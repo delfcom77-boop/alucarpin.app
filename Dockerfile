@@ -10,9 +10,9 @@ RUN mkdir -p app_web
 COPY login.html administrador.html ayudante.html ./app_web/
 COPY empresa.db ./empresa.db
 
-ENV ALUCARPIN_DATABASE=/data/empresa.db
+ENV ALUCARPIN_DATABASE=/app/empresa.db
 ENV PORT=8000
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "if [ ! -f \"$ALUCARPIN_DATABASE\" ]; then cp empresa.db \"$ALUCARPIN_DATABASE\"; fi; uvicorn api_central:app --host 0.0.0.0 --port ${PORT}"]
+CMD ["sh", "-c", "uvicorn api_central:app --host 0.0.0.0 --port ${PORT}"]
