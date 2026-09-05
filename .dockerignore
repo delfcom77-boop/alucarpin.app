@@ -1,0 +1,7 @@
+.git
+.venv
+__pycache__
+*.pyc
+dist
+respaldo_antiguo_20260904_184013
+*.spec

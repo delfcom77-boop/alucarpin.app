@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: alucarpin-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: ALUCARPIN_SESSION_SECRET
+        generateValue: true
+      - key: ALUCARPIN_DATABASE
+        value: /data/empresa.db
+      - key: DATABASE_URL
+        sync: false
