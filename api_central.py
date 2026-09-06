@@ -90,6 +90,10 @@ class AyudanteCreate(BaseModel):
     nombre: str = Field(min_length=1)
 
 
+class AyudanteUpdate(BaseModel):
+    nombre: str = Field(min_length=1)
+
+
 def conexion():
     if DATABASE_URL:
         return ConexionPostgres(DATABASE_URL)
@@ -345,6 +349,46 @@ def crear_ayudante(datos: AyudanteCreate, usuario=Depends(administrador)):
                 raise HTTPException(status_code=409, detail="Ya existe un ayudante o usuario con ese nombre") from error
             raise
     return {"id": ayudante_id, "nombre": nombre, "usuario": nombre_usuario, "password_inicial": "Cambiar123!"}
+
+
+@app.patch("/ayudantes/{ayudante_id}")
+def modificar_ayudante(ayudante_id: int, datos: AyudanteUpdate, usuario=Depends(administrador)):
+    from autenticacion import usuario_normalizado
+
+    nombre = datos.nombre.strip()
+    if not nombre:
+        raise HTTPException(status_code=400, detail="El nombre es obligatorio")
+    nombre_usuario = usuario_normalizado(nombre)
+    with conexion() as db:
+        existente = db.execute("SELECT id FROM ayudantes WHERE id = ?", (ayudante_id,)).fetchone()
+        if not existente:
+            raise HTTPException(status_code=404, detail="Ayudante no encontrado")
+        try:
+            db.execute("UPDATE ayudantes SET nombre = ? WHERE id = ?", (nombre, ayudante_id))
+            db.execute("UPDATE usuarios SET usuario = ? WHERE ayudante_id = ?", (nombre_usuario, ayudante_id))
+            db.commit()
+        except Exception as error:
+            db.rollback()
+            if "unique" in str(error).lower() or "usuario" in str(error).lower():
+                raise HTTPException(status_code=409, detail="Ya existe un ayudante o usuario con ese nombre") from error
+            raise
+    return {"id": ayudante_id, "nombre": nombre, "usuario": nombre_usuario}
+
+
+@app.delete("/ayudantes/{ayudante_id}")
+def borrar_ayudante(ayudante_id: int, usuario=Depends(administrador)):
+    with conexion() as db:
+        existente = db.execute("SELECT id FROM ayudantes WHERE id = ?", (ayudante_id,)).fetchone()
+        if not existente:
+            raise HTTPException(status_code=404, detail="Ayudante no encontrado")
+        fichajes = db.execute("SELECT 1 FROM fichajes_ayudantes WHERE ayudante_id = ? LIMIT 1", (ayudante_id,)).fetchone()
+        pagos = db.execute("SELECT 1 FROM liquidaciones WHERE ayudante_id = ? LIMIT 1", (ayudante_id,)).fetchone()
+        if fichajes or pagos:
+            raise HTTPException(status_code=409, detail="No se puede borrar: tiene fichajes o pagos asociados")
+        db.execute("DELETE FROM usuarios WHERE ayudante_id = ?", (ayudante_id,))
+        db.execute("DELETE FROM ayudantes WHERE id = ?", (ayudante_id,))
+        db.commit()
+    return {"borrado": True}
 
 
 @app.get("/ayudantes/{ayudante_id}/fichajes")

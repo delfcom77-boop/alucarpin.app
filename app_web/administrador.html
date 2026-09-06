@@ -16,8 +16,12 @@
     h1, h2 { margin: 0 0 10px; }
     section { background: #fff; border: 1px solid #ddd8cc; border-radius: 12px; padding: 18px; margin-top: 16px; }
     .ayudantes { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+    .ayudante-item { display: grid; gap: 6px; }
     .ayudante { background: #e5efed; border: 2px solid transparent; color: #1d4d50; border-radius: 8px; padding: 14px; text-align: left; font: inherit; font-weight: 700; cursor: pointer; }
     .ayudante.seleccionado { border-color: #d45d3f; background: #fff0e9; }
+    .ayudante-acciones { display: flex; gap: 6px; }
+    .ayudante-acciones button { min-height: 34px; border: 0; padding: 6px 10px; cursor: pointer; font-weight: 700; }
+    .borrar-ayudante { background: #f4cccc; color: #7b2020; }
     form { display: grid; gap: 12px; }
     label { font-weight: 700; display: grid; gap: 6px; }
     input, button { min-height: 46px; border-radius: 8px; font: inherit; }
@@ -175,9 +179,30 @@
       const lista = await respuesta.json();
       contenedorAyudantes.textContent = '';
       lista.forEach(ayudante => {
+        const elemento = document.createElement('div'); elemento.className = 'ayudante-item';
         const boton = document.createElement('button'); boton.type = 'button'; boton.className = 'ayudante'; boton.dataset.ayudanteId = ayudante.id; boton.textContent = ayudante.nombre;
         boton.onclick = () => seleccionar(ayudante.id, boton);
-        contenedorAyudantes.appendChild(boton);
+        const acciones = document.createElement('div'); acciones.className = 'ayudante-acciones';
+        const modificar = document.createElement('button'); modificar.type = 'button'; modificar.textContent = 'Modificar';
+        modificar.onclick = async () => {
+          const nombre = prompt('Nuevo nombre del ayudante:', ayudante.nombre);
+          if (!nombre || nombre.trim() === ayudante.nombre) return;
+          const respuesta = await apiFetch(`/ayudantes/${ayudante.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: nombre.trim() }) });
+          const resultado = await respuesta.json();
+          mensajeAyudante.textContent = respuesta.ok ? `Ayudante modificado. Nuevo usuario: ${resultado.usuario}` : (resultado.detail || 'No se pudo modificar.');
+          mensajeAyudante.className = respuesta.ok ? 'mensaje exito' : 'mensaje error';
+          if (respuesta.ok) { await cargarAyudantes(); await cargarListadoGeneral(); await cargarUsuarios(); }
+        };
+        const borrar = document.createElement('button'); borrar.type = 'button'; borrar.className = 'borrar-ayudante'; borrar.textContent = 'Borrar';
+        borrar.onclick = async () => {
+          if (!confirm(`¿Borrar al ayudante ${ayudante.nombre}?`)) return;
+          const respuesta = await apiFetch(`/ayudantes/${ayudante.id}`, { method: 'DELETE' });
+          const resultado = await respuesta.json();
+          mensajeAyudante.textContent = respuesta.ok ? 'Ayudante borrado correctamente.' : (resultado.detail || 'No se pudo borrar.');
+          mensajeAyudante.className = respuesta.ok ? 'mensaje exito' : 'mensaje error';
+          if (respuesta.ok) { ayudanteId = null; await cargarAyudantes(); await cargarListadoGeneral(); await cargarUsuarios(); }
+        };
+        acciones.append(modificar, borrar); elemento.append(boton, acciones); contenedorAyudantes.appendChild(elemento);
       });
       if (lista.length === 1) {
         await seleccionar(lista[0].id, contenedorAyudantes.querySelector('.ayudante'));
