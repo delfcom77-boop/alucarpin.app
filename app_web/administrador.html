@@ -47,6 +47,14 @@
     <header><h1>Control de ayudantes</h1><p>Pagos y resumen semanal</p></header>
     <section><h2>Seleccionar ayudante</h2><div id="ayudantes" class="ayudantes">Cargando...</div></section>
     <section>
+      <h2>Añadir ayudante</h2>
+      <form id="formulario-ayudante">
+        <label>Nombre completo <input id="nombre-ayudante" required></label>
+        <button type="submit">Crear ayudante</button>
+        <div id="mensaje-ayudante" class="mensaje"></div>
+      </form>
+    </section>
+    <section>
       <h2>Listado general de fichajes</h2>
       <p>Selecciona una línea para modificarla o borrarla.</p>
       <div class="lista-general">
@@ -108,6 +116,7 @@
     const fichajes = document.querySelector('#fichajes');
     const mensaje = document.querySelector('#mensaje');
     const mensajeUsuarios = document.querySelector('#mensaje-usuarios');
+    const mensajeAyudante = document.querySelector('#mensaje-ayudante');
       const mensajeGeneral = document.querySelector('#mensaje-general');
 
         async function cargarListadoGeneral() {
@@ -174,6 +183,22 @@
         await seleccionar(lista[0].id, contenedorAyudantes.querySelector('.ayudante'));
       }
     }
+    document.querySelector('#formulario-ayudante').addEventListener('submit', async event => {
+      event.preventDefault();
+      const nombre = document.querySelector('#nombre-ayudante').value.trim();
+      const respuesta = await apiFetch('/ayudantes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre }) });
+      const resultado = await respuesta.json();
+      if (!respuesta.ok) {
+        mensajeAyudante.textContent = resultado.detail || 'No se pudo crear el ayudante.';
+        mensajeAyudante.className = 'mensaje error';
+        return;
+      }
+      mensajeAyudante.textContent = `Creado. Usuario: ${resultado.usuario} | Contraseña inicial: ${resultado.password_inicial}`;
+      mensajeAyudante.className = 'mensaje exito';
+      event.target.reset();
+      await cargarAyudantes();
+      await cargarUsuarios();
+    });
     function marcarAyudante(id) {
       ayudanteId = Number(id);
       document.querySelectorAll('.ayudante').forEach(item => {

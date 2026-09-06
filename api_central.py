@@ -86,6 +86,10 @@ class EstadoUsuarioUpdate(BaseModel):
     activo: bool
 
 
+class AyudanteCreate(BaseModel):
+    nombre: str = Field(min_length=1)
+
+
 def conexion():
     if DATABASE_URL:
         return ConexionPostgres(DATABASE_URL)
@@ -314,6 +318,33 @@ def listar_ayudantes(usuario=Depends(usuario_actual)):
             consulta = "SELECT id, nombre, 1 AS activo FROM ayudantes ORDER BY nombre"
             parametros = ()
         return [dict(fila) for fila in db.execute(consulta, parametros)]
+
+
+@app.post("/ayudantes", status_code=201)
+def crear_ayudante(datos: AyudanteCreate, usuario=Depends(administrador)):
+    from autenticacion import hash_password, usuario_normalizado
+
+    nombre = datos.nombre.strip()
+    if not nombre:
+        raise HTTPException(status_code=400, detail="El nombre es obligatorio")
+    nombre_usuario = usuario_normalizado(nombre)
+    salt, digest = hash_password("Cambiar123!")
+    with conexion() as db:
+        siguiente_id = db.execute("SELECT COALESCE(MAX(id), 0) + 1 AS siguiente_id FROM ayudantes").fetchone()
+        ayudante_id = siguiente_id["siguiente_id"] if isinstance(siguiente_id, dict) else siguiente_id[0]
+        try:
+            db.execute("INSERT INTO ayudantes (id, nombre) VALUES (?, ?)", (ayudante_id, nombre))
+            db.execute(
+                "INSERT INTO usuarios (usuario, password_salt, password_hash, rol, ayudante_id) VALUES (?, ?, ?, 'ayudante', ?)",
+                (nombre_usuario, salt, digest, ayudante_id),
+            )
+            db.commit()
+        except Exception as error:
+            db.rollback()
+            if "usuario" in str(error).lower() or "unique" in str(error).lower():
+                raise HTTPException(status_code=409, detail="Ya existe un ayudante o usuario con ese nombre") from error
+            raise
+    return {"id": ayudante_id, "nombre": nombre, "usuario": nombre_usuario, "password_inicial": "Cambiar123!"}
 
 
 @app.get("/ayudantes/{ayudante_id}/fichajes")

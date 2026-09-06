@@ -5,6 +5,8 @@ const ARCHIVOS = [
   '/app/ayudante.html',
   '/app/manifest.json',
   '/app/icon.svg',
+  '/app/icon-192.png',
+  '/app/icon-512.png',
   '/app/pwa.js'
 ];
 
