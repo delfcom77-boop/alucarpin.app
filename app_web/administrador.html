@@ -35,6 +35,8 @@
       th, td { border-bottom: 1px solid #ddd8cc; padding: 10px 8px; text-align: left; }
       th { background: #eef3f1; }
       tr.seleccionada { background: #fff0e9; }
+      tr.pagado { background: #e3f3e5; color: #185c2b; }
+      tr.pendiente { background: #fce4e4; color: #7a2020; }
       tr { cursor: pointer; }
       .acciones { display: flex; gap: 8px; }
       .acciones button { min-height: 38px; border: 0; padding: 7px 12px; cursor: pointer; font-weight: 700; }
@@ -136,6 +138,7 @@
           registros.forEach(fichaje => {
             const fila = document.createElement('tr');
             fila.dataset.ayudanteId = fichaje.ayudante_id;
+            fila.className = fichaje.pagado ? 'pagado' : 'pendiente';
             const tipo = fichaje.tipo_destino === 'presupuesto' ? 'Presupuesto Alucarpin' : 'Faena a 3º';
             fila.innerHTML = `<td>${fichaje.nombreAyudante}</td><td>${tipo}</td><td>${fichaje.fecha}</td><td>${fichaje.cliente || ''}</td><td>${fichaje.obra}</td><td>${fichaje.ubicacion || ''}</td><td>${fichaje.poblacion || ''}</td><td class="acciones"><button type="button">Modificar</button><button type="button" class="borrar">Borrar</button></td>`;
             fila.onclick = () => seleccionarFichajeGeneral(fichaje, fila);

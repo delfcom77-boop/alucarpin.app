@@ -413,7 +413,26 @@ def listar_fichajes(
             f"SELECT * FROM fichajes_ayudantes WHERE {' AND '.join(condiciones)} ORDER BY fecha DESC, id DESC",
             parametros,
         ).fetchall()
-        return [dict(fila) for fila in filas]
+        registros = [dict(fila) for fila in filas]
+        pagos = db.execute(
+            "SELECT ayudante_id, desde, hasta, precio_dia, importe_pagado FROM liquidaciones WHERE ayudante_id = ?",
+            (ayudante_id,),
+        ).fetchall()
+        for registro in registros:
+            registro["pagado"] = False
+            for pago in pagos:
+                desde_pago = pago["desde"]
+                hasta_pago = pago["hasta"]
+                if desde_pago <= registro["fecha"] <= hasta_pago:
+                    dia_laborable = "strftime('%w', fecha) NOT IN ('0', '6')" if not DATABASE_URL else "EXTRACT(DOW FROM fecha) NOT IN (0, 6)"
+                    cantidad = db.execute(
+                        f"SELECT COUNT(*) AS cantidad FROM fichajes_ayudantes WHERE ayudante_id = ? AND fecha BETWEEN ? AND ? AND confirmado_ayudante = 1 AND {dia_laborable}",
+                        (ayudante_id, desde_pago, hasta_pago),
+                    ).fetchone()["cantidad"]
+                    total = round(cantidad * pago["precio_dia"], 2)
+                    registro["pagado"] = total > 0 and pago["importe_pagado"] >= total
+                    break
+        return registros
 
 
 @app.post("/fichajes", status_code=201)
