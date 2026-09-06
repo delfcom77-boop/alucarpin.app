@@ -1,6 +1,7 @@
 {
   "name": "AlucarpinSamitier",
   "short_name": "Alucarpin",
+  "description": "Gestion de fichajes y pagos de AlucarpinSamitier.",
   "lang": "es",
   "start_url": "/app/login.html",
   "scope": "/app/",
@@ -9,9 +10,15 @@
   "theme_color": "#176b70",
   "icons": [
     {
-      "src": "/app/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/app/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/app/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ]
