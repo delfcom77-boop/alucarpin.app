@@ -97,6 +97,8 @@ def conexion():
 
 def inicializar_base_datos():
     if DATABASE_URL:
+        with conexion() as db:
+            inicializar_usuarios(db)
         return
     with conexion() as db:
         db.executescript("""

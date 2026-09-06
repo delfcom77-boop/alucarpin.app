@@ -29,30 +29,42 @@ def password_valida(password, salt, digest):
 
 
 def inicializar_usuarios(db):
-    db.execute("""
-        CREATE TABLE IF NOT EXISTS usuarios (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            usuario TEXT NOT NULL UNIQUE,
-            password_salt TEXT NOT NULL,
-            password_hash TEXT NOT NULL,
-            rol TEXT NOT NULL,
-            ayudante_id INTEGER UNIQUE,
-            activo INTEGER NOT NULL DEFAULT 1,
-            creado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    db.execute(
-        "INSERT OR IGNORE INTO usuarios (usuario, password_salt, password_hash, rol) VALUES (?, ?, ?, 'administrador')",
-        ("administrador", ADMIN_SALT, ADMIN_HASH),
+    es_postgres = hasattr(db, "db")
+    if not es_postgres:
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                usuario TEXT NOT NULL UNIQUE,
+                password_salt TEXT NOT NULL,
+                password_hash TEXT NOT NULL,
+                rol TEXT NOT NULL,
+                ayudante_id INTEGER UNIQUE,
+                activo INTEGER NOT NULL DEFAULT 1,
+                creado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+    consulta_admin = (
+        "INSERT INTO usuarios (usuario, password_salt, password_hash, rol) "
+        "VALUES (?, ?, ?, 'administrador') ON CONFLICT (usuario) DO NOTHING"
+        if es_postgres
+        else "INSERT OR IGNORE INTO usuarios (usuario, password_salt, password_hash, rol) VALUES (?, ?, ?, 'administrador')"
     )
+    db.execute(consulta_admin, ("administrador", ADMIN_SALT, ADMIN_HASH))
     ayudantes = db.execute("SELECT id, nombre FROM ayudantes ORDER BY id").fetchall()
-    for ayudante_id, nombre in ayudantes:
+    for ayudante in ayudantes:
+        if isinstance(ayudante, dict):
+            ayudante_id, nombre = ayudante["id"], ayudante["nombre"]
+        else:
+            ayudante_id, nombre = ayudante
         usuario = usuario_normalizado(nombre)
         salt, digest = hash_password("Cambiar123!")
-        db.execute(
-            "INSERT OR IGNORE INTO usuarios (usuario, password_salt, password_hash, rol, ayudante_id) VALUES (?, ?, ?, 'ayudante', ?)",
-            (usuario, salt, digest, ayudante_id),
+        consulta_ayudante = (
+            "INSERT INTO usuarios (usuario, password_salt, password_hash, rol, ayudante_id) "
+            "VALUES (?, ?, ?, 'ayudante', ?) ON CONFLICT (usuario) DO NOTHING"
+            if es_postgres
+            else "INSERT OR IGNORE INTO usuarios (usuario, password_salt, password_hash, rol, ayudante_id) VALUES (?, ?, ?, 'ayudante', ?)"
         )
+        db.execute(consulta_ayudante, (usuario, salt, digest, ayudante_id))
     db.commit()
 
 

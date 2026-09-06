@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#176b70">
+  <link rel="manifest" href="/app/manifest.json">
+  <link rel="icon" href="/app/icon.svg" type="image/svg+xml">
+  <title>Acceso | AlucarpinSamitier</title>
+  <style>
+    :root { font-family: Segoe UI, sans-serif; color: #223238; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #eef3f2; }
+    main { width: min(420px, calc(100% - 32px)); background: #fff; border: 1px solid #d6e1df; border-radius: 12px; padding: 24px; }
+    h1 { margin-top: 0; color: #176b70; }
+    label { display: grid; gap: 6px; margin-top: 14px; font-weight: 700; }
+    .recordar { display: flex; grid-template-columns: auto 1fr; align-items: center; gap: 8px; font-weight: 400; }
+    .recordar input { width: auto; min-height: auto; }
+    input, button { width: 100%; min-height: 46px; border-radius: 8px; font: inherit; }
+    input { border: 1px solid #aebfbd; padding: 10px; }
+    button { margin-top: 20px; border: 0; background: #d45d3f; color: #fff; font-weight: 700; cursor: pointer; }
+    #mensaje { min-height: 24px; margin-top: 12px; font-weight: 700; color: #a52e2e; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Acceso a la aplicación</h1>
+    <form id="login">
+      <label>Usuario <input id="usuario" autocomplete="username" required></label>
+      <label>Contraseña <input id="password" type="password" autocomplete="current-password" required></label>
+      <label class="recordar"><input id="recordar" type="checkbox"> Recordar usuario y contraseña</label>
+      <button type="submit">Entrar</button>
+      <div id="mensaje" role="alert"></div>
+    </form>
+  </main>
+  <script>
+    const formulario = document.querySelector('#login');
+    const mensaje = document.querySelector('#mensaje');
+    const usuario = document.querySelector('#usuario');
+    const password = document.querySelector('#password');
+    const recordar = document.querySelector('#recordar');
+    const credencialesGuardadas = localStorage.getItem('alucarpin_credenciales');
+    if (credencialesGuardadas) {
+      try {
+        const credenciales = JSON.parse(credencialesGuardadas);
+        usuario.value = credenciales.usuario || '';
+        password.value = credenciales.password || '';
+        recordar.checked = Boolean(credenciales.usuario || credenciales.password);
+      } catch {
+        localStorage.removeItem('alucarpin_credenciales');
+      }
+    }
+    formulario.addEventListener('submit', async event => {
+      event.preventDefault();
+      mensaje.textContent = 'Comprobando...';
+      const respuesta = await fetch('/login', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ usuario: usuario.value, password: password.value }) });
+      const resultado = await respuesta.json();
+      if (!respuesta.ok) { mensaje.textContent = resultado.detail || 'No se pudo iniciar sesión.'; return; }
+      if (recordar.checked) {
+        localStorage.setItem('alucarpin_credenciales', JSON.stringify({ usuario: usuario.value, password: password.value }));
+      } else {
+        localStorage.removeItem('alucarpin_credenciales');
+      }
+      localStorage.setItem('alucarpin_token', resultado.token);
+      location.href = resultado.rol === 'administrador' ? '/app/administrador.html' : `/app/ayudante.html?ayudante_id=${resultado.ayudante_id}`;
+    });
+  </script>
+  <script src="/app/pwa.js"></script>
+</body>
+</html>

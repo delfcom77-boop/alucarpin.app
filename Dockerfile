@@ -7,7 +7,7 @@ RUN pip install --no-cache-dir -r requirements-api.txt
 
 COPY api_central.py autenticacion.py base_datos.py ./
 RUN mkdir -p app_web
-COPY login.html administrador.html ayudante.html ./app_web/
+COPY app_web/login.html app_web/administrador.html app_web/ayudante.html app_web/manifest.json app_web/pwa.js app_web/sw.js app_web/icon.svg ./app_web/
 COPY empresa.db ./empresa.db
 
 ENV ALUCARPIN_DATABASE=/app/empresa.db

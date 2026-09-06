@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#176b70">
+  <link rel="manifest" href="/app/manifest.json">
+  <link rel="icon" href="/app/icon.svg" type="image/svg+xml">
+  <title>AlucarpinSamitier | Ayudante</title>
+  <style>
+    :root { color-scheme: light; font-family: Segoe UI, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #eef3f2; color: #17333a; }
+    main { width: min(760px, 100%); margin: auto; padding: 24px 16px 40px; }
+    header { background: #176b70; color: white; padding: 22px; border-radius: 14px; margin-bottom: 16px; }
+    h1 { margin: 0 0 6px; font-size: clamp(24px, 6vw, 34px); }
+    p { margin: 0; }
+    section { background: white; border: 1px solid #d6e1df; border-radius: 12px; padding: 18px; margin-top: 16px; }
+    h2 { margin: 0 0 14px; font-size: 20px; }
+    label { display: block; font-weight: 600; margin: 12px 0 6px; }
+    input, button { width: 100%; min-height: 48px; border-radius: 8px; font: inherit; }
+    input { border: 1px solid #aebfbd; padding: 10px 12px; }
+    button { border: 0; background: #d45d3f; color: white; font-weight: 700; padding: 10px 14px; cursor: pointer; margin-top: 16px; }
+    button:hover { background: #b94b31; }
+    .mensaje { min-height: 24px; margin-top: 12px; font-weight: 600; }
+    .error { color: #a52e2e; }
+    .ok { color: #176b70; }
+    .lista { overflow-x: auto; }
+    table { width: 100%; min-width: 650px; border-collapse: collapse; }
+    th, td { padding: 11px 8px; border-bottom: 1px solid #d6e1df; text-align: left; }
+    th { background: #eef7f5; }
+    tbody tr { cursor: pointer; }
+    tbody tr:hover, tbody tr.seleccionado { background: #eef7f5; }
+    @media (min-width: 640px) { form { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; } form button, form .mensaje { grid-column: 1 / -1; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Mis días trabajados</h1>
+      <p id="nombre">Cargando ayudante...</p>
+    </header>
+    <section>
+      <h2>Registrar día</h2>
+      <form id="formulario">
+        <div><label for="fecha">Día</label><input id="fecha" type="date" required></div>
+        <div><label for="tipo-destino">¿Dónde se ha trabajado?</label><select id="tipo-destino" required><option value="faena">Faena a 3º</option><option value="presupuesto">Presupuesto Alucarpin</option></select></div>
+        <div><label for="cliente">Cliente</label><input id="cliente" required maxlength="160"></div>
+        <div><label for="obra">Obra</label><input id="obra" required maxlength="160"></div>
+        <div><label for="ubicacion">Ubicación</label><input id="ubicacion" maxlength="200"></div>
+        <div><label for="poblacion">Población</label><input id="poblacion" maxlength="100"></div>
+        <button type="submit">OK - Guardar día trabajado</button>
+        <div id="mensaje" class="mensaje" role="status"></div>
+      </form>
+    </section>
+    <section>
+      <h2>Listado general de mis faenas</h2>
+      <p id="contador">Cargando faenas...</p>
+      <div class="lista">
+        <table><thead><tr><th>Día</th><th>Tipo</th><th>Cliente</th><th>Obra</th><th>Ubicación</th><th>Población</th></tr></thead><tbody id="historial"><tr><td colspan="6">Cargando...</td></tr></tbody></table>
+      </div>
+    </section>
+  </main>
+  <script>
+    const api = '';
+    const token = localStorage.getItem('alucarpin_token');
+    if (!token) location.replace('/app/login.html');
+    const apiFetch = (url, options = {}) => fetch(url, { ...options, headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` } });
+    const ayudanteId = new URLSearchParams(location.search).get('ayudante_id');
+    const historial = document.querySelector('#historial');
+    const mensaje = document.querySelector('#mensaje');
+    const formulario = document.querySelector('#formulario');
+    const fecha = document.querySelector('#fecha');
+    const tipoDestino = document.querySelector('#tipo-destino');
+    const contador = document.querySelector('#contador');
+    let fichajes = [];
+
+    if (!ayudanteId) {
+      mensaje.textContent = 'Falta identificar al ayudante en esta prueba.';
+      mensaje.className = 'mensaje error';
+      formulario.querySelector('button').disabled = true;
+    }
+    fecha.valueAsDate = new Date();
+
+    async function cargar() {
+      if (!ayudanteId) return;
+      const [ayudantes, respuesta] = await Promise.all([
+        apiFetch(`${api}/ayudantes`),
+        apiFetch(`${api}/ayudantes/${ayudanteId}/fichajes`)
+      ]);
+      const listaAyudantes = await ayudantes.json();
+      const ayudante = listaAyudantes.find(item => String(item.id) === String(ayudanteId));
+      document.querySelector('#nombre').textContent = ayudante ? ayudante.nombre : 'Ayudante no encontrado';
+      fichajes = await respuesta.json();
+      pintar();
+    }
+
+    function pintar() {
+      historial.textContent = '';
+      contador.textContent = `${fichajes.length} faena${fichajes.length === 1 ? '' : 's'} registrada${fichajes.length === 1 ? '' : 's'}`;
+      if (!fichajes.length) { historial.innerHTML = '<tr><td colspan="6">Todavía no hay días registrados.</td></tr>'; return; }
+      fichajes.forEach(fichaje => {
+        const item = document.createElement('tr');
+        item.className = 'registro';
+        const tipo = fichaje.tipo_destino === 'presupuesto' ? 'Presupuesto Alucarpin' : 'Faena a 3º';
+        item.innerHTML = `<td>${fichaje.fecha}</td><td>${tipo}</td><td>${fichaje.cliente || ''}</td><td>${fichaje.obra}</td><td>${fichaje.ubicacion || ''}</td><td>${fichaje.poblacion || ''}</td>`;
+        item.onclick = () => cargarEnFormulario(fichaje, item);
+        historial.appendChild(item);
+      });
+    }
+
+    function cargarEnFormulario(fichaje, elemento) {
+      document.querySelectorAll('#historial .registro').forEach(item => item.classList.remove('seleccionado'));
+      elemento.classList.add('seleccionado');
+      fecha.value = fichaje.fecha;
+      tipoDestino.value = fichaje.tipo_destino || 'faena';
+      document.querySelector('#cliente').value = fichaje.cliente || '';
+      document.querySelector('#obra').value = fichaje.obra;
+      document.querySelector('#ubicacion').value = fichaje.ubicacion || '';
+      document.querySelector('#poblacion').value = fichaje.poblacion || '';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      formulario.dataset.id = fichaje.id;
+    }
+
+    formulario.addEventListener('submit', async event => {
+      event.preventDefault();
+      mensaje.textContent = 'Guardando...';
+      mensaje.className = 'mensaje';
+      const datos = { ayudante_id: Number(ayudanteId), fecha: fecha.value, tipo_destino: tipoDestino.value, cliente: document.querySelector('#cliente').value, obra: document.querySelector('#obra').value, ubicacion: document.querySelector('#ubicacion').value, poblacion: document.querySelector('#poblacion').value };
+      const id = formulario.dataset.id;
+      const respuesta = await apiFetch(id ? `${api}/fichajes/${id}` : `${api}/fichajes`, { method: id ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) });
+      if (!respuesta.ok) { const detalle = await respuesta.json(); mensaje.textContent = detalle.detail || 'No se pudo guardar.'; mensaje.className = 'mensaje error'; return; }
+      mensaje.textContent = 'Día guardado y enviado correctamente.';
+      mensaje.className = 'mensaje ok';
+      delete formulario.dataset.id;
+      formulario.reset();
+      fecha.valueAsDate = new Date();
+      await cargar();
+    });
+
+    cargar().catch(() => { historial.textContent = 'No se pudo conectar con el programa.'; });
+  </script>
+  <script src="/app/pwa.js"></script>
+</body>
+</html>

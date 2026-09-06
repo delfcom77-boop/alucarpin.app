@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#293f4a">
+  <link rel="manifest" href="/app/manifest.json">
+  <link rel="icon" href="/app/icon.svg" type="image/svg+xml">
+  <title>AlucarpinSamitier | Administración</title>
+  <style>
+    :root { font-family: Segoe UI, sans-serif; color: #223238; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f3f1eb; }
+    main { width: min(900px, 100%); margin: auto; padding: 24px 16px 40px; }
+    header { background: #293f4a; color: #fff; border-radius: 14px; padding: 22px; }
+    h1, h2 { margin: 0 0 10px; }
+    section { background: #fff; border: 1px solid #ddd8cc; border-radius: 12px; padding: 18px; margin-top: 16px; }
+    .ayudantes { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+    .ayudante { background: #e5efed; border: 2px solid transparent; color: #1d4d50; border-radius: 8px; padding: 14px; text-align: left; font: inherit; font-weight: 700; cursor: pointer; }
+    .ayudante.seleccionado { border-color: #d45d3f; background: #fff0e9; }
+    form { display: grid; gap: 12px; }
+    label { font-weight: 700; display: grid; gap: 6px; }
+    input, button { min-height: 46px; border-radius: 8px; font: inherit; }
+    input { border: 1px solid #b9c4c2; padding: 10px; }
+    .fila { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .resumen { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 14px; }
+    .dato { background: #f1f5f3; border-radius: 8px; padding: 12px; }
+    .dato strong { display: block; font-size: 20px; margin-top: 4px; }
+      .lista-general { overflow-x: auto; }
+      table { width: 100%; border-collapse: collapse; min-width: 700px; }
+      th, td { border-bottom: 1px solid #ddd8cc; padding: 10px 8px; text-align: left; }
+      th { background: #eef3f1; }
+      tr.seleccionada { background: #fff0e9; }
+      tr { cursor: pointer; }
+      .acciones { display: flex; gap: 8px; }
+      .acciones button { min-height: 38px; border: 0; padding: 7px 12px; cursor: pointer; font-weight: 700; }
+      .borrar { background: #f4cccc; color: #7b2020; }
+    button[type=submit] { background: #d45d3f; color: #fff; border: 0; font-weight: 700; cursor: pointer; }
+    .mensaje { min-height: 24px; font-weight: 700; }
+    .error { color: #a52e2e; }
+    .exito { color: #1c6b42; }
+    @media (max-width: 560px) { .fila, .resumen { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header><h1>Control de ayudantes</h1><p>Pagos y resumen semanal</p></header>
+    <section><h2>Seleccionar ayudante</h2><div id="ayudantes" class="ayudantes">Cargando...</div></section>
+    <section>
+      <h2>Listado general de fichajes</h2>
+      <p>Selecciona una línea para modificarla o borrarla.</p>
+      <div class="lista-general">
+        <table><thead><tr><th>Ayudante</th><th>Tipo</th><th>Día</th><th>Cliente</th><th>Obra</th><th>Ubicación</th><th>Población</th><th>Acciones</th></tr></thead><tbody id="lista-general"><tr><td colspan="8">Cargando...</td></tr></tbody></table>
+      </div>
+      <div id="mensaje-general" class="mensaje"></div>
+    </section>
+    <section>
+      <h2>Modificar fichaje seleccionado</h2>
+      <form id="formulario-edicion">
+        <input id="editar-id" type="hidden">
+        <div class="fila">
+          <label>Día <input id="fecha-general" type="date" required></label>
+          <label>Tipo <select id="tipo-general" required><option value="faena">Faena a 3º</option><option value="presupuesto">Presupuesto Alucarpin</option></select></label>
+        </div>
+        <div class="fila">
+          <label>Cliente <input id="cliente-general" required></label>
+          <label>Obra <input id="obra-general" required></label>
+        </div>
+        <div class="fila">
+          <label>Ubicación <input id="ubicacion-general"></label>
+          <label>Población <input id="poblacion-general"></label>
+        </div>
+        <button type="submit">Guardar modificación</button>
+      </form>
+    </section>
+    <section>
+      <h2>Preparar pago</h2>
+      <form id="formulario">
+        <div class="fila">
+          <label>Desde <input id="desde" type="date" required></label>
+          <label>Hasta <input id="hasta" type="date" required></label>
+        </div>
+        <div class="fila">
+          <label>Precio por día (€) <input id="precio" type="number" min="0" step="0.01" required></label>
+          <label>Importe pagado (€) <input id="pagado" type="number" min="0" step="0.01" value="0" required></label>
+        </div>
+        <button type="submit">Calcular y guardar pago</button>
+        <div id="mensaje" class="mensaje"></div>
+      </form>
+      <div id="resumen" class="resumen" hidden>
+        <div class="dato">Días<strong id="dias">0</strong></div>
+        <div class="dato">Total<strong id="total">0,00 €</strong></div>
+        <div class="dato">Pendiente<strong id="pendiente">0,00 €</strong></div>
+        <div class="dato">Estado<strong id="estado">Pendiente</strong></div>
+      </div>
+    </section>
+    <section><h2>Fichajes del periodo</h2><div id="fichajes">Selecciona un ayudante y un rango de fechas.</div></section>
+    <section><h2>Usuarios y contraseñas</h2><div class="lista-general"><table><thead><tr><th>Usuario</th><th>Rol</th><th>Ayudante</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="usuarios"><tr><td colspan="5">Cargando...</td></tr></tbody></table></div><div id="mensaje-usuarios" class="mensaje"></div></section>
+  </main>
+  <script>
+    const api = '';
+    const token = localStorage.getItem('alucarpin_token');
+    if (!token) location.replace('/app/login.html');
+    const apiFetch = (url, options = {}) => fetch(url, { ...options, headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` } });
+    const cerrarSesion = () => { localStorage.removeItem('alucarpin_token'); location.replace('/app/login.html'); };
+    let ayudanteId = null;
+    const contenedorAyudantes = document.querySelector('#ayudantes');
+    const fichajes = document.querySelector('#fichajes');
+    const mensaje = document.querySelector('#mensaje');
+    const mensajeUsuarios = document.querySelector('#mensaje-usuarios');
+      const mensajeGeneral = document.querySelector('#mensaje-general');
+
+        async function cargarListadoGeneral() {
+          const lista = await (await apiFetch(`${api}/ayudantes`)).json();
+          const grupos = await Promise.all(lista.map(async ayudante => {
+            const respuesta = await apiFetch(`${api}/ayudantes/${ayudante.id}/fichajes`);
+            return (await respuesta.json()).map(fichaje => ({ ...fichaje, nombreAyudante: ayudante.nombre }));
+          }));
+          const registros = grupos.flat().sort((a, b) => b.fecha.localeCompare(a.fecha) || b.id - a.id);
+          const cuerpo = document.querySelector('#lista-general');
+          cuerpo.textContent = '';
+          if (!registros.length) { cuerpo.innerHTML = '<tr><td colspan="8">No hay fichajes registrados.</td></tr>'; return; }
+          registros.forEach(fichaje => {
+            const fila = document.createElement('tr');
+            fila.dataset.ayudanteId = fichaje.ayudante_id;
+            const tipo = fichaje.tipo_destino === 'presupuesto' ? 'Presupuesto Alucarpin' : 'Faena a 3º';
+            fila.innerHTML = `<td>${fichaje.nombreAyudante}</td><td>${tipo}</td><td>${fichaje.fecha}</td><td>${fichaje.cliente || ''}</td><td>${fichaje.obra}</td><td>${fichaje.ubicacion || ''}</td><td>${fichaje.poblacion || ''}</td><td class="acciones"><button type="button">Modificar</button><button type="button" class="borrar">Borrar</button></td>`;
+            fila.onclick = () => seleccionarFichajeGeneral(fichaje, fila);
+            fila.querySelector('.acciones button:first-child').onclick = event => { event.stopPropagation(); seleccionarFichajeGeneral(fichaje, fila); };
+            fila.querySelector('.borrar').onclick = async event => { event.stopPropagation(); await borrarFichaje(fichaje); };
+            cuerpo.appendChild(fila);
+          });
+        }
+
+        function seleccionarFichajeGeneral(fichaje, fila) {
+          marcarAyudante(fichaje.ayudante_id);
+          document.querySelectorAll('#lista-general tr').forEach(item => item.classList.remove('seleccionada'));
+          fila.classList.add('seleccionada');
+          document.querySelector('#tipo-general').value = fichaje.tipo_destino || 'faena';
+          document.querySelector('#cliente-general').value = fichaje.cliente || '';
+          document.querySelector('#obra-general').value = fichaje.obra || '';
+          document.querySelector('#ubicacion-general').value = fichaje.ubicacion || '';
+          document.querySelector('#poblacion-general').value = fichaje.poblacion || '';
+          document.querySelector('#fecha-general').value = fichaje.fecha;
+          document.querySelector('#editar-id').value = fichaje.id;
+          cargarFichajes().catch(mostrarError);
+        }
+
+        async function borrarFichaje(fichaje) {
+          if (!confirm(`¿Borrar el fichaje de ${fichaje.nombreAyudante} del día ${fichaje.fecha}?`)) return;
+          const respuesta = await apiFetch(`${api}/fichajes/${fichaje.id}`, { method: 'DELETE' });
+          if (!respuesta.ok) { mensajeGeneral.textContent = 'No se pudo borrar el fichaje.'; return; }
+          mensajeGeneral.textContent = 'Fichaje borrado correctamente.';
+          await cargarListadoGeneral();
+          await cargarFichajes();
+        }
+    const desde = document.querySelector('#desde');
+    const hasta = document.querySelector('#hasta');
+    const fechaHoy = new Date();
+    const fechaSemana = new Date(fechaHoy); fechaSemana.setDate(fechaHoy.getDate() - ((fechaHoy.getDay() + 6) % 7));
+    const ultimoDiaLaborable = new Date(fechaSemana); ultimoDiaLaborable.setDate(fechaSemana.getDate() + 4);
+    desde.valueAsDate = fechaSemana; hasta.valueAsDate = ultimoDiaLaborable;
+
+    async function cargarAyudantes() {
+      const respuesta = await apiFetch(`${api}/ayudantes`);
+      const lista = await respuesta.json();
+      contenedorAyudantes.textContent = '';
+      lista.forEach(ayudante => {
+        const boton = document.createElement('button'); boton.type = 'button'; boton.className = 'ayudante'; boton.dataset.ayudanteId = ayudante.id; boton.textContent = ayudante.nombre;
+        boton.onclick = () => seleccionar(ayudante.id, boton);
+        contenedorAyudantes.appendChild(boton);
+      });
+      if (lista.length === 1) {
+        await seleccionar(lista[0].id, contenedorAyudantes.querySelector('.ayudante'));
+      }
+    }
+    function marcarAyudante(id) {
+      ayudanteId = Number(id);
+      document.querySelectorAll('.ayudante').forEach(item => {
+        item.classList.toggle('seleccionado', Number(item.dataset.ayudanteId) === ayudanteId);
+      });
+    }
+    async function seleccionar(id, boton) {
+      marcarAyudante(id);
+      await cargarFichajes();
+    }
+
+    document.querySelector('#formulario-edicion').addEventListener('submit', async event => {
+      event.preventDefault();
+      const id = document.querySelector('#editar-id').value;
+      if (!id) { mensajeGeneral.textContent = 'Selecciona una línea del listado.'; return; }
+      const respuesta = await apiFetch(`${api}/fichajes/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fecha: document.querySelector('#fecha-general').value, tipo_destino: document.querySelector('#tipo-general').value, cliente: document.querySelector('#cliente-general').value, obra: document.querySelector('#obra-general').value, ubicacion: document.querySelector('#ubicacion-general').value, poblacion: document.querySelector('#poblacion-general').value }) });
+      if (!respuesta.ok) { const resultado = await respuesta.json(); mensajeGeneral.textContent = resultado.detail || 'No se pudo modificar.'; return; }
+      mensajeGeneral.textContent = 'Fichaje modificado correctamente.';
+      mensajeGeneral.className = 'mensaje exito';
+      await cargarListadoGeneral();
+      await cargarFichajes();
+    });
+    async function cargarFichajes() {
+      if (ayudanteId === null) { actualizarResumen(0); return; }
+      if (desde.value > hasta.value) {
+        fichajes.textContent = 'El rango de fechas no es válido.';
+        actualizarResumen(0);
+        return;
+      }
+      const respuesta = await apiFetch(`${api}/ayudantes/${ayudanteId}/fichajes?desde=${desde.value}&hasta=${hasta.value}`);
+      if (!respuesta.ok) throw new Error('No se pudieron cargar los fichajes.');
+      const lista = await respuesta.json();
+      const listaLaborable = lista.filter(item => {
+        const dia = new Date(`${item.fecha}T00:00:00`).getDay();
+        return dia !== 0 && dia !== 6;
+      });
+      fichajes.textContent = listaLaborable.length ? listaLaborable.map(item => `${item.fecha} | ${item.tipo_destino === 'presupuesto' ? 'Presupuesto Alucarpin' : 'Faena a 3º'} | ${item.obra} | ${item.ubicacion || 'Sin ubicación'}`).join('\n') : 'No hay fichajes en este periodo.';
+      fichajes.style.whiteSpace = 'pre-line';
+      document.querySelector('#dias').textContent = listaLaborable.length;
+      actualizarResumen(listaLaborable.length);
+    }
+    function actualizarResumen(dias) {
+      const total = dias * Number(document.querySelector('#precio').value || 0);
+      const pagado = Number(document.querySelector('#pagado').value || 0);
+      document.querySelector('#total').textContent = `${total.toFixed(2)} €`;
+      document.querySelector('#pendiente').textContent = `${Math.max(total - pagado, 0).toFixed(2)} €`;
+      document.querySelector('#estado').textContent = total > 0 && pagado >= total ? 'Pagado' : 'Pendiente';
+      document.querySelector('#resumen').hidden = false;
+    }
+    [desde, hasta].forEach(item => item.addEventListener('change', () => cargarFichajes().catch(mostrarError)));
+    [document.querySelector('#precio'), document.querySelector('#pagado')].forEach(item => item.addEventListener('input', () => actualizarResumen(document.querySelector('#dias').textContent)));
+    document.querySelector('#formulario').addEventListener('submit', async event => {
+      event.preventDefault();
+      const botonSeleccionado = document.querySelector('.ayudante.seleccionado');
+      const filaSeleccionada = document.querySelector('#lista-general tr.seleccionada');
+      const ayudanteSeleccionado = ayudanteId ?? botonSeleccionado?.dataset.ayudanteId ?? filaSeleccionada?.dataset.ayudanteId;
+      if (!ayudanteSeleccionado) { mensaje.textContent = 'Selecciona un ayudante.'; mensaje.className = 'mensaje error'; return; }
+      ayudanteId = Number(ayudanteSeleccionado);
+      const respuesta = await apiFetch(`${api}/liquidaciones`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ayudante_id: ayudanteId, desde: desde.value, hasta: hasta.value, precio_dia: Number(document.querySelector('#precio').value), importe_pagado: Number(document.querySelector('#pagado').value) }) });
+      const resultado = await respuesta.json();
+      if (!respuesta.ok) { mensaje.textContent = resultado.detail || 'No se pudo guardar el pago.'; mensaje.className = 'mensaje error'; return; }
+      mensaje.textContent = resultado.accion === 'modificado'
+        ? `Pago modificado correctamente: ${resultado.estado}.`
+        : `Pago guardado correctamente: ${resultado.estado}.`;
+      mensaje.className = 'mensaje exito';
+      actualizarResumen(resultado.dias);
+    });
+    function mostrarError() {
+      mensaje.textContent = 'No se pudo conectar con la API.';
+      mensaje.className = 'mensaje error';
+    }
+    async function cargarUsuarios() {
+      const respuesta = await apiFetch('/usuarios');
+      if (!respuesta.ok) throw new Error('No se pudieron cargar los usuarios.');
+      const usuarios = await respuesta.json();
+      const cuerpo = document.querySelector('#usuarios');
+      cuerpo.textContent = '';
+      usuarios.forEach(usuario => {
+        const fila = document.createElement('tr');
+        fila.innerHTML = `<td>${usuario.usuario}</td><td>${usuario.rol}</td><td>${usuario.nombre_ayudante || ''}</td><td>${usuario.activo ? 'Activo' : 'Desactivado'}</td><td class="acciones"><button type="button" class="cambiar-password">Cambiar contraseña</button><button type="button" class="cambiar-estado">${usuario.activo ? 'Desactivar' : 'Activar'}</button></td>`;
+        fila.querySelector('.cambiar-password').onclick = async () => {
+          const password = prompt(`Nueva contraseña para ${usuario.usuario} (mínimo 8 caracteres):`);
+          if (!password) return;
+          const cambio = await apiFetch(`/usuarios/${usuario.id}/password`, { method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({password}) });
+          mensajeUsuarios.textContent = cambio.ok ? 'Contraseña actualizada correctamente.' : 'No se pudo actualizar la contraseña.';
+          mensajeUsuarios.className = cambio.ok ? 'mensaje exito' : 'mensaje error';
+        };
+        fila.querySelector('.cambiar-estado').onclick = async () => {
+          const cambio = await apiFetch(`/usuarios/${usuario.id}/estado`, { method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({activo: !usuario.activo}) });
+          if (cambio.ok) { mensajeUsuarios.textContent = 'Estado actualizado correctamente.'; await cargarUsuarios(); }
+          else { const detalle = await cambio.json(); mensajeUsuarios.textContent = detalle.detail || 'No se pudo cambiar el estado.'; }
+        };
+        cuerpo.appendChild(fila);
+      });
+    }
+    cargarAyudantes().catch(mostrarError);
+    cargarListadoGeneral().catch(mostrarError);
+    cargarUsuarios().catch(error => { mensajeUsuarios.textContent = error.message; mensajeUsuarios.className = 'mensaje error'; });
+  </script>
+  <script src="/app/pwa.js"></script>
+</body>
+</html>

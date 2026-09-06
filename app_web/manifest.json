@@ -1,0 +1,18 @@
+{
+  "name": "AlucarpinSamitier",
+  "short_name": "Alucarpin",
+  "lang": "es",
+  "start_url": "/app/login.html",
+  "scope": "/app/",
+  "display": "standalone",
+  "background_color": "#eef3f2",
+  "theme_color": "#176b70",
+  "icons": [
+    {
+      "src": "/app/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
