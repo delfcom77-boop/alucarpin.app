@@ -140,6 +140,13 @@
       await cargar();
     });
 
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) cargar().catch(() => {});
+    });
+    setInterval(() => {
+      if (!document.hidden) cargar().catch(() => {});
+    }, 15000);
+
     cargar().catch(() => { historial.textContent = 'No se pudo conectar con el programa.'; });
   </script>
   <script src="/app/pwa.js"></script>
