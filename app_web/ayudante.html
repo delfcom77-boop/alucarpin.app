@@ -30,6 +30,8 @@
     th, td { padding: 11px 8px; border-bottom: 1px solid #d6e1df; text-align: left; }
     th { background: #eef7f5; }
     tbody tr { cursor: pointer; }
+    tbody tr.pagado { background: #e3f3e5; color: #185c2b; }
+    tbody tr.pendiente { background: #fce4e4; color: #7a2020; }
     tbody tr:hover, tbody tr.seleccionado { background: #eef7f5; }
     @media (min-width: 640px) { form { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; } form button, form .mensaje { grid-column: 1 / -1; } }
   </style>
@@ -101,7 +103,7 @@
       if (!fichajes.length) { historial.innerHTML = '<tr><td colspan="6">Todavía no hay días registrados.</td></tr>'; return; }
       fichajes.forEach(fichaje => {
         const item = document.createElement('tr');
-        item.className = 'registro';
+        item.className = `registro ${fichaje.pagado ? 'pagado' : 'pendiente'}`;
         const tipo = fichaje.tipo_destino === 'presupuesto' ? 'Presupuesto Alucarpin' : 'Faena a 3º';
         item.innerHTML = `<td>${fichaje.fecha}</td><td>${tipo}</td><td>${fichaje.cliente || ''}</td><td>${fichaje.obra}</td><td>${fichaje.ubicacion || ''}</td><td>${fichaje.poblacion || ''}</td>`;
         item.onclick = () => cargarEnFormulario(fichaje, item);
