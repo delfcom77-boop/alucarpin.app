@@ -36,6 +36,7 @@
       th { background: #eef3f1; }
       tr.seleccionada { background: #fff0e9; }
       tr.pagado { background: #e3f3e5; color: #185c2b; }
+      tr.parcial { background: #fff3cd; color: #765b00; }
       tr.pendiente { background: #fce4e4; color: #7a2020; }
       tr { cursor: pointer; }
       .acciones { display: flex; gap: 8px; }
@@ -45,12 +46,22 @@
     .mensaje { min-height: 24px; font-weight: 700; }
     .error { color: #a52e2e; }
     .exito { color: #1c6b42; }
+    .estado-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .estado-dato { border-radius: 8px; padding: 12px; font-weight: 700; }
+    .estado-dato { border: 2px solid transparent; cursor: pointer; text-align: left; width: 100%; }
+    .estado-dato.seleccionado { border-color: #293f4a; }
+    .estado-dato strong { display: block; font-size: 24px; margin-top: 4px; }
+    .estado-pagado { background: #e3f3e5; color: #185c2b; }
+    .estado-parcial { background: #fff3cd; color: #765b00; }
+    .estado-pendiente { background: #fce4e4; color: #7a2020; }
+    .estado-total { background: #eef3f1; color: #293f4a; }
     @media (max-width: 560px) { .fila, .resumen { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
   <main>
     <header><h1>Control de ayudantes</h1><p>Pagos y resumen semanal</p></header>
+    <section><h2>Estado de pagos</h2><div class="estado-grid"><button class="estado-dato estado-pagado" data-filtro-estado="Pagado" type="button">Pagado<strong id="contador-pagado">0</strong></button><button class="estado-dato estado-parcial" data-filtro-estado="Parcial" type="button">Parcial<strong id="contador-parcial">0</strong></button><button class="estado-dato estado-pendiente" data-filtro-estado="No pagado" type="button">Pendiente<strong id="contador-pendiente">0</strong></button><button class="estado-dato estado-total" data-filtro-estado="Todos" type="button">Total jornadas<strong id="contador-total">0</strong></button></div></section>
     <section><h2>Seleccionar ayudante</h2><div id="ayudantes" class="ayudantes">Cargando...</div></section>
     <section>
       <h2>Añadir ayudante</h2>
@@ -88,7 +99,24 @@
       </form>
     </section>
     <section>
-      <h2>Preparar pago</h2>
+      <h2>Preparar pago por jornadas</h2>
+      <div class="fila">
+        <label>Desde <input id="desde" type="date" required></label>
+        <label>Hasta <input id="hasta" type="date" required></label>
+      </div>
+      <div class="lista-general">
+        <table><thead><tr><th>Fecha</th><th>Faena / obra</th><th>Precio del día</th><th>Pagado</th><th>Forma</th><th>Estado</th></tr></thead><tbody id="jornadas-pago"><tr><td colspan="6">Selecciona un ayudante y un rango.</td></tr></tbody></table>
+      </div>
+      <button id="guardar-pagos-jornadas" type="button">Guardar pagos del periodo</button>
+      <div id="mensaje-pago-jornada" class="mensaje"></div>
+      <div id="resumen" class="resumen" hidden>
+        <div class="dato">Días<strong id="dias">0</strong></div>
+        <div class="dato">Total<strong id="total">0,00 €</strong></div>
+        <div class="dato">Pendiente<strong id="pendiente">0,00 €</strong></div>
+        <div class="dato">Estado<strong id="estado">Pendiente</strong></div>
+      </div>
+    </section>
+    <section hidden>
       <form id="formulario">
         <div class="fila">
           <label>Desde <input id="desde" type="date" required></label>
@@ -101,12 +129,6 @@
         <button type="submit">Calcular y guardar pago</button>
         <div id="mensaje" class="mensaje"></div>
       </form>
-      <div id="resumen" class="resumen" hidden>
-        <div class="dato">Días<strong id="dias">0</strong></div>
-        <div class="dato">Total<strong id="total">0,00 €</strong></div>
-        <div class="dato">Pendiente<strong id="pendiente">0,00 €</strong></div>
-        <div class="dato">Estado<strong id="estado">Pendiente</strong></div>
-      </div>
     </section>
     <section><h2>Fichajes del periodo</h2><div id="fichajes">Selecciona un ayudante y un rango de fechas.</div></section>
     <section><h2>Usuarios y contraseñas</h2><div class="lista-general"><table><thead><tr><th>Usuario</th><th>Rol</th><th>Ayudante</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="usuarios"><tr><td colspan="5">Cargando...</td></tr></tbody></table></div><div id="mensaje-usuarios" class="mensaje"></div></section>
@@ -115,9 +137,16 @@
     const api = '';
     const token = localStorage.getItem('alucarpin_token');
     if (!token) location.replace('/app/login.html');
-    const apiFetch = (url, options = {}) => fetch(url, { ...options, headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` } });
+    const apiFetch = (url, options = {}) => {
+      const controller = new AbortController();
+      const temporizador = setTimeout(() => controller.abort(), 10000);
+      return fetch(url, { ...options, signal: controller.signal, headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` } })
+        .finally(() => clearTimeout(temporizador));
+    };
     const cerrarSesion = () => { localStorage.removeItem('alucarpin_token'); location.replace('/app/login.html'); };
     let ayudanteId = null;
+    let fichajePagoId = null;
+    let jornadasPago = [];
     const contenedorAyudantes = document.querySelector('#ayudantes');
     const fichajes = document.querySelector('#fichajes');
     const mensaje = document.querySelector('#mensaje');
@@ -126,19 +155,46 @@
       const mensajeGeneral = document.querySelector('#mensaje-general');
 
         async function cargarListadoGeneral() {
-          const lista = await (await apiFetch(`${api}/ayudantes`)).json();
+          const respuestaAyudantes = await apiFetch(`${api}/ayudantes`);
+          if (!respuestaAyudantes.ok) throw new Error(`Ayudantes: HTTP ${respuestaAyudantes.status}`);
+          const lista = await respuestaAyudantes.json();
           const grupos = await Promise.all(lista.map(async ayudante => {
             const respuesta = await apiFetch(`${api}/ayudantes/${ayudante.id}/fichajes`);
+            if (!respuesta.ok) throw new Error(`Fichajes: HTTP ${respuesta.status}`);
             return (await respuesta.json()).map(fichaje => ({ ...fichaje, nombreAyudante: ayudante.nombre }));
           }));
-          const registros = grupos.flat().sort((a, b) => b.fecha.localeCompare(a.fecha) || b.id - a.id);
+          registrosGenerales = await Promise.all(grupos.flat().sort((a, b) => b.fecha.localeCompare(a.fecha) || b.id - a.id).map(async fichaje => {
+            const respuestaPago = await apiFetch(`${api}/fichajes/${fichaje.id}/pago`);
+            const pago = respuestaPago.ok ? await respuestaPago.json() : { estado_pago: 'No pagado' };
+            return { ...fichaje, estadoPago: pago.estado_pago || 'No pagado' };
+          }));
+          actualizarContadores();
+          pintarListadoGeneral();
+        }
+
+        function actualizarContadores() {
+          const estados = { Pagado: 0, Parcial: 0, 'No pagado': 0 };
+          registrosGenerales.forEach(fichaje => estados[fichaje.estadoPago] = (estados[fichaje.estadoPago] || 0) + 1);
+          document.querySelector('#contador-pagado').textContent = estados.Pagado;
+          document.querySelector('#contador-parcial').textContent = estados.Parcial;
+          document.querySelector('#contador-pendiente').textContent = estados['No pagado'];
+          document.querySelector('#contador-total').textContent = registrosGenerales.length;
+        }
+
+        function pintarListadoGeneral() {
+          const registrosAyudante = filtroAyudanteGeneral === null
+            ? registrosGenerales
+            : registrosGenerales.filter(fichaje => Number(fichaje.ayudante_id) === filtroAyudanteGeneral);
+          const registros = filtroEstadoPago === 'Todos'
+            ? registrosAyudante
+            : registrosAyudante.filter(fichaje => fichaje.estadoPago === filtroEstadoPago);
           const cuerpo = document.querySelector('#lista-general');
           cuerpo.textContent = '';
           if (!registros.length) { cuerpo.innerHTML = '<tr><td colspan="8">No hay fichajes registrados.</td></tr>'; return; }
           registros.forEach(fichaje => {
             const fila = document.createElement('tr');
             fila.dataset.ayudanteId = fichaje.ayudante_id;
-            fila.className = fichaje.pagado ? 'pagado' : 'pendiente';
+            fila.className = fichaje.estadoPago === 'Pagado' ? 'pagado' : fichaje.estadoPago === 'Parcial' ? 'parcial' : 'pendiente';
             const tipo = fichaje.tipo_destino === 'presupuesto' ? 'Presupuesto Alucarpin' : 'Faena a 3º';
             fila.innerHTML = `<td>${fichaje.nombreAyudante}</td><td>${tipo}</td><td>${fichaje.fecha}</td><td>${fichaje.cliente || ''}</td><td>${fichaje.obra}</td><td>${fichaje.ubicacion || ''}</td><td>${fichaje.poblacion || ''}</td><td class="acciones"><button type="button">Modificar</button><button type="button" class="borrar">Borrar</button></td>`;
             fila.onclick = () => seleccionarFichajeGeneral(fichaje, fila);
@@ -179,8 +235,19 @@
 
     async function cargarAyudantes() {
       const respuesta = await apiFetch(`${api}/ayudantes`);
+      if (!respuesta.ok) throw new Error(`Ayudantes: HTTP ${respuesta.status}`);
       const lista = await respuesta.json();
       contenedorAyudantes.textContent = '';
+      const botonTodos = document.createElement('button');
+      botonTodos.type = 'button';
+      botonTodos.className = 'ayudante';
+      botonTodos.textContent = 'TODOS LOS TRABAJOS';
+      botonTodos.onclick = () => {
+        filtroAyudanteGeneral = null;
+        marcarAyudante(null);
+        pintarListadoGeneral();
+      };
+      contenedorAyudantes.appendChild(botonTodos);
       lista.forEach(ayudante => {
         const elemento = document.createElement('div'); elemento.className = 'ayudante-item';
         const boton = document.createElement('button'); boton.type = 'button'; boton.className = 'ayudante'; boton.dataset.ayudanteId = ayudante.id; boton.textContent = ayudante.nombre;
@@ -211,6 +278,11 @@
         await seleccionar(lista[0].id, contenedorAyudantes.querySelector('.ayudante'));
       }
     }
+    document.querySelectorAll('[data-filtro-estado]').forEach(boton => boton.addEventListener('click', () => {
+      filtroEstadoPago = boton.dataset.filtroEstado;
+      document.querySelectorAll('[data-filtro-estado]').forEach(item => item.classList.toggle('seleccionado', item === boton));
+      pintarListadoGeneral();
+    }));
     document.querySelector('#formulario-ayudante').addEventListener('submit', async event => {
       event.preventDefault();
       const nombre = document.querySelector('#nombre-ayudante').value.trim();
@@ -227,6 +299,10 @@
       await cargarAyudantes();
       await cargarUsuarios();
     });
+    let registrosGenerales = [];
+    let filtroAyudanteGeneral = null;
+    let filtroEstadoPago = 'Todos';
+
     function marcarAyudante(id) {
       ayudanteId = Number(id);
       document.querySelectorAll('.ayudante').forEach(item => {
@@ -235,6 +311,8 @@
     }
     async function seleccionar(id, boton) {
       marcarAyudante(id);
+      filtroAyudanteGeneral = Number(id);
+      pintarListadoGeneral();
       await cargarFichajes();
     }
 
@@ -263,37 +341,54 @@
         const dia = new Date(`${item.fecha}T00:00:00`).getDay();
         return dia !== 0 && dia !== 6;
       });
-      fichajes.textContent = listaLaborable.length ? listaLaborable.map(item => `${item.fecha} | ${item.tipo_destino === 'presupuesto' ? 'Presupuesto Alucarpin' : 'Faena a 3º'} | ${item.obra} | ${item.ubicacion || 'Sin ubicación'}`).join('\n') : 'No hay fichajes en este periodo.';
-      fichajes.style.whiteSpace = 'pre-line';
+      jornadasPago = await Promise.all(listaLaborable.map(async item => {
+        const respuestaPago = await apiFetch(`${api}/fichajes/${item.id}/pago`);
+        const pago = respuestaPago.ok ? await respuestaPago.json() : { importe: 50, importe_pagado: 0, forma_pago: 'Efectivo', estado_pago: 'No pagado' };
+        return { ...item, pago };
+      }));
+      pintarJornadasPago();
+      fichajes.textContent = listaLaborable.length ? `${listaLaborable.length} jornadas encontradas.` : 'No hay fichajes en este periodo.';
       document.querySelector('#dias').textContent = listaLaborable.length;
       actualizarResumen(listaLaborable.length);
     }
+    function pintarJornadasPago() {
+      const cuerpo = document.querySelector('#jornadas-pago');
+      cuerpo.textContent = '';
+      if (!jornadasPago.length) { cuerpo.innerHTML = '<tr><td colspan="6">No hay jornadas en este rango.</td></tr>'; return; }
+      jornadasPago.forEach((jornada, indice) => {
+        const fila = document.createElement('tr');
+        const importe = Number(jornada.pago.importe ?? 50);
+        const importePagado = Number(jornada.pago.importe_pagado ?? 0);
+        const estadoCalculado = importePagado >= importe && importe > 0 ? 'Pagado' : importePagado > 0 ? 'Parcial' : 'No pagado';
+        fila.innerHTML = `<td>${jornada.fecha}</td><td>${jornada.obra || ''}</td><td><input data-campo="importe" type="number" min="0" step="0.01" value="${importe}"></td><td><input data-campo="importe_pagado" type="number" min="0" step="0.01" value="${importePagado}"></td><td><select data-campo="forma"><option ${jornada.pago.forma_pago === 'Efectivo' ? 'selected' : ''}>Efectivo</option><option ${jornada.pago.forma_pago === 'Transferencia' ? 'selected' : ''}>Transferencia</option></select></td><td><select data-campo="estado"><option ${estadoCalculado === 'No pagado' ? 'selected' : ''}>No pagado</option><option ${estadoCalculado === 'Parcial' ? 'selected' : ''}>Parcial</option><option ${estadoCalculado === 'Pagado' ? 'selected' : ''}>Pagado</option></select></td>`;
+        fila.querySelector('[data-campo="importe"]').oninput = event => jornada.pago.importe = Number(event.target.value);
+        fila.querySelector('[data-campo="importe_pagado"]').oninput = event => { jornada.pago.importe_pagado = Number(event.target.value); jornada.pago.estado_pago = jornada.pago.importe_pagado >= jornada.pago.importe && jornada.pago.importe > 0 ? 'Pagado' : jornada.pago.importe_pagado > 0 ? 'Parcial' : 'No pagado'; fila.querySelector('[data-campo="estado"]').value = jornada.pago.estado_pago; };
+        fila.querySelector('[data-campo="forma"]').onchange = event => jornada.pago.forma_pago = event.target.value;
+        fila.querySelector('[data-campo="estado"]').onchange = event => jornada.pago.estado_pago = event.target.value;
+        cuerpo.appendChild(fila);
+      });
+    }
+    document.querySelector('#guardar-pagos-jornadas').onclick = async () => {
+      const mensajePago = document.querySelector('#mensaje-pago-jornada');
+      if (!jornadasPago.length) { mensajePago.textContent = 'No hay jornadas para guardar.'; return; }
+      for (const jornada of jornadasPago) {
+        const respuesta = await apiFetch(`${api}/fichajes/${jornada.id}/pago`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(jornada.pago) });
+        if (!respuesta.ok) { mensajePago.textContent = 'No se pudo guardar una de las jornadas.'; mensajePago.className = 'mensaje error'; return; }
+      }
+      mensajePago.textContent = 'Pagos del periodo guardados correctamente.';
+      mensajePago.className = 'mensaje exito';
+      await cargarFichajes();
+    };
     function actualizarResumen(dias) {
-      const total = dias * Number(document.querySelector('#precio').value || 0);
-      const pagado = Number(document.querySelector('#pagado').value || 0);
+      const total = jornadasPago.reduce((suma, jornada) => suma + Number(jornada.pago.importe || 0), 0);
+      const pagado = jornadasPago.filter(jornada => jornada.pago.estado_pago === 'Pagado')
+        .reduce((suma, jornada) => suma + Number(jornada.pago.importe || 0), 0);
       document.querySelector('#total').textContent = `${total.toFixed(2)} €`;
       document.querySelector('#pendiente').textContent = `${Math.max(total - pagado, 0).toFixed(2)} €`;
       document.querySelector('#estado').textContent = total > 0 && pagado >= total ? 'Pagado' : 'Pendiente';
       document.querySelector('#resumen').hidden = false;
     }
     [desde, hasta].forEach(item => item.addEventListener('change', () => cargarFichajes().catch(mostrarError)));
-    [document.querySelector('#precio'), document.querySelector('#pagado')].forEach(item => item.addEventListener('input', () => actualizarResumen(document.querySelector('#dias').textContent)));
-    document.querySelector('#formulario').addEventListener('submit', async event => {
-      event.preventDefault();
-      const botonSeleccionado = document.querySelector('.ayudante.seleccionado');
-      const filaSeleccionada = document.querySelector('#lista-general tr.seleccionada');
-      const ayudanteSeleccionado = ayudanteId ?? botonSeleccionado?.dataset.ayudanteId ?? filaSeleccionada?.dataset.ayudanteId;
-      if (!ayudanteSeleccionado) { mensaje.textContent = 'Selecciona un ayudante.'; mensaje.className = 'mensaje error'; return; }
-      ayudanteId = Number(ayudanteSeleccionado);
-      const respuesta = await apiFetch(`${api}/liquidaciones`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ayudante_id: ayudanteId, desde: desde.value, hasta: hasta.value, precio_dia: Number(document.querySelector('#precio').value), importe_pagado: Number(document.querySelector('#pagado').value) }) });
-      const resultado = await respuesta.json();
-      if (!respuesta.ok) { mensaje.textContent = resultado.detail || 'No se pudo guardar el pago.'; mensaje.className = 'mensaje error'; return; }
-      mensaje.textContent = resultado.accion === 'modificado'
-        ? `Pago modificado correctamente: ${resultado.estado}.`
-        : `Pago guardado correctamente: ${resultado.estado}.`;
-      mensaje.className = 'mensaje exito';
-      actualizarResumen(resultado.dias);
-    });
     function mostrarError() {
       mensaje.textContent = 'No se pudo conectar con la API.';
       mensaje.className = 'mensaje error';
@@ -322,8 +417,13 @@
         cuerpo.appendChild(fila);
       });
     }
-    cargarAyudantes().catch(mostrarError);
-    cargarListadoGeneral().catch(mostrarError);
+    cargarAyudantes().catch(error => {
+      contenedorAyudantes.textContent = error.message;
+      contenedorAyudantes.className = 'mensaje error';
+    });
+    cargarListadoGeneral().catch(error => {
+      document.querySelector('#lista-general').innerHTML = `<tr><td colspan="8">${error.message}</td></tr>`;
+    });
     cargarUsuarios().catch(error => { mensajeUsuarios.textContent = error.message; mensajeUsuarios.className = 'mensaje error'; });
   </script>
   <script src="/app/pwa.js"></script>

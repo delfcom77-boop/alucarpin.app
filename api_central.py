@@ -73,6 +73,13 @@ class PagoCreate(BaseModel):
     fecha_pago: Optional[date] = None
 
 
+class PagoJornadaUpdate(BaseModel):
+    importe: float = Field(default=50, ge=0)
+    importe_pagado: float = Field(default=0, ge=0)
+    forma_pago: str = "Efectivo"
+    estado_pago: Literal["No pagado", "Parcial", "Pagado"] = "No pagado"
+
+
 class LoginCreate(BaseModel):
     usuario: str
     password: str
@@ -280,6 +287,60 @@ def listar_usuarios(usuario=Depends(administrador)):
             """
         ).fetchall()
     return [dict(fila) for fila in filas]
+
+
+@app.get("/resumen-gestion")
+def resumen_gestion(usuario=Depends(administrador)):
+    avisos = []
+
+    def consultar(consulta, etiqueta):
+        try:
+            with conexion() as db:
+                return [dict(fila) for fila in db.execute(consulta).fetchall()]
+        except Exception as error:
+            avisos.append(f"{etiqueta}: {type(error).__name__}")
+            return []
+
+    faenas = consultar(
+        "SELECT id, cliente, obra, fecha, ubicacion, poblacion, precio, ayudantes "
+        "FROM faenas ORDER BY fecha DESC, id DESC",
+        "faenas",
+    )
+    presupuestos = consultar(
+        "SELECT id, cliente, num_presupuesto, fecha, bruto, iva, "
+        "presupuesto_final, estado FROM presupuestos ORDER BY fecha DESC, id DESC",
+        "presupuestos",
+    )
+    gastos = []
+    for nombres, tipo in (
+        (("gastos_faenas_extras", "gasto_faenas"), "faena"),
+        (("gastos_presupuestos", "gasto_presupuesto"), "presupuesto"),
+    ):
+        for tabla in nombres:
+            filas = consultar(
+                f"SELECT id, proveedor, concepto, importe, "
+                f"COALESCE(importe_pagado, pagado, 0) AS importe_pagado, "
+                f"forma_pago, fecha, estado_pago, categoria FROM {tabla} "
+                f"ORDER BY fecha DESC, id DESC",
+                tabla,
+            )
+            if filas or not avisos or not avisos[-1].startswith(tabla + ":"):
+                for gasto in filas:
+                    gasto["tipo"] = tipo
+                gastos.extend(filas)
+                break
+
+    return {
+        "faenas": faenas,
+        "presupuestos": presupuestos,
+        "gastos": gastos,
+        "totales": {
+            "faenas": len(faenas),
+            "presupuestos": len(presupuestos),
+            "gastos": len(gastos),
+        },
+        "avisos": avisos,
+    }
 
 
 @app.patch("/usuarios/{usuario_id}/password")
@@ -490,6 +551,84 @@ def borrar_fichaje(fichaje_id: int, usuario=Depends(administrador)):
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Fichaje no encontrado")
         return {"eliminado": True, "id": fichaje_id}
+
+
+@app.get("/fichajes/{fichaje_id}/pago")
+def consultar_pago_jornada(fichaje_id: int, usuario=Depends(administrador)):
+    with conexion() as db:
+        fichaje = db.execute(
+            "SELECT f.id, f.ayudante_id, f.fecha, f.obra, f.faena_id_vinculada, "
+            "a.nombre FROM fichajes_ayudantes f JOIN ayudantes a "
+            "ON a.id = f.ayudante_id WHERE f.id = ?",
+            (fichaje_id,),
+        ).fetchone()
+        if not fichaje:
+            raise HTTPException(status_code=404, detail="Fichaje no encontrado")
+        if not fichaje["faena_id_vinculada"]:
+            return {"fichaje_id": fichaje_id, "importe": 50, "forma_pago": "Efectivo", "estado_pago": "No pagado", "creado": False}
+        for tabla in ("gastos_faenas_extras", "gasto_faenas"):
+            try:
+                gasto = db.execute(
+                    f"SELECT id, importe, COALESCE(importe_pagado, pagado, 0) AS importe_pagado, forma_pago, estado_pago FROM {tabla} "
+                    "WHERE faena_id = ? AND proveedor = ? AND fecha = ? "
+                    "AND categoria = 'Ayudantes' ORDER BY id DESC LIMIT 1",
+                    (fichaje["faena_id_vinculada"], fichaje["nombre"], fichaje["fecha"]),
+                ).fetchone()
+                if gasto:
+                    estado = "Pagado" if gasto["importe_pagado"] >= gasto["importe"] and gasto["importe"] > 0 else "Parcial" if gasto["importe_pagado"] > 0 else "No pagado"
+                    return {"fichaje_id": fichaje_id, "gasto_id": gasto["id"], "importe": gasto["importe"], "importe_pagado": gasto["importe_pagado"], "forma_pago": gasto["forma_pago"], "estado_pago": estado, "creado": True}
+            except Exception:
+                if DATABASE_URL:
+                    db.db.rollback()
+        return {"fichaje_id": fichaje_id, "importe": 50, "forma_pago": "Efectivo", "estado_pago": "No pagado", "creado": False}
+
+
+@app.patch("/fichajes/{fichaje_id}/pago")
+def actualizar_pago_jornada(fichaje_id: int, cambios: PagoJornadaUpdate, usuario=Depends(administrador)):
+    with conexion() as db:
+        estado_calculado = (
+            "Pagado" if cambios.importe_pagado >= cambios.importe and cambios.importe > 0
+            else "Parcial" if cambios.importe_pagado > 0 else "No pagado"
+        )
+        fichaje = db.execute(
+            "SELECT f.ayudante_id, f.fecha, f.obra, f.faena_id_vinculada, a.nombre "
+            "FROM fichajes_ayudantes f JOIN ayudantes a ON a.id = f.ayudante_id "
+            "WHERE f.id = ?",
+            (fichaje_id,),
+        ).fetchone()
+        if not fichaje or not fichaje["faena_id_vinculada"]:
+            raise HTTPException(status_code=400, detail="El fichaje debe estar vinculado a una faena")
+        parametros = (fichaje["faena_id_vinculada"], fichaje["nombre"], fichaje["fecha"])
+        for tabla in ("gastos_faenas_extras", "gasto_faenas"):
+            try:
+                existente = db.execute(
+                    f"SELECT id FROM {tabla} WHERE faena_id = ? AND proveedor = ? "
+                    "AND fecha = ? AND categoria = 'Ayudantes' ORDER BY id DESC LIMIT 1",
+                    parametros,
+                ).fetchone()
+                if existente:
+                    db.execute(
+                        f"UPDATE {tabla} SET importe = ?, bruto = ?, forma_pago = ?, "
+                        "estado_pago = ?, pagado = ?, importe_pagado = ? WHERE id = ?",
+                        (cambios.importe, cambios.importe, cambios.forma_pago,
+                         estado_calculado, cambios.importe_pagado, cambios.importe_pagado, existente["id"]),
+                    )
+                else:
+                    db.execute(
+                        f"INSERT INTO {tabla} "
+                        "(faena_id, concepto, proveedor, bruto, tipo_iva, iva, importe, "
+                        "pagado, importe_pagado, forma_pago, fecha, estado_pago, categoria) "
+                        "VALUES (?, ?, ?, ?, '0', 0, ?, ?, ?, ?, ?, ?, 'Ayudantes')",
+                        (fichaje["faena_id_vinculada"], f"Día trabajado - {fichaje['obra']}",
+                         fichaje["nombre"], cambios.importe, cambios.importe,
+                         cambios.importe_pagado, cambios.importe_pagado,
+                         cambios.forma_pago, fichaje["fecha"], estado_calculado),
+                    )
+                return {"fichaje_id": fichaje_id, "importe": cambios.importe, "importe_pagado": cambios.importe_pagado, "forma_pago": cambios.forma_pago, "estado_pago": estado_calculado}
+            except Exception:
+                if DATABASE_URL:
+                    db.db.rollback()
+        raise HTTPException(status_code=500, detail="No existe una tabla de gastos compatible")
 
 
 @app.post("/liquidaciones", status_code=201)

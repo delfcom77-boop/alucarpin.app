@@ -32,6 +32,12 @@
       .acciones { display: flex; gap: 8px; }
       .acciones button { min-height: 38px; border: 0; padding: 7px 12px; cursor: pointer; font-weight: 700; }
       .borrar { background: #f4cccc; color: #7b2020; }
+    .gestion-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .gestion-bloque { background: #f1f5f3; border-radius: 8px; padding: 12px; }
+    .gestion-bloque h3 { margin: 0 0 8px; font-size: 16px; }
+    .gestion-lista { margin: 0; white-space: pre-line; font-size: 13px; line-height: 1.5; }
+    .gestion-cabecera { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .gestion-cabecera button { min-height: 38px; border: 0; padding: 7px 12px; background: #293f4a; color: #fff; cursor: pointer; font-weight: 700; }
     button[type=submit] { background: #d45d3f; color: #fff; border: 0; font-weight: 700; cursor: pointer; }
     .mensaje { min-height: 24px; font-weight: 700; }
     .error { color: #a52e2e; }
@@ -42,6 +48,15 @@
 <body>
   <main>
     <header><h1>Control de ayudantes</h1><p>Pagos y resumen semanal</p></header>
+    <section>
+      <div class="gestion-cabecera"><h2>Resumen de gestión</h2><button id="recargar-gestion" type="button">Actualizar</button></div>
+      <div class="gestion-grid">
+        <div class="gestion-bloque"><h3>Faenas</h3><div id="resumen-faenas" class="gestion-lista">Cargando...</div></div>
+        <div class="gestion-bloque"><h3>Presupuestos</h3><div id="resumen-presupuestos" class="gestion-lista">Cargando...</div></div>
+        <div class="gestion-bloque"><h3>Gastos</h3><div id="resumen-gastos" class="gestion-lista">Cargando...</div></div>
+      </div>
+      <div id="mensaje-gestion" class="mensaje"></div>
+    </section>
     <section><h2>Seleccionar ayudante</h2><div id="ayudantes" class="ayudantes">Cargando...</div></section>
     <section>
       <h2>Listado general de fichajes</h2>
@@ -78,7 +93,7 @@
           <label>Hasta <input id="hasta" type="date" required></label>
         </div>
         <div class="fila">
-          <label>Precio por día (€) <input id="precio" type="number" min="0" step="0.01" required></label>
+          <label>Precio por día (€) <input id="precio" type="number" min="0" step="0.01" value="50" required></label>
           <label>Importe pagado (€) <input id="pagado" type="number" min="0" step="0.01" value="0" required></label>
         </div>
         <button type="submit">Calcular y guardar pago</button>
@@ -101,11 +116,38 @@
     const apiFetch = (url, options = {}) => fetch(url, { ...options, headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` } });
     const cerrarSesion = () => { localStorage.removeItem('alucarpin_token'); location.replace('/app/login.html'); };
     let ayudanteId = null;
+    let registrosGenerales = [];
+    let filtroAyudanteGeneral = null;
+    const tarifaDiariaPorDefecto = 50;
     const contenedorAyudantes = document.querySelector('#ayudantes');
     const fichajes = document.querySelector('#fichajes');
     const mensaje = document.querySelector('#mensaje');
     const mensajeUsuarios = document.querySelector('#mensaje-usuarios');
       const mensajeGeneral = document.querySelector('#mensaje-general');
+    const mensajeGestion = document.querySelector('#mensaje-gestion');
+
+    async function cargarResumenGestion() {
+      const respuesta = await apiFetch(`${api}/resumen-gestion`);
+      if (!respuesta.ok) {
+        let detalle = '';
+        try { detalle = (await respuesta.json()).detail || ''; } catch {}
+        throw new Error(`No se pudo cargar el resumen de gestión (${respuesta.status})${detalle ? `: ${detalle}` : '.'}`);
+      }
+      const datos = await respuesta.json();
+      const faenas = datos.faenas.map(item => `${item.cliente} | ${item.obra || ''} | ${item.precio ?? 0} €`);
+      const presupuestos = datos.presupuestos.map(item => `Nº ${item.num_presupuesto} | ${item.cliente} | ${item.presupuesto_final ?? 0} €`);
+      const gastos = datos.gastos.map(item => `${item.proveedor || ''} | ${item.concepto || ''} | ${item.importe ?? 0} € | ${item.forma_pago || ''}`);
+      document.querySelector('#resumen-faenas').textContent = faenas.length ? faenas.join('\n') : 'Sin faenas.';
+      document.querySelector('#resumen-presupuestos').textContent = presupuestos.length ? presupuestos.join('\n') : 'Sin presupuestos.';
+      document.querySelector('#resumen-gastos').textContent = gastos.length ? gastos.join('\n') : 'Sin gastos.';
+      mensajeGestion.textContent = `Faenas: ${datos.totales.faenas} | Presupuestos: ${datos.totales.presupuestos} | Gastos: ${datos.totales.gastos}`;
+      if (datos.avisos?.length) mensajeGestion.textContent += ` | Avisos: ${datos.avisos.join(', ')}`;
+      mensajeGestion.className = 'mensaje exito';
+    }
+    document.querySelector('#recargar-gestion').addEventListener('click', () => cargarResumenGestion().catch(error => {
+      mensajeGestion.textContent = error.message;
+      mensajeGestion.className = 'mensaje error';
+    }));
 
         async function cargarListadoGeneral() {
           const lista = await (await apiFetch(`${api}/ayudantes`)).json();
@@ -113,7 +155,14 @@
             const respuesta = await apiFetch(`${api}/ayudantes/${ayudante.id}/fichajes`);
             return (await respuesta.json()).map(fichaje => ({ ...fichaje, nombreAyudante: ayudante.nombre }));
           }));
-          const registros = grupos.flat().sort((a, b) => b.fecha.localeCompare(a.fecha) || b.id - a.id);
+          registrosGenerales = grupos.flat().sort((a, b) => b.fecha.localeCompare(a.fecha) || b.id - a.id);
+          pintarListadoGeneral();
+        }
+
+        function pintarListadoGeneral() {
+          const registros = filtroAyudanteGeneral !== null
+            ? registrosGenerales.filter(fichaje => Number(fichaje.ayudante_id) === filtroAyudanteGeneral)
+            : registrosGenerales;
           const cuerpo = document.querySelector('#lista-general');
           cuerpo.textContent = '';
           if (!registros.length) { cuerpo.innerHTML = '<tr><td colspan="8">No hay fichajes registrados.</td></tr>'; return; }
@@ -162,6 +211,16 @@
       const respuesta = await apiFetch(`${api}/ayudantes`);
       const lista = await respuesta.json();
       contenedorAyudantes.textContent = '';
+      const botonTodos = document.createElement('button');
+      botonTodos.type = 'button';
+      botonTodos.className = 'ayudante';
+      botonTodos.textContent = 'TODOS LOS TRABAJOS';
+      botonTodos.onclick = () => {
+        filtroAyudanteGeneral = null;
+        marcarAyudante(null);
+        pintarListadoGeneral();
+      };
+      contenedorAyudantes.appendChild(botonTodos);
       lista.forEach(ayudante => {
         const boton = document.createElement('button'); boton.type = 'button'; boton.className = 'ayudante'; boton.dataset.ayudanteId = ayudante.id; boton.textContent = ayudante.nombre;
         boton.onclick = () => seleccionar(ayudante.id, boton);
@@ -179,6 +238,10 @@
     }
     async function seleccionar(id, boton) {
       marcarAyudante(id);
+      filtroAyudanteGeneral = Number(id);
+      pintarListadoGeneral();
+      document.querySelector('#precio').value = tarifaDiariaPorDefecto;
+      actualizarResumen(document.querySelector('#dias').textContent);
       await cargarFichajes();
     }
 
@@ -268,6 +331,7 @@
     }
     cargarAyudantes().catch(mostrarError);
     cargarListadoGeneral().catch(mostrarError);
+    cargarResumenGestion().catch(error => { mensajeGestion.textContent = error.message; mensajeGestion.className = 'mensaje error'; });
     cargarUsuarios().catch(error => { mensajeUsuarios.textContent = error.message; mensajeUsuarios.className = 'mensaje error'; });
   </script>
 </body>
