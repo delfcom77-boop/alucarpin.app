@@ -60,7 +60,8 @@ def inicializar_usuarios(db):
         salt, digest = hash_password("Cambiar123!")
         consulta_ayudante = (
             "INSERT INTO usuarios (usuario, password_salt, password_hash, rol, ayudante_id) "
-            "VALUES (?, ?, ?, 'ayudante', ?) ON CONFLICT (usuario) DO NOTHING"
+            "VALUES (?, ?, ?, 'ayudante', ?) "
+            "ON CONFLICT (ayudante_id) DO NOTHING"
             if es_postgres
             else "INSERT OR IGNORE INTO usuarios (usuario, password_salt, password_hash, rol, ayudante_id) VALUES (?, ?, ?, 'ayudante', ?)"
         )
