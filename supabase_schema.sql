@@ -98,6 +98,8 @@ CREATE TABLE IF NOT EXISTS seguimientos_agenda (
     hora TEXT NOT NULL,
     cliente TEXT NOT NULL DEFAULT '',
     telefono TEXT NOT NULL DEFAULT '',
+    ubicacion TEXT NOT NULL DEFAULT '',
+    poblacion TEXT NOT NULL DEFAULT '',
     motivo TEXT NOT NULL,
     observaciones TEXT NOT NULL DEFAULT '',
     estado TEXT NOT NULL DEFAULT 'Pendiente',
@@ -120,6 +122,12 @@ ALTER TABLE seguimientos_agenda
 
 ALTER TABLE seguimientos_agenda
     ALTER COLUMN fecha_llamada SET NOT NULL;
+
+ALTER TABLE seguimientos_agenda
+    ADD COLUMN IF NOT EXISTS ubicacion TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE seguimientos_agenda
+    ADD COLUMN IF NOT EXISTS poblacion TEXT NOT NULL DEFAULT '';
 
 ALTER TABLE fichajes_ayudantes
     ADD COLUMN IF NOT EXISTS num_presupuesto TEXT;

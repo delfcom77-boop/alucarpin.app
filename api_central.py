@@ -108,6 +108,8 @@ class SeguimientoCreate(BaseModel):
     hora: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
     cliente: str = ""
     telefono: str = ""
+    ubicacion: str = ""
+    poblacion: str = ""
     motivo: str = Field(min_length=1)
     observaciones: str = ""
     estado: Literal["Pendiente", "Realizado"] = "Pendiente"
@@ -213,6 +215,8 @@ def inicializar_base_datos():
                     hora TEXT NOT NULL,
                     cliente TEXT NOT NULL DEFAULT '',
                     telefono TEXT NOT NULL DEFAULT '',
+                    ubicacion TEXT NOT NULL DEFAULT '',
+                    poblacion TEXT NOT NULL DEFAULT '',
                     motivo TEXT NOT NULL,
                     observaciones TEXT NOT NULL DEFAULT '',
                     estado TEXT NOT NULL DEFAULT 'Pendiente',
@@ -221,6 +225,8 @@ def inicializar_base_datos():
                 )
             """)
             db.execute("ALTER TABLE seguimientos_agenda ADD COLUMN IF NOT EXISTS fecha_llamada DATE")
+            db.execute("ALTER TABLE seguimientos_agenda ADD COLUMN IF NOT EXISTS ubicacion TEXT NOT NULL DEFAULT ''")
+            db.execute("ALTER TABLE seguimientos_agenda ADD COLUMN IF NOT EXISTS poblacion TEXT NOT NULL DEFAULT ''")
             db.execute("UPDATE seguimientos_agenda SET fecha_llamada = fecha_recordatorio WHERE fecha_llamada IS NULL")
         return
     with conexion() as db:
@@ -299,6 +305,8 @@ def inicializar_base_datos():
                 hora TEXT NOT NULL,
                 cliente TEXT NOT NULL DEFAULT '',
                 telefono TEXT NOT NULL DEFAULT '',
+                ubicacion TEXT NOT NULL DEFAULT '',
+                poblacion TEXT NOT NULL DEFAULT '',
                 motivo TEXT NOT NULL,
                 observaciones TEXT NOT NULL DEFAULT '',
                 estado TEXT NOT NULL DEFAULT 'Pendiente',
@@ -312,6 +320,10 @@ def inicializar_base_datos():
         if "fecha_llamada" not in columnas_seguimientos:
             db.execute("ALTER TABLE seguimientos_agenda ADD COLUMN fecha_llamada TEXT")
             db.execute("UPDATE seguimientos_agenda SET fecha_llamada = fecha_recordatorio WHERE fecha_llamada IS NULL")
+        if "ubicacion" not in columnas_seguimientos:
+            db.execute("ALTER TABLE seguimientos_agenda ADD COLUMN ubicacion TEXT NOT NULL DEFAULT ''")
+        if "poblacion" not in columnas_seguimientos:
+            db.execute("ALTER TABLE seguimientos_agenda ADD COLUMN poblacion TEXT NOT NULL DEFAULT ''")
         columnas = {
             fila[1] for fila in db.execute("PRAGMA table_info(fichajes_ayudantes)")
         }
@@ -656,7 +668,8 @@ def calendario_seguimiento(seguimiento_id: int, usuario=Depends(administrador)):
     fin = inicio + timedelta(minutes=15)
     titulo = f"Llamar" + (f": {seguimiento['cliente']}" if seguimiento["cliente"] else "")
     fecha_llamada = seguimiento["fecha_llamada"] or ""
-    descripcion = " | ".join(filter(None, [f"Llamada recibida el {fecha_llamada}", seguimiento["motivo"], seguimiento["observaciones"], seguimiento["telefono"]]))
+    ubicacion = ", ".join(filter(None, [seguimiento["ubicacion"], seguimiento["poblacion"]]))
+    descripcion = " | ".join(filter(None, [f"Llamada recibida el {fecha_llamada}", seguimiento["motivo"], seguimiento["observaciones"], ubicacion, seguimiento["telefono"]]))
     recurrencia = ["RRULE:FREQ=DAILY"] if seguimiento["estado"] == "Pendiente" else []
     contenido = "\r\n".join([
         "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Alucarpin//Agenda//ES", "BEGIN:VEVENT",
@@ -706,7 +719,8 @@ def calendario_completo(usuario=Depends(administrador)):
         inicio = datetime.strptime(f"{fecha_texto} {seguimiento['hora']}", "%Y%m%d %H:%M")
         fin = inicio + timedelta(minutes=15)
         titulo = f"Llamar" + (f": {seguimiento['cliente']}" if seguimiento["cliente"] else "")
-        descripcion = " | ".join(filter(None, [f"Llamada recibida el {seguimiento['fecha_llamada']}", seguimiento["motivo"], seguimiento["observaciones"], seguimiento["telefono"]]))
+        ubicacion = ", ".join(filter(None, [seguimiento["ubicacion"], seguimiento["poblacion"]]))
+        descripcion = " | ".join(filter(None, [f"Llamada recibida el {seguimiento['fecha_llamada']}", seguimiento["motivo"], seguimiento["observaciones"], ubicacion, seguimiento["telefono"]]))
         recurrencia = ["RRULE:FREQ=DAILY"] if seguimiento["estado"] == "Pendiente" else []
         eventos.append([f"UID:alucarpin-seguimiento-{seguimiento['id']}@alucarpin.app", f"DTSTART:{inicio.strftime('%Y%m%dT%H%M%S')}", f"DTEND:{fin.strftime('%Y%m%dT%H%M%S')}", f"SUMMARY:{_ics_escape(titulo)}", f"DESCRIPTION:{_ics_escape(descripcion)}", *recurrencia, "BEGIN:VALARM", "TRIGGER:-PT0M", "ACTION:DISPLAY", f"DESCRIPTION:{_ics_escape(titulo)}", "END:VALARM"])
 
