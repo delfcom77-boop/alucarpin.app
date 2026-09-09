@@ -631,8 +631,16 @@ def crear_seguimiento(datos: SeguimientoCreate, usuario=Depends(administrador)):
 @app.patch("/seguimientos/{seguimiento_id}")
 def modificar_seguimiento(seguimiento_id: int, datos: SeguimientoUpdate, usuario=Depends(administrador)):
     valores = datos.model_dump()
+    with conexion() as db:
+        existente = db.execute(
+            "SELECT fecha_recordatorio FROM seguimientos_agenda WHERE id = ?",
+            (seguimiento_id,),
+        ).fetchone()
+    if not existente:
+        raise HTTPException(status_code=404, detail="Seguimiento no encontrado")
     valores["fecha_llamada"] = (valores.get("fecha_llamada") or date.today()).isoformat()
-    valores["fecha_recordatorio"] = valores["fecha_recordatorio"].isoformat()
+    fecha_recordatorio = valores.get("fecha_recordatorio") or existente["fecha_recordatorio"]
+    valores["fecha_recordatorio"] = fecha_recordatorio.isoformat() if hasattr(fecha_recordatorio, "isoformat") else fecha_recordatorio
     valores = {clave: valor.strip() if isinstance(valor, str) else valor for clave, valor in valores.items()}
     asignaciones = ", ".join(f"{clave} = ?" for clave in valores)
     with conexion() as db:
