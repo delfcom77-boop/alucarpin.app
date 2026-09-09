@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AlucarpinSamitier | Menú principal</title>
+  <style>
+    :root { font-family: Segoe UI, sans-serif; color: #223238; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: #f3f1eb; }
+    main { width: min(900px, 100%); margin: auto; padding: 28px 16px 40px; }
+    header { background: #293f4a; color: #fff; border-radius: 14px; padding: 24px; }
+    h1 { margin: 0 0 8px; }
+    .menu { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 18px; }
+    .opcion { min-height: 170px; display: flex; flex-direction: column; justify-content: space-between; padding: 20px; border-radius: 12px; color: #fff; text-decoration: none; font-weight: 700; box-shadow: 0 4px 12px #22323822; }
+    .opcion strong { font-size: 22px; }
+    .opcion span { font-weight: 400; line-height: 1.4; }
+    .control { background: #176b70; }
+    .agenda { background: #d45d3f; }
+    .ayudantes { background: #806b3e; }
+    .salir { display: inline-block; margin-top: 18px; color: #7b2020; font-weight: 700; cursor: pointer; }
+    @media (max-width: 620px) { .menu { grid-template-columns: 1fr; } .opcion { min-height: 125px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header><h1>AlucarpinSamitier</h1><p>¿Qué quieres hacer?</p></header>
+    <section class="menu">
+      <a class="opcion control" href="/app/mi_control.html"><strong>Mi control</strong><span>Trabajos, reparaciones, presupuestos e ingresos.</span></a>
+      <a class="opcion agenda" href="/app/agenda.html"><strong>Agenda y citas</strong><span>Visitas, reuniones, llamadas y recordatorios.</span></a>
+      <a class="opcion ayudantes" href="/app/administrador.html"><strong>Ayudantes</strong><span>Fichajes, faenas, reparaciones y pagos.</span></a>
+    </section>
+    <a class="salir" id="salir" href="/app/login.html">Cerrar sesión</a>
+  </main>
+  <script>
+    if (!localStorage.getItem('alucarpin_token')) location.replace('/app/login.html');
+    document.querySelector('#salir').onclick = event => { event.preventDefault(); localStorage.removeItem('alucarpin_token'); location.replace('/app/login.html'); };
+  </script>
+</body>
+</html>
