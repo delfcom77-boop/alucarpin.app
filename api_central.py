@@ -104,7 +104,7 @@ class CitaUpdate(CitaCreate):
 
 class SeguimientoCreate(BaseModel):
     fecha_llamada: Optional[date] = None
-    fecha_recordatorio: date
+    fecha_recordatorio: Optional[date] = None
     hora: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
     cliente: str = ""
     telefono: str = ""
@@ -612,7 +612,7 @@ def listar_seguimientos(usuario=Depends(administrador)):
 def crear_seguimiento(datos: SeguimientoCreate, usuario=Depends(administrador)):
     valores = datos.model_dump()
     valores["fecha_llamada"] = (valores.get("fecha_llamada") or date.today()).isoformat()
-    valores["fecha_recordatorio"] = valores["fecha_recordatorio"].isoformat()
+    valores["fecha_recordatorio"] = (valores.get("fecha_recordatorio") or date.today()).isoformat()
     valores = {clave: valor.strip() if isinstance(valor, str) else valor for clave, valor in valores.items()}
     columnas = ", ".join(valores)
     marcadores = ", ".join("?" for _ in valores)
