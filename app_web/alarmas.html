@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AlucarpinSamitier | Todas las alarmas</title>
+  <style>
+    :root { font-family: Segoe UI, sans-serif; color: #223238; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f3f1eb; }
+    main { width: min(1050px, 100%); margin: auto; padding: 24px 16px 40px; }
+    header { background: #293f4a; color: #fff; border-radius: 14px; padding: 22px; }
+    h1 { margin: 0 0 8px; }
+    nav { margin: 16px 0; } nav a { background: #293f4a; color: #fff; border-radius: 8px; padding: 12px 16px; text-decoration: none; font-weight: 700; }
+    section { background: #fff; border: 1px solid #ddd8cc; border-radius: 12px; padding: 18px; margin-top: 16px; }
+    .controles { display: grid; grid-template-columns: 1fr auto; gap: 10px; } input, select, button { min-height: 46px; border-radius: 8px; font: inherit; } input, select { border: 1px solid #b9c4c2; padding: 10px; } button { border: 0; background: #d45d3f; color: #fff; font-weight: 700; padding: 8px 12px; cursor: pointer; }
+    .lista { overflow-x: auto; } table { width: 100%; border-collapse: collapse; min-width: 850px; } th, td { border-bottom: 1px solid #ddd8cc; padding: 10px 8px; text-align: left; } th { background: #eef3f1; } .acciones { display: flex; flex-wrap: wrap; gap: 8px; } .realizado { background: #176b70; } .error { color: #a52e2e; font-weight: 700; }
+    @media (max-width: 600px) { .controles { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header><h1>TODAS LAS ALARMAS</h1><p>Notas, citas y trabajos pendientes en un solo lugar</p></header>
+    <nav><a href="/app/inicio.html">Volver al menú</a></nav>
+    <section><div class="controles"><input id="buscar" placeholder="Buscar cliente, dirección o detalle"><select id="filtro"><option value="todas">Todas</option><option value="nota">Notas</option><option value="cita">Citas</option><option value="trabajo">Trabajos</option></select></div><div id="mensaje"></div></section>
+    <section><div class="lista"><table><thead><tr><th>Tipo</th><th>Fecha</th><th>Hora</th><th>Cliente</th><th>Dirección / población</th><th>Detalle</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista"><tr><td colspan="8">Cargando...</td></tr></tbody></table></div></section>
+  </main>
+  <script>
+    const token = localStorage.getItem('alucarpin_token'); if (!token) location.replace('/app/login.html');
+    const apiFetch = (url, options = {}) => fetch(url, { ...options, headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` } });
+    const buscar = document.querySelector('#buscar'); const filtro = document.querySelector('#filtro'); const lista = document.querySelector('#lista'); const mensaje = document.querySelector('#mensaje'); let alarmas = [];
+    const fecha = valor => String(valor || '').split('-').reverse().join('/'); const tipos = { nota: 'NOTA', cita: 'CITA', trabajo: 'TRABAJO' };
+    function pintar() { const texto = buscar.value.trim().toLowerCase(); const tipo = filtro.value; const visibles = alarmas.filter(item => (tipo === 'todas' || item.tipo === tipo) && (!texto || JSON.stringify(item).toLowerCase().includes(texto))); lista.textContent = ''; if (!visibles.length) { lista.innerHTML = '<tr><td colspan="8">No hay alarmas.</td></tr>'; return; } visibles.forEach(item => { const fila = document.createElement('tr'); fila.innerHTML = `<td>${tipos[item.tipo]}</td><td>${fecha(item.fecha)}</td><td>${item.hora || '-'}</td><td>${item.cliente || '-'}</td><td>${[item.ubicacion, item.poblacion].filter(Boolean).join(', ') || '-'}</td><td>${item.detalle || '-'}</td><td>${item.estado}</td><td class="acciones"><button type="button" class="realizado">Marcar realizada</button></td>`; fila.querySelector('button').onclick = async () => { if (item.tipo === 'nota') await apiFetch(`/seguimientos/${item.referencia_id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fecha_recordatorio: item.fecha, hora: item.hora, cliente: item.cliente || '', ubicacion: item.ubicacion || '', poblacion: item.poblacion || '', motivo: item.detalle || '', estado: 'Realizado' }) }); if (item.tipo === 'cita') await apiFetch(`/citas/${item.referencia_id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fecha: item.fecha, hora: item.hora, cliente: item.cliente || '', ubicacion: item.ubicacion || '', poblacion: item.poblacion || '', observaciones: item.detalle || '', estado: 'Realizada' }) }); await cargar(); }; lista.appendChild(fila); }); }
+    async function cargar() { const respuesta = await apiFetch('/alarmas'); if (!respuesta.ok) { mensaje.textContent = 'No se pudieron cargar las alarmas.'; mensaje.className = 'error'; return; } alarmas = await respuesta.json(); pintar(); }
+    buscar.oninput = pintar; filtro.onchange = pintar; cargar();
+  </script>
+</body>
+</html>

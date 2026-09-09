@@ -528,6 +528,22 @@ def listar_citas(usuario=Depends(administrador)):
     return [dict(fila) for fila in filas]
 
 
+@app.get("/alarmas")
+def listar_alarmas(usuario=Depends(administrador)):
+    with conexion() as db:
+        notas = db.execute("SELECT id, fecha_recordatorio AS fecha, hora, cliente, ubicacion, poblacion, motivo AS detalle, estado FROM seguimientos_agenda WHERE estado = 'Pendiente'").fetchall()
+        citas = db.execute("SELECT id, fecha, hora, cliente, ubicacion, poblacion, observaciones AS detalle, estado FROM citas_agenda WHERE estado = 'Pendiente'").fetchall()
+        trabajos = db.execute("SELECT id, fecha_inicio AS fecha, '' AS hora, cliente, ubicacion, poblacion, obra AS detalle, estado_cobro AS estado FROM trabajos_propios WHERE fecha_inicio >= CURRENT_DATE").fetchall()
+    alarmas = []
+    for fila in notas:
+        item = dict(fila); item.update(tipo="nota", referencia_id=item.pop("id")); alarmas.append(item)
+    for fila in citas:
+        item = dict(fila); item.update(tipo="cita", referencia_id=item.pop("id")); alarmas.append(item)
+    for fila in trabajos:
+        item = dict(fila); item.update(tipo="trabajo", referencia_id=item.pop("id")); alarmas.append(item)
+    return sorted(alarmas, key=lambda item: (str(item.get("fecha") or ""), str(item.get("hora") or "")))
+
+
 @app.post("/citas", status_code=201)
 def crear_cita(datos: CitaCreate, usuario=Depends(administrador)):
     valores = datos.model_dump()
