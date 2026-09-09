@@ -93,6 +93,7 @@ CREATE INDEX IF NOT EXISTS idx_citas_agenda_fecha_hora
 
 CREATE TABLE IF NOT EXISTS seguimientos_agenda (
     id BIGSERIAL PRIMARY KEY,
+    fecha_llamada DATE NOT NULL DEFAULT CURRENT_DATE,
     fecha_recordatorio DATE NOT NULL,
     hora TEXT NOT NULL,
     cliente TEXT NOT NULL DEFAULT '',
@@ -107,6 +108,19 @@ CREATE TABLE IF NOT EXISTS seguimientos_agenda (
 CREATE INDEX IF NOT EXISTS idx_seguimientos_agenda_estado_fecha
     ON seguimientos_agenda (estado, fecha_recordatorio, hora);
 
+ALTER TABLE seguimientos_agenda
+    ADD COLUMN IF NOT EXISTS fecha_llamada DATE;
+
+UPDATE seguimientos_agenda
+SET fecha_llamada = fecha_recordatorio
+WHERE fecha_llamada IS NULL;
+
+ALTER TABLE seguimientos_agenda
+    ALTER COLUMN fecha_llamada SET DEFAULT CURRENT_DATE;
+
+ALTER TABLE seguimientos_agenda
+    ALTER COLUMN fecha_llamada SET NOT NULL;
+
 ALTER TABLE fichajes_ayudantes
     ADD COLUMN IF NOT EXISTS num_presupuesto TEXT;
 
@@ -114,3 +128,46 @@ ALTER TABLE ayudantes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE usuarios ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fichajes_ayudantes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE liquidaciones ENABLE ROW LEVEL SECURITY;
+
+CREATE OR REPLACE FUNCTION alucarpin_rellenar_fechas()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.creado_en IS NULL THEN
+        NEW.creado_en := CURRENT_TIMESTAMP;
+    END IF;
+    IF NEW.actualizado_en IS NULL THEN
+        NEW.actualizado_en := CURRENT_TIMESTAMP;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_trabajos_propios_fechas ON trabajos_propios;
+CREATE TRIGGER trg_trabajos_propios_fechas
+BEFORE INSERT OR UPDATE ON trabajos_propios
+FOR EACH ROW EXECUTE FUNCTION alucarpin_rellenar_fechas();
+
+DROP TRIGGER IF EXISTS trg_citas_agenda_fechas ON citas_agenda;
+CREATE TRIGGER trg_citas_agenda_fechas
+BEFORE INSERT OR UPDATE ON citas_agenda
+FOR EACH ROW EXECUTE FUNCTION alucarpin_rellenar_fechas();
+
+DROP TRIGGER IF EXISTS trg_seguimientos_agenda_fechas ON seguimientos_agenda;
+CREATE TRIGGER trg_seguimientos_agenda_fechas
+BEFORE INSERT OR UPDATE ON seguimientos_agenda
+FOR EACH ROW EXECUTE FUNCTION alucarpin_rellenar_fechas();
+
+UPDATE trabajos_propios
+SET creado_en = COALESCE(creado_en, CURRENT_TIMESTAMP),
+    actualizado_en = COALESCE(actualizado_en, CURRENT_TIMESTAMP)
+WHERE creado_en IS NULL OR actualizado_en IS NULL;
+
+UPDATE citas_agenda
+SET creado_en = COALESCE(creado_en, CURRENT_TIMESTAMP),
+    actualizado_en = COALESCE(actualizado_en, CURRENT_TIMESTAMP)
+WHERE creado_en IS NULL OR actualizado_en IS NULL;
+
+UPDATE seguimientos_agenda
+SET creado_en = COALESCE(creado_en, CURRENT_TIMESTAMP),
+    actualizado_en = COALESCE(actualizado_en, CURRENT_TIMESTAMP)
+WHERE creado_en IS NULL OR actualizado_en IS NULL;

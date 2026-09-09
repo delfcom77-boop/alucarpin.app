@@ -103,6 +103,7 @@ class CitaUpdate(CitaCreate):
 
 
 class SeguimientoCreate(BaseModel):
+    fecha_llamada: Optional[date] = None
     fecha_recordatorio: date
     hora: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
     cliente: str = ""
@@ -207,6 +208,7 @@ def inicializar_base_datos():
             db.execute("""
                 CREATE TABLE IF NOT EXISTS seguimientos_agenda (
                     id BIGSERIAL PRIMARY KEY,
+                    fecha_llamada DATE NOT NULL DEFAULT CURRENT_DATE,
                     fecha_recordatorio DATE NOT NULL,
                     hora TEXT NOT NULL,
                     cliente TEXT NOT NULL DEFAULT '',
@@ -218,6 +220,8 @@ def inicializar_base_datos():
                     actualizado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            db.execute("ALTER TABLE seguimientos_agenda ADD COLUMN IF NOT EXISTS fecha_llamada DATE")
+            db.execute("UPDATE seguimientos_agenda SET fecha_llamada = fecha_recordatorio WHERE fecha_llamada IS NULL")
         return
     with conexion() as db:
         db.executescript("""
@@ -290,6 +294,7 @@ def inicializar_base_datos():
             );
             CREATE TABLE IF NOT EXISTS seguimientos_agenda (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    fecha_llamada TEXT NOT NULL DEFAULT CURRENT_DATE,
                 fecha_recordatorio TEXT NOT NULL,
                 hora TEXT NOT NULL,
                 cliente TEXT NOT NULL DEFAULT '',
@@ -301,6 +306,12 @@ def inicializar_base_datos():
                 actualizado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
         """)
+        columnas_seguimientos = {
+            fila[1] for fila in db.execute("PRAGMA table_info(seguimientos_agenda)")
+        }
+        if "fecha_llamada" not in columnas_seguimientos:
+            db.execute("ALTER TABLE seguimientos_agenda ADD COLUMN fecha_llamada TEXT")
+            db.execute("UPDATE seguimientos_agenda SET fecha_llamada = fecha_recordatorio WHERE fecha_llamada IS NULL")
         columnas = {
             fila[1] for fila in db.execute("PRAGMA table_info(fichajes_ayudantes)")
         }
@@ -588,6 +599,7 @@ def listar_seguimientos(usuario=Depends(administrador)):
 @app.post("/seguimientos", status_code=201)
 def crear_seguimiento(datos: SeguimientoCreate, usuario=Depends(administrador)):
     valores = datos.model_dump()
+    valores["fecha_llamada"] = (valores.get("fecha_llamada") or date.today()).isoformat()
     valores["fecha_recordatorio"] = valores["fecha_recordatorio"].isoformat()
     valores = {clave: valor.strip() if isinstance(valor, str) else valor for clave, valor in valores.items()}
     columnas = ", ".join(valores)
@@ -607,6 +619,7 @@ def crear_seguimiento(datos: SeguimientoCreate, usuario=Depends(administrador)):
 @app.patch("/seguimientos/{seguimiento_id}")
 def modificar_seguimiento(seguimiento_id: int, datos: SeguimientoUpdate, usuario=Depends(administrador)):
     valores = datos.model_dump()
+    valores["fecha_llamada"] = (valores.get("fecha_llamada") or date.today()).isoformat()
     valores["fecha_recordatorio"] = valores["fecha_recordatorio"].isoformat()
     valores = {clave: valor.strip() if isinstance(valor, str) else valor for clave, valor in valores.items()}
     asignaciones = ", ".join(f"{clave} = ?" for clave in valores)
@@ -642,7 +655,8 @@ def calendario_seguimiento(seguimiento_id: int, usuario=Depends(administrador)):
     from datetime import timedelta
     fin = inicio + timedelta(minutes=15)
     titulo = f"Llamar" + (f": {seguimiento['cliente']}" if seguimiento["cliente"] else "")
-    descripcion = " | ".join(filter(None, [seguimiento["motivo"], seguimiento["observaciones"], seguimiento["telefono"]]))
+    fecha_llamada = seguimiento["fecha_llamada"] or ""
+    descripcion = " | ".join(filter(None, [f"Llamada recibida el {fecha_llamada}", seguimiento["motivo"], seguimiento["observaciones"], seguimiento["telefono"]]))
     contenido = "\r\n".join([
         "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Alucarpin//Agenda//ES", "BEGIN:VEVENT",
         f"UID:alucarpin-seguimiento-{seguimiento_id}@alucarpin.app", f"DTSTAMP:{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}",
@@ -690,7 +704,7 @@ def calendario_completo(usuario=Depends(administrador)):
         inicio = datetime.strptime(f"{fecha_texto} {seguimiento['hora']}", "%Y%m%d %H:%M")
         fin = inicio + timedelta(minutes=15)
         titulo = f"Llamar" + (f": {seguimiento['cliente']}" if seguimiento["cliente"] else "")
-        descripcion = " | ".join(filter(None, [seguimiento["motivo"], seguimiento["observaciones"], seguimiento["telefono"]]))
+        descripcion = " | ".join(filter(None, [f"Llamada recibida el {seguimiento['fecha_llamada']}", seguimiento["motivo"], seguimiento["observaciones"], seguimiento["telefono"]]))
         eventos.append([f"UID:alucarpin-seguimiento-{seguimiento['id']}@alucarpin.app", f"DTSTART:{inicio.strftime('%Y%m%dT%H%M%S')}", f"DTEND:{fin.strftime('%Y%m%dT%H%M%S')}", f"SUMMARY:{_ics_escape(titulo)}", f"DESCRIPTION:{_ics_escape(descripcion)}", "BEGIN:VALARM", "TRIGGER:-PT0M", "ACTION:DISPLAY", f"DESCRIPTION:{_ics_escape(titulo)}", "END:VALARM"])
 
     lineas = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Alucarpin//Agenda//ES"]
