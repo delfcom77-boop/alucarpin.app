@@ -30,6 +30,7 @@
     .acciones { display: flex; flex-wrap: wrap; gap: 8px; }
     .acciones button { min-height: 38px; padding: 7px 12px; }
     .borrar { background: #f4cccc; color: #7b2020; }
+    .seguimiento { background: #fff8e5; border-color: #e6c968; }
     @media (max-width: 560px) { .fila { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -48,6 +49,18 @@
         <button type="submit">Guardar y añadir al calendario</button><div id="mensaje" class="mensaje"></div>
       </form>
     </section>
+    <section class="seguimiento">
+      <h2>Recordarme una llamada</h2>
+      <p>Guarda una llamada pendiente para devolverla cuando hayas mirado tu agenda.</p>
+      <form id="formulario-seguimiento">
+        <div class="fila"><label>Recordarme el día <input id="seguimiento-fecha" type="date" required></label><label>A las <input id="seguimiento-hora" type="time" required></label></div>
+        <div class="fila"><label>Cliente <input id="seguimiento-cliente"></label><label>Teléfono <input id="seguimiento-telefono" type="tel"></label></div>
+        <label>Qué tengo que devolver <input id="seguimiento-motivo" required placeholder="Decir día y hora para tomar medidas"></label>
+        <label>Notas <input id="seguimiento-observaciones" placeholder="Mirar agenda antes de llamar"></label>
+        <button type="submit">Guardar recordatorio y añadir alarma</button><div id="mensaje-seguimiento" class="mensaje"></div>
+      </form>
+    </section>
+    <section><h2>Llamadas pendientes</h2><div class="lista"><table><thead><tr><th>Recordatorio</th><th>Cliente</th><th>Motivo</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista-seguimientos"><tr><td colspan="5">Cargando...</td></tr></tbody></table></div></section>
     <section><h2>Próximas citas</h2><div class="lista"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Tipo</th><th>Cliente</th><th>Dirección</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista"><tr><td colspan="7">Cargando...</td></tr></tbody></table></div></section>
   </main>
   <script>
@@ -56,11 +69,15 @@
     const apiFetch = (url, options = {}) => fetch(url, { ...options, headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` } });
     const formulario = document.querySelector('#formulario');
     const mensaje = document.querySelector('#mensaje');
+    const formularioSeguimiento = document.querySelector('#formulario-seguimiento');
+    const mensajeSeguimiento = document.querySelector('#mensaje-seguimiento');
     const tipos = { visita: 'Visita', reparacion: 'Reparación', reunion: 'Reunión', llamada: 'Llamada', presupuesto: 'Presupuesto', otro: 'Otro' };
     const fechaTexto = valor => String(valor || '').split('-').reverse().join('/');
     const valor = id => document.querySelector(`#${id}`).value;
     document.querySelector('#fecha').valueAsDate = new Date();
     document.querySelector('#hora').value = '09:00';
+    document.querySelector('#seguimiento-fecha').valueAsDate = new Date();
+    document.querySelector('#seguimiento-hora').value = '10:00';
     async function calendario(id) { const respuesta = await apiFetch(`/citas/${id}/calendario`); if (!respuesta.ok) throw new Error('No se pudo generar el calendario.'); const enlace = document.createElement('a'); enlace.href = URL.createObjectURL(await respuesta.blob()); enlace.download = `alucarpin-cita-${id}.ics`; enlace.click(); URL.revokeObjectURL(enlace.href); }
     async function cargar() {
       const respuesta = await apiFetch('/citas'); if (!respuesta.ok) throw new Error('No se pudieron cargar las citas.');
@@ -69,8 +86,18 @@
       citas.forEach(cita => { const fila = document.createElement('tr'); fila.innerHTML = `<td>${fechaTexto(cita.fecha)}</td><td>${cita.hora}</td><td>${tipos[cita.tipo] || cita.tipo}</td><td>${cita.cliente || '-'}</td><td>${[cita.ubicacion, cita.poblacion].filter(Boolean).join(', ') || '-'}</td><td>${cita.estado}</td><td class="acciones"><button type="button" class="cal">Calendario</button><button type="button" class="realizada">Marcar realizada</button><button type="button" class="borrar">Borrar</button></td>`; fila.querySelector('.cal').onclick = () => calendario(cita.id).catch(error => mostrarError(error.message)); fila.querySelector('.realizada').onclick = async () => { await apiFetch(`/citas/${cita.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...cita, fecha: cita.fecha, hora: cita.hora }) }); await cargar(); }; fila.querySelector('.borrar').onclick = async () => { if (!confirm('¿Borrar esta cita?')) return; await apiFetch(`/citas/${cita.id}`, { method: 'DELETE' }); await cargar(); }; cuerpo.appendChild(fila); });
     }
     const mostrarError = texto => { mensaje.textContent = texto; mensaje.className = 'mensaje error'; };
+    const mostrarErrorSeguimiento = texto => { mensajeSeguimiento.textContent = texto; mensajeSeguimiento.className = 'mensaje error'; };
+    async function calendarioSeguimiento(id) { const respuesta = await apiFetch(`/seguimientos/${id}/calendario`); if (!respuesta.ok) throw new Error('No se pudo generar la alarma.'); const enlace = document.createElement('a'); enlace.href = URL.createObjectURL(await respuesta.blob()); enlace.download = `alucarpin-seguimiento-${id}.ics`; enlace.click(); URL.revokeObjectURL(enlace.href); }
+    async function cargarSeguimientos() {
+      const respuesta = await apiFetch('/seguimientos'); if (!respuesta.ok) throw new Error('No se pudieron cargar las llamadas pendientes.');
+      const seguimientos = await respuesta.json(); const cuerpo = document.querySelector('#lista-seguimientos'); cuerpo.textContent = '';
+      if (!seguimientos.length) { cuerpo.innerHTML = '<tr><td colspan="5">No hay llamadas pendientes.</td></tr>'; return; }
+      seguimientos.forEach(seguimiento => { const fila = document.createElement('tr'); fila.innerHTML = `<td>${fechaTexto(seguimiento.fecha_recordatorio)} ${seguimiento.hora}</td><td>${seguimiento.cliente || '-'}</td><td>${seguimiento.motivo}</td><td>${seguimiento.estado}</td><td class="acciones"><button type="button" class="cal-seguimiento">Alarma</button><button type="button" class="realizado-seguimiento">Marcar realizada</button><button type="button" class="borrar-seguimiento borrar">Borrar</button></td>`; fila.querySelector('.cal-seguimiento').onclick = () => calendarioSeguimiento(seguimiento.id).catch(error => mostrarErrorSeguimiento(error.message)); fila.querySelector('.realizado-seguimiento').onclick = async () => { await apiFetch(`/seguimientos/${seguimiento.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...seguimiento, fecha_recordatorio: seguimiento.fecha_recordatorio }) }); await cargarSeguimientos(); }; fila.querySelector('.borrar-seguimiento').onclick = async () => { if (!confirm('¿Borrar este recordatorio?')) return; await apiFetch(`/seguimientos/${seguimiento.id}`, { method: 'DELETE' }); await cargarSeguimientos(); }; cuerpo.appendChild(fila); });
+    }
+    formularioSeguimiento.onsubmit = async event => { event.preventDefault(); const datos = { fecha_recordatorio: valor('seguimiento-fecha'), hora: valor('seguimiento-hora'), cliente: valor('seguimiento-cliente'), telefono: valor('seguimiento-telefono'), motivo: valor('seguimiento-motivo'), observaciones: valor('seguimiento-observaciones'), estado: 'Pendiente' }; const respuesta = await apiFetch('/seguimientos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) }); const resultado = await respuesta.json(); if (!respuesta.ok) { mostrarErrorSeguimiento(resultado.detail || 'No se pudo guardar el recordatorio.'); return; } await calendarioSeguimiento(resultado.id); mensajeSeguimiento.textContent = 'Recordatorio guardado y alarma añadida al calendario.'; mensajeSeguimiento.className = 'mensaje exito'; formularioSeguimiento.reset(); document.querySelector('#seguimiento-fecha').valueAsDate = new Date(); document.querySelector('#seguimiento-hora').value = '10:00'; await cargarSeguimientos(); };
     formulario.onsubmit = async event => { event.preventDefault(); const datos = { fecha: valor('fecha'), hora: valor('hora'), tipo: valor('tipo'), cliente: valor('cliente'), ubicacion: valor('ubicacion'), poblacion: valor('poblacion'), telefono: valor('telefono'), observaciones: valor('observaciones'), estado: 'Pendiente' }; const respuesta = await apiFetch('/citas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) }); const resultado = await respuesta.json(); if (!respuesta.ok) { mostrarError(resultado.detail || 'No se pudo guardar la cita.'); return; } await calendario(resultado.id); mensaje.textContent = 'Cita guardada y añadida al calendario.'; mensaje.className = 'mensaje exito'; formulario.reset(); document.querySelector('#fecha').valueAsDate = new Date(); document.querySelector('#hora').value = '09:00'; await cargar(); };
     cargar().catch(error => mostrarError(error.message));
+    cargarSeguimientos().catch(error => mostrarErrorSeguimiento(error.message));
   </script>
 </body>
 </html>

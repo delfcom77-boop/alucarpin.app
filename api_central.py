@@ -102,6 +102,20 @@ class CitaUpdate(CitaCreate):
     pass
 
 
+class SeguimientoCreate(BaseModel):
+    fecha_recordatorio: date
+    hora: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    cliente: str = ""
+    telefono: str = ""
+    motivo: str = Field(min_length=1)
+    observaciones: str = ""
+    estado: Literal["Pendiente", "Realizado"] = "Pendiente"
+
+
+class SeguimientoUpdate(SeguimientoCreate):
+    pass
+
+
 class PagoCreate(BaseModel):
     ayudante_id: int
     desde: date
@@ -190,6 +204,20 @@ def inicializar_base_datos():
                     actualizado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            db.execute("""
+                CREATE TABLE IF NOT EXISTS seguimientos_agenda (
+                    id BIGSERIAL PRIMARY KEY,
+                    fecha_recordatorio DATE NOT NULL,
+                    hora TEXT NOT NULL,
+                    cliente TEXT NOT NULL DEFAULT '',
+                    telefono TEXT NOT NULL DEFAULT '',
+                    motivo TEXT NOT NULL,
+                    observaciones TEXT NOT NULL DEFAULT '',
+                    estado TEXT NOT NULL DEFAULT 'Pendiente',
+                    creado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    actualizado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
         return
     with conexion() as db:
         db.executescript("""
@@ -255,6 +283,18 @@ def inicializar_base_datos():
                 ubicacion TEXT NOT NULL DEFAULT '',
                 poblacion TEXT NOT NULL DEFAULT '',
                 telefono TEXT NOT NULL DEFAULT '',
+                observaciones TEXT NOT NULL DEFAULT '',
+                estado TEXT NOT NULL DEFAULT 'Pendiente',
+                creado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                actualizado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS seguimientos_agenda (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fecha_recordatorio TEXT NOT NULL,
+                hora TEXT NOT NULL,
+                cliente TEXT NOT NULL DEFAULT '',
+                telefono TEXT NOT NULL DEFAULT '',
+                motivo TEXT NOT NULL,
                 observaciones TEXT NOT NULL DEFAULT '',
                 estado TEXT NOT NULL DEFAULT 'Pendiente',
                 creado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -534,6 +574,84 @@ def calendario_cita(cita_id: int, usuario=Depends(administrador)):
         f"DESCRIPTION:{_ics_escape(cita['observaciones'])}", "END:VEVENT", "END:VCALENDAR", "",
     ])
     return Response(content=contenido, media_type="text/calendar", headers={"Content-Disposition": f'attachment; filename="alucarpin-cita-{cita_id}.ics"'})
+
+
+@app.get("/seguimientos")
+def listar_seguimientos(usuario=Depends(administrador)):
+    with conexion() as db:
+        filas = db.execute(
+            "SELECT * FROM seguimientos_agenda ORDER BY estado, fecha_recordatorio, hora, id"
+        ).fetchall()
+    return [dict(fila) for fila in filas]
+
+
+@app.post("/seguimientos", status_code=201)
+def crear_seguimiento(datos: SeguimientoCreate, usuario=Depends(administrador)):
+    valores = datos.model_dump()
+    valores["fecha_recordatorio"] = valores["fecha_recordatorio"].isoformat()
+    valores = {clave: valor.strip() if isinstance(valor, str) else valor for clave, valor in valores.items()}
+    columnas = ", ".join(valores)
+    marcadores = ", ".join("?" for _ in valores)
+    with conexion() as db:
+        if DATABASE_URL:
+            fila = db.execute(
+                f"INSERT INTO seguimientos_agenda ({columnas}) VALUES ({marcadores}) RETURNING *",
+                tuple(valores.values()),
+            ).fetchone()
+        else:
+            db.execute(f"INSERT INTO seguimientos_agenda ({columnas}) VALUES ({marcadores})", tuple(valores.values()))
+            fila = db.execute("SELECT * FROM seguimientos_agenda WHERE id = last_insert_rowid()").fetchone()
+    return dict(fila)
+
+
+@app.patch("/seguimientos/{seguimiento_id}")
+def modificar_seguimiento(seguimiento_id: int, datos: SeguimientoUpdate, usuario=Depends(administrador)):
+    valores = datos.model_dump()
+    valores["fecha_recordatorio"] = valores["fecha_recordatorio"].isoformat()
+    valores = {clave: valor.strip() if isinstance(valor, str) else valor for clave, valor in valores.items()}
+    asignaciones = ", ".join(f"{clave} = ?" for clave in valores)
+    with conexion() as db:
+        cursor = db.execute(
+            f"UPDATE seguimientos_agenda SET {asignaciones}, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?",
+            [*valores.values(), seguimiento_id],
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Seguimiento no encontrado")
+        fila = db.execute("SELECT * FROM seguimientos_agenda WHERE id = ?", (seguimiento_id,)).fetchone()
+    return dict(fila)
+
+
+@app.delete("/seguimientos/{seguimiento_id}")
+def borrar_seguimiento(seguimiento_id: int, usuario=Depends(administrador)):
+    with conexion() as db:
+        cursor = db.execute("DELETE FROM seguimientos_agenda WHERE id = ?", (seguimiento_id,))
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Seguimiento no encontrado")
+    return {"eliminado": True}
+
+
+@app.get("/seguimientos/{seguimiento_id}/calendario")
+def calendario_seguimiento(seguimiento_id: int, usuario=Depends(administrador)):
+    with conexion() as db:
+        seguimiento = db.execute("SELECT * FROM seguimientos_agenda WHERE id = ?", (seguimiento_id,)).fetchone()
+    if not seguimiento:
+        raise HTTPException(status_code=404, detail="Seguimiento no encontrado")
+    fecha = seguimiento["fecha_recordatorio"]
+    fecha_texto = fecha.strftime("%Y%m%d") if hasattr(fecha, "strftime") else str(fecha).replace("-", "")
+    inicio = datetime.strptime(f"{fecha_texto} {seguimiento['hora']}", "%Y%m%d %H:%M")
+    from datetime import timedelta
+    fin = inicio + timedelta(minutes=15)
+    titulo = f"Llamar" + (f": {seguimiento['cliente']}" if seguimiento["cliente"] else "")
+    descripcion = " | ".join(filter(None, [seguimiento["motivo"], seguimiento["observaciones"], seguimiento["telefono"]]))
+    contenido = "\r\n".join([
+        "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Alucarpin//Agenda//ES", "BEGIN:VEVENT",
+        f"UID:alucarpin-seguimiento-{seguimiento_id}@alucarpin.app", f"DTSTAMP:{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}",
+        f"DTSTART:{inicio.strftime('%Y%m%dT%H%M%S')}", f"DTEND:{fin.strftime('%Y%m%dT%H%M%S')}",
+        f"SUMMARY:{_ics_escape(titulo)}", f"DESCRIPTION:{_ics_escape(descripcion)}",
+        "BEGIN:VALARM", "TRIGGER:-PT0M", "ACTION:DISPLAY", f"DESCRIPTION:{_ics_escape(titulo)}", "END:VALARM",
+        "END:VEVENT", "END:VCALENDAR", "",
+    ])
+    return Response(content=contenido, media_type="text/calendar", headers={"Content-Disposition": f'attachment; filename="alucarpin-seguimiento-{seguimiento_id}.ics"'})
 
 
 def _trabajo_datos(datos):

@@ -91,6 +91,22 @@ CREATE TABLE IF NOT EXISTS citas_agenda (
 CREATE INDEX IF NOT EXISTS idx_citas_agenda_fecha_hora
     ON citas_agenda (fecha, hora);
 
+CREATE TABLE IF NOT EXISTS seguimientos_agenda (
+    id BIGSERIAL PRIMARY KEY,
+    fecha_recordatorio DATE NOT NULL,
+    hora TEXT NOT NULL,
+    cliente TEXT NOT NULL DEFAULT '',
+    telefono TEXT NOT NULL DEFAULT '',
+    motivo TEXT NOT NULL,
+    observaciones TEXT NOT NULL DEFAULT '',
+    estado TEXT NOT NULL DEFAULT 'Pendiente',
+    creado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    actualizado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_seguimientos_agenda_estado_fecha
+    ON seguimientos_agenda (estado, fecha_recordatorio, hora);
+
 ALTER TABLE fichajes_ayudantes
     ADD COLUMN IF NOT EXISTS num_presupuesto TEXT;
 
