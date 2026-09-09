@@ -606,7 +606,7 @@ def calendario_cita(cita_id: int, usuario=Depends(administrador)):
     titulo = f"{cita['tipo'].capitalize()}" + (f": {cita['cliente']}" if cita["cliente"] else "")
     ubicacion = ", ".join(filter(None, [cita["ubicacion"], cita["poblacion"]]))
     contenido = "\r\n".join([
-        "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Alucarpin//Agenda//ES", "BEGIN:VEVENT",
+        "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Alucarpin//Agenda//ES", "X-WR-CALNAME:Alucarpin", "BEGIN:VEVENT",
         f"UID:alucarpin-cita-{cita_id}@alucarpin.app", f"DTSTAMP:{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}",
         f"DTSTART:{inicio.strftime('%Y%m%dT%H%M%S')}", f"DTEND:{fin.strftime('%Y%m%dT%H%M%S')}",
         f"SUMMARY:{_ics_escape(titulo)}", f"LOCATION:{_ics_escape(ubicacion)}",
@@ -694,7 +694,7 @@ def calendario_seguimiento(seguimiento_id: int, usuario=Depends(administrador)):
     fecha_llamada = seguimiento["fecha_llamada"] or ""
     ubicacion = ", ".join(filter(None, [seguimiento["ubicacion"], seguimiento["poblacion"]]))
     descripcion = " | ".join(filter(None, [f"Llamada recibida el {fecha_llamada}", seguimiento["motivo"], seguimiento["observaciones"], ubicacion, seguimiento["telefono"]]))
-    recurrencia = ["RRULE:FREQ=DAILY"] if seguimiento["estado"] == "Pendiente" else []
+    recurrencia = ["RRULE:FREQ=DAILY;COUNT=365"] if seguimiento["estado"] == "Pendiente" else []
     contenido = "\r\n".join([
         "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Alucarpin//Agenda//ES", "BEGIN:VEVENT",
         f"UID:alucarpin-seguimiento-{seguimiento_id}@alucarpin.app", f"DTSTAMP:{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}",
@@ -745,10 +745,10 @@ def calendario_completo(usuario=Depends(administrador)):
         titulo = f"Llamar" + (f": {seguimiento['cliente']}" if seguimiento["cliente"] else "")
         ubicacion = ", ".join(filter(None, [seguimiento["ubicacion"], seguimiento["poblacion"]]))
         descripcion = " | ".join(filter(None, [f"Llamada recibida el {seguimiento['fecha_llamada']}", seguimiento["motivo"], seguimiento["observaciones"], ubicacion, seguimiento["telefono"]]))
-        recurrencia = ["RRULE:FREQ=DAILY"] if seguimiento["estado"] == "Pendiente" else []
+        recurrencia = ["RRULE:FREQ=DAILY;COUNT=365"] if seguimiento["estado"] == "Pendiente" else []
         eventos.append([f"UID:alucarpin-seguimiento-{seguimiento['id']}@alucarpin.app", f"DTSTART:{inicio.strftime('%Y%m%dT%H%M%S')}", f"DTEND:{fin.strftime('%Y%m%dT%H%M%S')}", f"SUMMARY:{_ics_escape(titulo)}", f"DESCRIPTION:{_ics_escape(descripcion)}", *recurrencia, "BEGIN:VALARM", "TRIGGER:-PT0M", "ACTION:DISPLAY", f"DESCRIPTION:{_ics_escape(titulo)}", "END:VALARM"])
 
-    lineas = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Alucarpin//Agenda//ES"]
+    lineas = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Alucarpin//Agenda//ES", "X-WR-CALNAME:Alucarpin"]
     for evento in eventos:
         lineas.extend(["BEGIN:VEVENT", f"DTSTAMP:{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}", *evento, "END:VEVENT"])
     lineas.extend(["END:VCALENDAR", ""])
