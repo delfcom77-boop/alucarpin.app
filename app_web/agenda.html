@@ -38,6 +38,7 @@
   <main>
     <header><h1>Agenda y citas</h1><p>Visitas, reuniones, llamadas y reparaciones pendientes</p></header>
     <nav><a href="/app/inicio.html">Volver al menú</a></nav>
+    <button id="sincronizar-calendario" type="button">Sincronizar todo con el calendario</button>
     <section>
       <h2>Nueva cita</h2>
       <form id="formulario">
@@ -74,6 +75,8 @@
     const tipos = { visita: 'Visita', reparacion: 'Reparación', reunion: 'Reunión', llamada: 'Llamada', presupuesto: 'Presupuesto', otro: 'Otro' };
     const fechaTexto = valor => String(valor || '').split('-').reverse().join('/');
     const valor = id => document.querySelector(`#${id}`).value;
+    const sincronizarCalendario = async () => { const respuesta = await apiFetch('/calendario.ics'); if (!respuesta.ok) throw new Error('No se pudo sincronizar el calendario.'); const enlace = document.createElement('a'); enlace.href = URL.createObjectURL(await respuesta.blob()); enlace.download = 'alucarpin-calendario-completo.ics'; enlace.click(); URL.revokeObjectURL(enlace.href); };
+    document.querySelector('#sincronizar-calendario').onclick = () => sincronizarCalendario().then(() => { mensaje.textContent = 'Calendario sincronizado con todas tus citas, trabajos y recordatorios.'; mensaje.className = 'mensaje exito'; }).catch(error => mostrarError(error.message));
     document.querySelector('#fecha').valueAsDate = new Date();
     document.querySelector('#hora').value = '09:00';
     document.querySelector('#seguimiento-fecha').valueAsDate = new Date();

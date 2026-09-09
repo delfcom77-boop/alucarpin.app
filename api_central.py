@@ -654,6 +654,52 @@ def calendario_seguimiento(seguimiento_id: int, usuario=Depends(administrador)):
     return Response(content=contenido, media_type="text/calendar", headers={"Content-Disposition": f'attachment; filename="alucarpin-seguimiento-{seguimiento_id}.ics"'})
 
 
+@app.get("/calendario.ics")
+def calendario_completo(usuario=Depends(administrador)):
+    eventos = []
+    with conexion() as db:
+        trabajos = db.execute("SELECT * FROM trabajos_propios ORDER BY fecha_inicio, id").fetchall()
+        citas = db.execute("SELECT * FROM citas_agenda ORDER BY fecha, hora, id").fetchall()
+        seguimientos = db.execute("SELECT * FROM seguimientos_agenda ORDER BY fecha_recordatorio, hora, id").fetchall()
+
+    from datetime import timedelta
+    for trabajo in trabajos:
+        inicio = trabajo["fecha_inicio"]
+        fin = trabajo["fecha_fin"] or inicio
+        inicio_texto = inicio.strftime("%Y%m%d") if hasattr(inicio, "strftime") else str(inicio).replace("-", "")
+        if hasattr(fin, "strftime"):
+            fin_fecha = fin + timedelta(days=1)
+            fin_texto = fin_fecha.strftime("%Y%m%d")
+        else:
+            partes = str(fin).split("-")
+            fin_texto = (date(int(partes[0]), int(partes[1]), int(partes[2])) + timedelta(days=1)).strftime("%Y%m%d")
+        titulo = f"{trabajo['tipo'].capitalize()}: {trabajo['cliente']} - {trabajo['obra']}"
+        ubicacion = ", ".join(filter(None, [trabajo["ubicacion"], trabajo["poblacion"]]))
+        eventos.append([f"UID:alucarpin-trabajo-{trabajo['id']}@alucarpin.app", f"DTSTART;VALUE=DATE:{inicio_texto}", f"DTEND;VALUE=DATE:{fin_texto}", f"SUMMARY:{_ics_escape(titulo)}", f"LOCATION:{_ics_escape(ubicacion)}", f"DESCRIPTION:{_ics_escape(trabajo['observaciones'])}"])
+
+    for cita in citas:
+        fecha_texto = cita["fecha"].strftime("%Y%m%d") if hasattr(cita["fecha"], "strftime") else str(cita["fecha"]).replace("-", "")
+        inicio = datetime.strptime(f"{fecha_texto} {cita['hora']}", "%Y%m%d %H:%M")
+        fin = inicio + timedelta(minutes=int(cita["duracion_minutos"]))
+        titulo = f"{cita['tipo'].capitalize()}" + (f": {cita['cliente']}" if cita["cliente"] else "")
+        ubicacion = ", ".join(filter(None, [cita["ubicacion"], cita["poblacion"]]))
+        eventos.append([f"UID:alucarpin-cita-{cita['id']}@alucarpin.app", f"DTSTART:{inicio.strftime('%Y%m%dT%H%M%S')}", f"DTEND:{fin.strftime('%Y%m%dT%H%M%S')}", f"SUMMARY:{_ics_escape(titulo)}", f"LOCATION:{_ics_escape(ubicacion)}", f"DESCRIPTION:{_ics_escape(cita['observaciones'])}"])
+
+    for seguimiento in seguimientos:
+        fecha_texto = seguimiento["fecha_recordatorio"].strftime("%Y%m%d") if hasattr(seguimiento["fecha_recordatorio"], "strftime") else str(seguimiento["fecha_recordatorio"]).replace("-", "")
+        inicio = datetime.strptime(f"{fecha_texto} {seguimiento['hora']}", "%Y%m%d %H:%M")
+        fin = inicio + timedelta(minutes=15)
+        titulo = f"Llamar" + (f": {seguimiento['cliente']}" if seguimiento["cliente"] else "")
+        descripcion = " | ".join(filter(None, [seguimiento["motivo"], seguimiento["observaciones"], seguimiento["telefono"]]))
+        eventos.append([f"UID:alucarpin-seguimiento-{seguimiento['id']}@alucarpin.app", f"DTSTART:{inicio.strftime('%Y%m%dT%H%M%S')}", f"DTEND:{fin.strftime('%Y%m%dT%H%M%S')}", f"SUMMARY:{_ics_escape(titulo)}", f"DESCRIPTION:{_ics_escape(descripcion)}", "BEGIN:VALARM", "TRIGGER:-PT0M", "ACTION:DISPLAY", f"DESCRIPTION:{_ics_escape(titulo)}", "END:VALARM"])
+
+    lineas = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Alucarpin//Agenda//ES"]
+    for evento in eventos:
+        lineas.extend(["BEGIN:VEVENT", f"DTSTAMP:{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}", *evento, "END:VEVENT"])
+    lineas.extend(["END:VCALENDAR", ""])
+    return Response(content="\r\n".join(lineas), media_type="text/calendar", headers={"Content-Disposition": 'attachment; filename="alucarpin-calendario-completo.ics"'})
+
+
 def _trabajo_datos(datos):
     valores = datos.model_dump()
     for clave in ("fecha_inicio", "fecha_fin", "fecha_cobro"):
