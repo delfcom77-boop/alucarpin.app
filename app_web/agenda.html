@@ -31,6 +31,9 @@
     .acciones button { min-height: 38px; padding: 7px 12px; }
     .borrar { background: #f4cccc; color: #7b2020; }
     .seguimiento { background: #fff8e5; border-color: #e6c968; }
+      .agenda-menu { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+      .agenda-menu button { background: #293f4a; color: #fff; border: 0; padding: 12px 16px; cursor: pointer; font-weight: 700; }
+      .agenda-menu button.seleccionado { background: #d45d3f; }
     @media (max-width: 560px) { .fila { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -39,7 +42,11 @@
     <header><h1>Agenda y citas</h1><p>Visitas, reuniones, llamadas y reparaciones pendientes</p></header>
     <nav><a href="/app/inicio.html">Volver al menú</a></nav>
     <button id="sincronizar-calendario" type="button">Sincronizar todo con el calendario</button>
-    <section>
+      <div class="agenda-menu" aria-label="Secciones de agenda">
+        <button type="button" class="seleccionado" data-seccion-agenda="citas">Nueva cita</button>
+        <button type="button" data-seccion-agenda="notas">Nueva nota</button>
+      </div>
+    <section data-seccion-contenido="citas">
       <h2>Nueva cita</h2>
       <form id="formulario">
         <div class="fila"><label>Fecha de la cita <input id="fecha" type="date" required></label><label>Hora de la cita / visita <input id="hora" type="time" required></label></div>
@@ -50,9 +57,8 @@
         <button type="submit">Guardar y añadir al calendario</button><div id="mensaje" class="mensaje"></div>
       </form>
     </section>
-    <section class="seguimiento">
+    <section class="seguimiento" data-seccion-contenido="notas" hidden>
       <h2>Recordarme una llamada</h2>
-      <p>Guarda una llamada pendiente para devolverla cuando hayas mirado tu agenda.</p>
       <form id="formulario-seguimiento">
         <div><label>Me llamó el día <input id="seguimiento-fecha-llamada" type="date" required></label></div>
         <div><label>Hora del recordatorio diario <input id="seguimiento-hora" type="time" required></label></div>
@@ -63,8 +69,8 @@
         <button type="submit">Guardar recordatorio y añadir alarma</button><div id="mensaje-seguimiento" class="mensaje"></div>
       </form>
     </section>
-    <section><h2>Llamadas pendientes</h2><div class="lista"><table><thead><tr><th>Recordatorio</th><th>Cliente</th><th>Dirección / población</th><th>Qué me ha pedido</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista-seguimientos"><tr><td colspan="6">Cargando...</td></tr></tbody></table></div></section>
-    <section><h2>Próximas citas</h2><div class="lista"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Tipo</th><th>Cliente</th><th>Dirección</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista"><tr><td colspan="7">Cargando...</td></tr></tbody></table></div></section>
+    <section data-seccion-contenido="notas" hidden><h2>Notas pendientes</h2><div class="lista"><table><thead><tr><th>Recordatorio</th><th>Cliente</th><th>Dirección / población</th><th>Qué me ha pedido</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista-seguimientos"><tr><td colspan="6">Cargando...</td></tr></tbody></table></div></section>
+    <section data-seccion-contenido="citas"><h2>Próximas citas</h2><div class="lista"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Tipo</th><th>Cliente</th><th>Dirección</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista"><tr><td colspan="7">Cargando...</td></tr></tbody></table></div></section>
   </main>
   <script>
     const token = localStorage.getItem('alucarpin_token');
@@ -74,6 +80,11 @@
     const mensaje = document.querySelector('#mensaje');
     const formularioSeguimiento = document.querySelector('#formulario-seguimiento');
     const mensajeSeguimiento = document.querySelector('#mensaje-seguimiento');
+    document.querySelectorAll('[data-seccion-agenda]').forEach(boton => boton.onclick = () => {
+      const seccion = boton.dataset.seccionAgenda;
+      document.querySelectorAll('[data-seccion-contenido]').forEach(elemento => { elemento.hidden = elemento.dataset.seccionContenido !== seccion; });
+      document.querySelectorAll('[data-seccion-agenda]').forEach(elemento => elemento.classList.toggle('seleccionado', elemento === boton));
+    });
     const tipos = { visita: 'Visita', reparacion: 'Reparación', reunion: 'Reunión', llamada: 'Llamada', presupuesto: 'Presupuesto', otro: 'Otro' };
     const fechaTexto = valor => String(valor || '').split('-').reverse().join('/');
     const valor = id => document.querySelector(`#${id}`).value;
