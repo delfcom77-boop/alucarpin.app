@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS fichajes_ayudantes (
     obra TEXT NOT NULL,
     ubicacion TEXT NOT NULL DEFAULT '',
     poblacion TEXT NOT NULL DEFAULT '',
+    num_presupuesto TEXT,
     confirmado_ayudante INTEGER NOT NULL DEFAULT 1,
     sincronizado INTEGER NOT NULL DEFAULT 0,
     creado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -48,6 +49,50 @@ CREATE INDEX IF NOT EXISTS idx_fichajes_ayudante_fecha
 
 CREATE INDEX IF NOT EXISTS idx_liquidaciones_ayudante
     ON liquidaciones (ayudante_id);
+
+CREATE TABLE IF NOT EXISTS trabajos_propios (
+    id BIGSERIAL PRIMARY KEY,
+    tipo TEXT NOT NULL,
+    fecha_inicio DATE NOT NULL,
+    fecha_fin DATE,
+    cliente TEXT NOT NULL,
+    obra TEXT NOT NULL,
+    ubicacion TEXT NOT NULL DEFAULT '',
+    poblacion TEXT NOT NULL DEFAULT '',
+    observaciones TEXT NOT NULL DEFAULT '',
+    num_presupuesto TEXT,
+    importe DOUBLE PRECISION NOT NULL DEFAULT 0,
+    estado_cobro TEXT NOT NULL DEFAULT 'No cobrado',
+    forma_pago TEXT NOT NULL DEFAULT '',
+    fecha_cobro DATE,
+    creado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    actualizado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_trabajos_propios_fecha
+    ON trabajos_propios (fecha_inicio);
+
+CREATE TABLE IF NOT EXISTS citas_agenda (
+    id BIGSERIAL PRIMARY KEY,
+    fecha DATE NOT NULL,
+    hora TEXT NOT NULL,
+    duracion_minutos INTEGER NOT NULL DEFAULT 60,
+    tipo TEXT NOT NULL DEFAULT 'visita',
+    cliente TEXT NOT NULL DEFAULT '',
+    ubicacion TEXT NOT NULL DEFAULT '',
+    poblacion TEXT NOT NULL DEFAULT '',
+    telefono TEXT NOT NULL DEFAULT '',
+    observaciones TEXT NOT NULL DEFAULT '',
+    estado TEXT NOT NULL DEFAULT 'Pendiente',
+    creado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    actualizado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_citas_agenda_fecha_hora
+    ON citas_agenda (fecha, hora);
+
+ALTER TABLE fichajes_ayudantes
+    ADD COLUMN IF NOT EXISTS num_presupuesto TEXT;
 
 ALTER TABLE ayudantes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE usuarios ENABLE ROW LEVEL SECURITY;

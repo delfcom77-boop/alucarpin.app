@@ -7,7 +7,7 @@ from typing import Literal, Optional
 
 import psycopg
 from psycopg.rows import dict_row
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 from fastapi.staticfiles import StaticFiles
@@ -48,20 +48,58 @@ class ConexionPostgres:
 class FichajeCreate(BaseModel):
     ayudante_id: int
     fecha: date
-    tipo_destino: Literal["faena", "presupuesto"] = "faena"
+    tipo_destino: Literal["faena", "presupuesto", "reparacion"] = "faena"
     cliente: str = Field(min_length=1)
     obra: str = Field(min_length=1)
     ubicacion: str = ""
     poblacion: str = ""
+    num_presupuesto: Optional[str] = None
 
 
 class FichajeUpdate(BaseModel):
     fecha: Optional[date] = None
-    tipo_destino: Optional[Literal["faena", "presupuesto"]] = None
+    tipo_destino: Optional[Literal["faena", "presupuesto", "reparacion"]] = None
     cliente: Optional[str] = Field(default=None, min_length=1)
     obra: Optional[str] = Field(default=None, min_length=1)
     ubicacion: Optional[str] = None
     poblacion: Optional[str] = None
+    num_presupuesto: Optional[str] = None
+
+
+class TrabajoCreate(BaseModel):
+    tipo: Literal["faena", "presupuesto", "reparacion"]
+    fecha_inicio: date
+    fecha_fin: Optional[date] = None
+    cliente: str = Field(min_length=1)
+    obra: str = Field(min_length=1)
+    ubicacion: str = ""
+    poblacion: str = ""
+    observaciones: str = ""
+    num_presupuesto: Optional[str] = None
+    importe: float = Field(default=0, ge=0)
+    estado_cobro: Literal["No cobrado", "Cobrado"] = "No cobrado"
+    forma_pago: str = ""
+    fecha_cobro: Optional[date] = None
+
+
+class TrabajoUpdate(TrabajoCreate):
+    pass
+
+
+class CitaCreate(BaseModel):
+    fecha: date
+    hora: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    tipo: Literal["visita", "reparacion", "reunion", "llamada", "presupuesto", "otro"] = "visita"
+    cliente: str = ""
+    ubicacion: str = ""
+    poblacion: str = ""
+    telefono: str = ""
+    observaciones: str = ""
+    estado: Literal["Pendiente", "Realizada", "Cancelada"] = "Pendiente"
+
+
+class CitaUpdate(CitaCreate):
+    pass
 
 
 class PagoCreate(BaseModel):
@@ -114,6 +152,44 @@ def inicializar_base_datos():
     if DATABASE_URL:
         with conexion() as db:
             inicializar_usuarios(db)
+            db.execute("ALTER TABLE fichajes_ayudantes ADD COLUMN IF NOT EXISTS num_presupuesto TEXT")
+            db.execute("""
+                CREATE TABLE IF NOT EXISTS trabajos_propios (
+                    id BIGSERIAL PRIMARY KEY,
+                    tipo TEXT NOT NULL,
+                    fecha_inicio DATE NOT NULL,
+                    fecha_fin DATE,
+                    cliente TEXT NOT NULL,
+                    obra TEXT NOT NULL,
+                    ubicacion TEXT NOT NULL DEFAULT '',
+                    poblacion TEXT NOT NULL DEFAULT '',
+                    observaciones TEXT NOT NULL DEFAULT '',
+                    num_presupuesto TEXT,
+                    importe DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    estado_cobro TEXT NOT NULL DEFAULT 'No cobrado',
+                    forma_pago TEXT NOT NULL DEFAULT '',
+                    fecha_cobro DATE,
+                    creado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    actualizado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            db.execute("""
+                CREATE TABLE IF NOT EXISTS citas_agenda (
+                    id BIGSERIAL PRIMARY KEY,
+                    fecha DATE NOT NULL,
+                    hora TEXT NOT NULL,
+                    duracion_minutos INTEGER NOT NULL DEFAULT 60,
+                    tipo TEXT NOT NULL DEFAULT 'visita',
+                    cliente TEXT NOT NULL DEFAULT '',
+                    ubicacion TEXT NOT NULL DEFAULT '',
+                    poblacion TEXT NOT NULL DEFAULT '',
+                    telefono TEXT NOT NULL DEFAULT '',
+                    observaciones TEXT NOT NULL DEFAULT '',
+                    estado TEXT NOT NULL DEFAULT 'Pendiente',
+                    creado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    actualizado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
         return
     with conexion() as db:
         db.executescript("""
@@ -131,6 +207,7 @@ def inicializar_base_datos():
                 obra TEXT NOT NULL,
                 ubicacion TEXT NOT NULL DEFAULT '',
                 poblacion TEXT NOT NULL DEFAULT '',
+                    num_presupuesto TEXT,
                 confirmado_ayudante INTEGER NOT NULL DEFAULT 1,
                 sincronizado INTEGER NOT NULL DEFAULT 0,
                 creado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -150,6 +227,39 @@ def inicializar_base_datos():
                 actualizado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (ayudante_id) REFERENCES ayudantes(id)
             );
+            CREATE TABLE IF NOT EXISTS trabajos_propios (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tipo TEXT NOT NULL,
+                fecha_inicio TEXT NOT NULL,
+                fecha_fin TEXT,
+                cliente TEXT NOT NULL,
+                obra TEXT NOT NULL,
+                ubicacion TEXT NOT NULL DEFAULT '',
+                poblacion TEXT NOT NULL DEFAULT '',
+                observaciones TEXT NOT NULL DEFAULT '',
+                num_presupuesto TEXT,
+                importe REAL NOT NULL DEFAULT 0,
+                estado_cobro TEXT NOT NULL DEFAULT 'No cobrado',
+                forma_pago TEXT NOT NULL DEFAULT '',
+                fecha_cobro TEXT,
+                creado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                actualizado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS citas_agenda (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fecha TEXT NOT NULL,
+                hora TEXT NOT NULL,
+                duracion_minutos INTEGER NOT NULL DEFAULT 60,
+                tipo TEXT NOT NULL DEFAULT 'visita',
+                cliente TEXT NOT NULL DEFAULT '',
+                ubicacion TEXT NOT NULL DEFAULT '',
+                poblacion TEXT NOT NULL DEFAULT '',
+                telefono TEXT NOT NULL DEFAULT '',
+                observaciones TEXT NOT NULL DEFAULT '',
+                estado TEXT NOT NULL DEFAULT 'Pendiente',
+                creado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                actualizado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
         """)
         columnas = {
             fila[1] for fila in db.execute("PRAGMA table_info(fichajes_ayudantes)")
@@ -158,6 +268,8 @@ def inicializar_base_datos():
             db.execute("ALTER TABLE fichajes_ayudantes ADD COLUMN cliente TEXT NOT NULL DEFAULT ''")
         if "tipo_destino" not in columnas:
             db.execute("ALTER TABLE fichajes_ayudantes ADD COLUMN tipo_destino TEXT NOT NULL DEFAULT 'faena'")
+        if "num_presupuesto" not in columnas:
+            db.execute("ALTER TABLE fichajes_ayudantes ADD COLUMN num_presupuesto TEXT")
 
         tablas = {
             fila[0]
@@ -197,6 +309,7 @@ def inicializar_base_datos():
                         obra TEXT NOT NULL,
                         ubicacion TEXT NOT NULL DEFAULT '',
                         poblacion TEXT NOT NULL DEFAULT '',
+                        num_presupuesto TEXT,
                         confirmado_ayudante INTEGER NOT NULL DEFAULT 1,
                         sincronizado INTEGER NOT NULL DEFAULT 0,
                         creado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -208,9 +321,9 @@ def inicializar_base_datos():
                 db.execute("""
                     INSERT INTO fichajes_ayudantes_nuevo
                     (id, ayudante_id, fecha, tipo_destino, cliente, obra, ubicacion, poblacion,
-                     confirmado_ayudante, sincronizado, creado_en, actualizado_en)
+                        num_presupuesto, confirmado_ayudante, sincronizado, creado_en, actualizado_en)
                     SELECT id, ayudante_id, fecha, tipo_destino, cliente, obra, ubicacion, poblacion,
-                           confirmado_ayudante, sincronizado, creado_en, actualizado_en
+                              num_presupuesto, confirmado_ayudante, sincronizado, creado_en, actualizado_en
                     FROM fichajes_ayudantes
                 """)
                 db.execute("DROP TABLE fichajes_ayudantes")
@@ -341,6 +454,221 @@ def resumen_gestion(usuario=Depends(administrador)):
         },
         "avisos": avisos,
     }
+
+
+@app.get("/citas")
+def listar_citas(usuario=Depends(administrador)):
+    with conexion() as db:
+        filas = db.execute(
+            "SELECT * FROM citas_agenda ORDER BY fecha, hora, id"
+        ).fetchall()
+    return [dict(fila) for fila in filas]
+
+
+@app.post("/citas", status_code=201)
+def crear_cita(datos: CitaCreate, usuario=Depends(administrador)):
+    valores = datos.model_dump()
+    valores["fecha"] = valores["fecha"].isoformat()
+    valores = {clave: valor.strip() if isinstance(valor, str) else valor for clave, valor in valores.items()}
+    columnas = ", ".join(valores)
+    marcadores = ", ".join("?" for _ in valores)
+    with conexion() as db:
+        if DATABASE_URL:
+            fila = db.execute(
+                f"INSERT INTO citas_agenda ({columnas}) VALUES ({marcadores}) RETURNING *",
+                tuple(valores.values()),
+            ).fetchone()
+        else:
+            db.execute(f"INSERT INTO citas_agenda ({columnas}) VALUES ({marcadores})", tuple(valores.values()))
+            fila = db.execute("SELECT * FROM citas_agenda WHERE id = last_insert_rowid()").fetchone()
+    return dict(fila)
+
+
+@app.patch("/citas/{cita_id}")
+def modificar_cita(cita_id: int, datos: CitaUpdate, usuario=Depends(administrador)):
+    valores = datos.model_dump()
+    valores["fecha"] = valores["fecha"].isoformat()
+    valores = {clave: valor.strip() if isinstance(valor, str) else valor for clave, valor in valores.items()}
+    asignaciones = ", ".join(f"{clave} = ?" for clave in valores)
+    with conexion() as db:
+        cursor = db.execute(
+            f"UPDATE citas_agenda SET {asignaciones}, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?",
+            [*valores.values(), cita_id],
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Cita no encontrada")
+        fila = db.execute("SELECT * FROM citas_agenda WHERE id = ?", (cita_id,)).fetchone()
+    return dict(fila)
+
+
+@app.delete("/citas/{cita_id}")
+def borrar_cita(cita_id: int, usuario=Depends(administrador)):
+    with conexion() as db:
+        cursor = db.execute("DELETE FROM citas_agenda WHERE id = ?", (cita_id,))
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Cita no encontrada")
+    return {"eliminada": True}
+
+
+@app.get("/citas/{cita_id}/calendario")
+def calendario_cita(cita_id: int, usuario=Depends(administrador)):
+    with conexion() as db:
+        cita = db.execute("SELECT * FROM citas_agenda WHERE id = ?", (cita_id,)).fetchone()
+    if not cita:
+        raise HTTPException(status_code=404, detail="Cita no encontrada")
+    fecha = cita["fecha"]
+    if hasattr(fecha, "strftime"):
+        fecha_texto = fecha.strftime("%Y%m%d")
+    else:
+        fecha_texto = str(fecha).replace("-", "")
+    inicio = datetime.strptime(f"{fecha_texto} {cita['hora']}", "%Y%m%d %H:%M")
+    from datetime import timedelta
+    fin = inicio + timedelta(minutes=int(cita["duracion_minutos"]))
+    titulo = f"{cita['tipo'].capitalize()}" + (f": {cita['cliente']}" if cita["cliente"] else "")
+    ubicacion = ", ".join(filter(None, [cita["ubicacion"], cita["poblacion"]]))
+    contenido = "\r\n".join([
+        "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Alucarpin//Agenda//ES", "BEGIN:VEVENT",
+        f"UID:alucarpin-cita-{cita_id}@alucarpin.app", f"DTSTAMP:{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}",
+        f"DTSTART:{inicio.strftime('%Y%m%dT%H%M%S')}", f"DTEND:{fin.strftime('%Y%m%dT%H%M%S')}",
+        f"SUMMARY:{_ics_escape(titulo)}", f"LOCATION:{_ics_escape(ubicacion)}",
+        f"DESCRIPTION:{_ics_escape(cita['observaciones'])}", "END:VEVENT", "END:VCALENDAR", "",
+    ])
+    return Response(content=contenido, media_type="text/calendar", headers={"Content-Disposition": f'attachment; filename="alucarpin-cita-{cita_id}.ics"'})
+
+
+def _trabajo_datos(datos):
+    valores = datos.model_dump()
+    for clave in ("fecha_inicio", "fecha_fin", "fecha_cobro"):
+        if valores.get(clave):
+            valores[clave] = valores[clave].isoformat()
+    for clave in ("cliente", "obra", "ubicacion", "poblacion", "observaciones", "num_presupuesto", "forma_pago"):
+        if isinstance(valores.get(clave), str):
+            valores[clave] = valores[clave].strip()
+    if valores["fecha_fin"] and valores["fecha_fin"] < valores["fecha_inicio"]:
+        raise HTTPException(status_code=400, detail="La fecha final no puede ser anterior a la inicial")
+    if valores["tipo"] == "presupuesto" and not valores["num_presupuesto"]:
+        raise HTTPException(status_code=400, detail="Selecciona un presupuesto existente")
+    if valores["estado_cobro"] == "Cobrado" and not valores["fecha_cobro"]:
+        valores["fecha_cobro"] = valores["fecha_inicio"]
+    return valores
+
+
+@app.get("/presupuestos")
+def listar_presupuestos(q: str = "", usuario=Depends(usuario_actual)):
+    patron = f"%{q.strip()}%"
+    try:
+        with conexion() as db:
+            filas = db.execute(
+                """
+                SELECT id, cliente, num_presupuesto, fecha, presupuesto_final, estado
+                FROM presupuestos
+                WHERE (? = '' OR cliente LIKE ? OR num_presupuesto LIKE ?)
+                ORDER BY id DESC
+                """,
+                (q.strip(), patron, patron),
+            ).fetchall()
+    except Exception as error:
+        if "no such table" in str(error).lower() or "does not exist" in str(error).lower():
+            return []
+        raise HTTPException(status_code=503, detail="La tabla de presupuestos no está disponible") from error
+    return [dict(fila) for fila in filas]
+
+
+@app.get("/trabajos")
+def listar_trabajos(usuario=Depends(administrador)):
+    with conexion() as db:
+        filas = db.execute(
+            "SELECT * FROM trabajos_propios ORDER BY fecha_inicio DESC, id DESC"
+        ).fetchall()
+    return [dict(fila) for fila in filas]
+
+
+@app.post("/trabajos", status_code=201)
+def crear_trabajo(datos: TrabajoCreate, usuario=Depends(administrador)):
+    valores = _trabajo_datos(datos)
+    columnas = ", ".join(valores)
+    marcadores = ", ".join("?" for _ in valores)
+    with conexion() as db:
+        if valores["num_presupuesto"]:
+            presupuesto = db.execute(
+                "SELECT 1 FROM presupuestos WHERE num_presupuesto = ? LIMIT 1",
+                (valores["num_presupuesto"],),
+            ).fetchone()
+            if not presupuesto:
+                raise HTTPException(status_code=400, detail="El presupuesto seleccionado no existe")
+        if DATABASE_URL:
+            fila = db.execute(
+                f"INSERT INTO trabajos_propios ({columnas}) VALUES ({marcadores}) RETURNING *",
+                tuple(valores.values()),
+            ).fetchone()
+        else:
+            db.execute(
+                f"INSERT INTO trabajos_propios ({columnas}) VALUES ({marcadores})",
+                tuple(valores.values()),
+            )
+            fila = db.execute("SELECT * FROM trabajos_propios WHERE id = last_insert_rowid()").fetchone()
+    return dict(fila)
+
+
+@app.patch("/trabajos/{trabajo_id}")
+def modificar_trabajo(trabajo_id: int, datos: TrabajoUpdate, usuario=Depends(administrador)):
+    valores = _trabajo_datos(datos)
+    asignaciones = ", ".join(f"{clave} = ?" for clave in valores)
+    with conexion() as db:
+        cursor = db.execute(
+            f"UPDATE trabajos_propios SET {asignaciones}, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?",
+            [*valores.values(), trabajo_id],
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Trabajo no encontrado")
+        fila = db.execute("SELECT * FROM trabajos_propios WHERE id = ?", (trabajo_id,)).fetchone()
+    return dict(fila)
+
+
+@app.delete("/trabajos/{trabajo_id}")
+def borrar_trabajo(trabajo_id: int, usuario=Depends(administrador)):
+    with conexion() as db:
+        cursor = db.execute("DELETE FROM trabajos_propios WHERE id = ?", (trabajo_id,))
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Trabajo no encontrado")
+    return {"eliminado": True}
+
+
+def _ics_escape(valor):
+    return str(valor or "").replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
+
+
+@app.get("/trabajos/{trabajo_id}/calendario")
+def calendario_trabajo(trabajo_id: int, usuario=Depends(administrador)):
+    with conexion() as db:
+        trabajo = db.execute("SELECT * FROM trabajos_propios WHERE id = ?", (trabajo_id,)).fetchone()
+    if not trabajo:
+        raise HTTPException(status_code=404, detail="Trabajo no encontrado")
+    inicio = trabajo["fecha_inicio"].strftime("%Y%m%d") if hasattr(trabajo["fecha_inicio"], "strftime") else str(trabajo["fecha_inicio"]).replace("-", "")
+    fecha_fin = trabajo["fecha_fin"] or trabajo["fecha_inicio"]
+    if hasattr(fecha_fin, "toordinal"):
+        from datetime import timedelta
+        fecha_fin = fecha_fin + timedelta(days=1)
+        fin = fecha_fin.strftime("%Y%m%d")
+    else:
+        partes = str(fecha_fin).split("-")
+        fecha_fin = date(int(partes[0]), int(partes[1]), int(partes[2]))
+        from datetime import timedelta
+        fin = (fecha_fin + timedelta(days=1)).strftime("%Y%m%d")
+    titulo = f"{trabajo['tipo'].capitalize()}: {trabajo['cliente']} - {trabajo['obra']}"
+    descripcion = " | ".join(filter(None, [trabajo["observaciones"], f"Presupuesto {trabajo['num_presupuesto']}" if trabajo["num_presupuesto"] else ""]))
+    ubicacion = ", ".join(filter(None, [trabajo["ubicacion"], trabajo["poblacion"]]))
+    contenido = "\r\n".join([
+        "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Alucarpin//Agenda//ES", "BEGIN:VEVENT",
+        f"UID:alucarpin-trabajo-{trabajo_id}@alucarpin.app", f"DTSTAMP:{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}",
+        f"DTSTART;VALUE=DATE:{inicio}", f"DTEND;VALUE=DATE:{fin}", f"SUMMARY:{_ics_escape(titulo)}",
+        f"LOCATION:{_ics_escape(ubicacion)}", f"DESCRIPTION:{_ics_escape(descripcion)}", "END:VEVENT", "END:VCALENDAR", "",
+    ])
+    return Response(
+        content=contenido,
+        media_type="text/calendar",
+        headers={"Content-Disposition": f'attachment; filename="alucarpin-trabajo-{trabajo_id}.ics"'},
+    )
 
 
 @app.patch("/usuarios/{usuario_id}/password")
@@ -502,15 +830,23 @@ def crear_fichaje(fichaje: FichajeCreate, usuario=Depends(usuario_actual)):
         raise HTTPException(status_code=403, detail="No puedes registrar otro ayudante")
     try:
         with conexion() as db:
-            parametros = (fichaje.ayudante_id, fichaje.fecha.isoformat(), fichaje.tipo_destino, fichaje.cliente.strip(), fichaje.obra.strip(), fichaje.ubicacion.strip(), fichaje.poblacion.strip())
+            num_presupuesto = fichaje.num_presupuesto.strip() if fichaje.num_presupuesto else None
+            if fichaje.tipo_destino == "presupuesto" and num_presupuesto:
+                presupuesto = db.execute(
+                    "SELECT 1 FROM presupuestos WHERE num_presupuesto = ? LIMIT 1",
+                    (num_presupuesto,),
+                ).fetchone()
+                if not presupuesto:
+                    raise HTTPException(status_code=400, detail="El presupuesto seleccionado no existe")
+            parametros = (fichaje.ayudante_id, fichaje.fecha.isoformat(), fichaje.tipo_destino, fichaje.cliente.strip(), fichaje.obra.strip(), fichaje.ubicacion.strip(), fichaje.poblacion.strip(), num_presupuesto)
             if DATABASE_URL:
                 fila = db.execute(
-                    "INSERT INTO fichajes_ayudantes (ayudante_id, fecha, tipo_destino, cliente, obra, ubicacion, poblacion, confirmado_ayudante, sincronizado) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1) RETURNING *",
+                    "INSERT INTO fichajes_ayudantes (ayudante_id, fecha, tipo_destino, cliente, obra, ubicacion, poblacion, num_presupuesto, confirmado_ayudante, sincronizado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1) RETURNING *",
                     parametros,
                 ).fetchone()
             else:
                 db.execute(
-                    "INSERT INTO fichajes_ayudantes (ayudante_id, fecha, tipo_destino, cliente, obra, ubicacion, poblacion, confirmado_ayudante, sincronizado) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1)",
+                    "INSERT INTO fichajes_ayudantes (ayudante_id, fecha, tipo_destino, cliente, obra, ubicacion, poblacion, num_presupuesto, confirmado_ayudante, sincronizado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1)",
                     parametros,
                 )
                 fila = db.execute("SELECT * FROM fichajes_ayudantes WHERE id = last_insert_rowid()").fetchone()
@@ -522,6 +858,15 @@ def crear_fichaje(fichaje: FichajeCreate, usuario=Depends(usuario_actual)):
 @app.patch("/fichajes/{fichaje_id}")
 def modificar_fichaje(fichaje_id: int, cambios: FichajeUpdate, usuario=Depends(usuario_actual)):
     datos = cambios.model_dump(exclude_unset=True)
+    if datos.get("num_presupuesto"):
+        datos["num_presupuesto"] = datos["num_presupuesto"].strip()
+        with conexion() as db:
+            presupuesto = db.execute(
+                "SELECT 1 FROM presupuestos WHERE num_presupuesto = ? LIMIT 1",
+                (datos["num_presupuesto"],),
+            ).fetchone()
+        if not presupuesto:
+            raise HTTPException(status_code=400, detail="El presupuesto seleccionado no existe")
     if "fecha" in datos:
         datos["fecha"] = datos["fecha"].isoformat()
     datos = {clave: valor.strip() if isinstance(valor, str) else valor for clave, valor in datos.items()}

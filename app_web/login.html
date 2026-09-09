@@ -62,7 +62,7 @@
         localStorage.removeItem('alucarpin_credenciales');
       }
       localStorage.setItem('alucarpin_token', resultado.token);
-      location.href = resultado.rol === 'administrador' ? '/app/administrador.html' : `/app/ayudante.html?ayudante_id=${resultado.ayudante_id}`;
+      location.href = resultado.rol === 'administrador' ? '/app/mi_control.html' : `/app/ayudante.html?ayudante_id=${resultado.ayudante_id}`;
     });
   </script>
   <script src="/app/pwa.js"></script>

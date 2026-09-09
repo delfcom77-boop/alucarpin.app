@@ -18,8 +18,8 @@
     section { background: white; border: 1px solid #d6e1df; border-radius: 12px; padding: 18px; margin-top: 16px; }
     h2 { margin: 0 0 14px; font-size: 20px; }
     label { display: block; font-weight: 600; margin: 12px 0 6px; }
-    input, button { width: 100%; min-height: 48px; border-radius: 8px; font: inherit; }
-    input { border: 1px solid #aebfbd; padding: 10px 12px; }
+    input, select, button { width: 100%; min-height: 48px; border-radius: 8px; font: inherit; }
+    input, select { border: 1px solid #aebfbd; padding: 10px 12px; }
     button { border: 0; background: #d45d3f; color: white; font-weight: 700; padding: 10px 14px; cursor: pointer; margin-top: 16px; }
     button:hover { background: #b94b31; }
     .mensaje { min-height: 24px; margin-top: 12px; font-weight: 600; }
@@ -46,7 +46,8 @@
       <h2>Registrar día</h2>
       <form id="formulario">
         <div><label for="fecha">Día</label><input id="fecha" type="date" required></div>
-        <div><label for="tipo-destino">¿Dónde se ha trabajado?</label><select id="tipo-destino" required><option value="faena">Faena a 3º</option><option value="presupuesto">Presupuesto Alucarpin</option></select></div>
+        <div><label for="tipo-destino">¿Qué trabajo se ha realizado?</label><select id="tipo-destino" required><option value="faena">Faena a 3º</option><option value="presupuesto">Presupuesto Alucarpin</option><option value="reparacion">Reparación</option></select></div>
+        <div id="presupuesto-bloque" hidden><label for="presupuesto">Presupuesto existente</label><select id="presupuesto"><option value="">Pendiente de vincular</option></select></div>
         <div><label for="cliente">Cliente</label><input id="cliente" required maxlength="160"></div>
         <div><label for="obra">Obra</label><input id="obra" required maxlength="160"></div>
         <div><label for="ubicacion">Ubicación</label><input id="ubicacion" maxlength="200"></div>
@@ -68,12 +69,15 @@
     const token = localStorage.getItem('alucarpin_token');
     if (!token) location.replace('/app/login.html');
     const apiFetch = (url, options = {}) => fetch(url, { ...options, headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` } });
+    const mostrarFecha = fecha => { const partes = String(fecha || '').split('-'); return partes.length === 3 ? `${partes[2]}/${partes[1]}/${partes[0]}` : fecha; };
     const ayudanteId = new URLSearchParams(location.search).get('ayudante_id');
     const historial = document.querySelector('#historial');
     const mensaje = document.querySelector('#mensaje');
     const formulario = document.querySelector('#formulario');
     const fecha = document.querySelector('#fecha');
     const tipoDestino = document.querySelector('#tipo-destino');
+    const presupuesto = document.querySelector('#presupuesto');
+    const presupuestoBloque = document.querySelector('#presupuesto-bloque');
     const contador = document.querySelector('#contador');
     let fichajes = [];
 
@@ -83,6 +87,23 @@
       formulario.querySelector('button').disabled = true;
     }
     fecha.valueAsDate = new Date();
+
+    tipoDestino.addEventListener('change', () => {
+      presupuestoBloque.hidden = tipoDestino.value !== 'presupuesto';
+    });
+
+    async function cargarPresupuestos() {
+      const respuesta = await apiFetch('/presupuestos');
+      if (!respuesta.ok) return;
+      const lista = await respuesta.json();
+      presupuesto.innerHTML = '<option value="">Pendiente de vincular</option>';
+      lista.forEach(item => {
+        const opcion = document.createElement('option');
+        opcion.value = item.num_presupuesto;
+        opcion.textContent = `Nº ${item.num_presupuesto} | ${item.cliente} | ${item.estado || ''}`;
+        presupuesto.appendChild(opcion);
+      });
+    }
 
     async function cargar() {
       if (!ayudanteId) return;
@@ -104,8 +125,8 @@
       fichajes.forEach(fichaje => {
         const item = document.createElement('tr');
         item.className = `registro ${fichaje.pagado ? 'pagado' : 'pendiente'}`;
-        const tipo = fichaje.tipo_destino === 'presupuesto' ? 'Presupuesto Alucarpin' : 'Faena a 3º';
-        item.innerHTML = `<td>${fichaje.fecha}</td><td>${tipo}</td><td>${fichaje.cliente || ''}</td><td>${fichaje.obra}</td><td>${fichaje.ubicacion || ''}</td><td>${fichaje.poblacion || ''}</td>`;
+        const tipo = fichaje.tipo_destino === 'presupuesto' ? 'Presupuesto Alucarpin' : fichaje.tipo_destino === 'reparacion' ? 'Reparación' : 'Faena a 3º';
+        item.innerHTML = `<td>${mostrarFecha(fichaje.fecha)}</td><td>${tipo}</td><td>${fichaje.cliente || ''}</td><td>${fichaje.obra}</td><td>${fichaje.ubicacion || ''}</td><td>${fichaje.poblacion || ''}</td>`;
         item.onclick = () => cargarEnFormulario(fichaje, item);
         historial.appendChild(item);
       });
@@ -116,6 +137,8 @@
       elemento.classList.add('seleccionado');
       fecha.value = fichaje.fecha;
       tipoDestino.value = fichaje.tipo_destino || 'faena';
+      presupuesto.value = fichaje.num_presupuesto || '';
+      tipoDestino.dispatchEvent(new Event('change'));
       document.querySelector('#cliente').value = fichaje.cliente || '';
       document.querySelector('#obra').value = fichaje.obra;
       document.querySelector('#ubicacion').value = fichaje.ubicacion || '';
@@ -128,7 +151,7 @@
       event.preventDefault();
       mensaje.textContent = 'Guardando...';
       mensaje.className = 'mensaje';
-      const datos = { ayudante_id: Number(ayudanteId), fecha: fecha.value, tipo_destino: tipoDestino.value, cliente: document.querySelector('#cliente').value, obra: document.querySelector('#obra').value, ubicacion: document.querySelector('#ubicacion').value, poblacion: document.querySelector('#poblacion').value };
+      const datos = { ayudante_id: Number(ayudanteId), fecha: fecha.value, tipo_destino: tipoDestino.value, cliente: document.querySelector('#cliente').value, obra: document.querySelector('#obra').value, ubicacion: document.querySelector('#ubicacion').value, poblacion: document.querySelector('#poblacion').value, num_presupuesto: tipoDestino.value === 'presupuesto' ? (presupuesto.value || null) : null };
       const id = formulario.dataset.id;
       const respuesta = await apiFetch(id ? `${api}/fichajes/${id}` : `${api}/fichajes`, { method: id ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) });
       if (!respuesta.ok) { const detalle = await respuesta.json(); mensaje.textContent = detalle.detail || 'No se pudo guardar.'; mensaje.className = 'mensaje error'; return; }
@@ -148,6 +171,7 @@
     }, 15000);
 
     cargar().catch(() => { historial.textContent = 'No se pudo conectar con el programa.'; });
+    cargarPresupuestos().catch(() => {});
   </script>
   <script src="/app/pwa.js"></script>
 </body>

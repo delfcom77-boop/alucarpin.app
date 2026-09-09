@@ -24,8 +24,8 @@
     .borrar-ayudante { background: #f4cccc; color: #7b2020; }
     form { display: grid; gap: 12px; }
     label { font-weight: 700; display: grid; gap: 6px; }
-    input, button { min-height: 46px; border-radius: 8px; font: inherit; }
-    input { border: 1px solid #b9c4c2; padding: 10px; }
+    input, select, button { min-height: 46px; border-radius: 8px; font: inherit; }
+    input, select { border: 1px solid #b9c4c2; padding: 10px; }
     .fila { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
     .resumen { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 14px; }
     .dato { background: #f1f5f3; border-radius: 8px; padding: 12px; }
@@ -46,6 +46,10 @@
     .mensaje { min-height: 24px; font-weight: 700; }
     .error { color: #a52e2e; }
     .exito { color: #1c6b42; }
+    .agenda-acciones { display: flex; flex-wrap: wrap; gap: 8px; }
+    .agenda-acciones button { border: 0; padding: 8px 12px; cursor: pointer; font-weight: 700; }
+    .agenda-acciones button:first-child { background: #293f4a; color: #fff; }
+    .agenda-acciones .borrar-trabajo { background: #f4cccc; color: #7b2020; }
     .estado-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
     .estado-dato { border-radius: 8px; padding: 12px; font-weight: 700; }
     .estado-dato { border: 2px solid transparent; cursor: pointer; text-align: left; width: 100%; }
@@ -60,8 +64,25 @@
 </head>
 <body>
   <main>
-    <header><h1>Control de ayudantes</h1><p>Pagos y resumen semanal</p></header>
+    <header><h1>Ayudantes</h1><p>Fichajes, jornadas y pagos</p></header>
+    <nav><a href="/app/mi_control.html" style="display:inline-block;background:#d45d3f;color:#fff;border-radius:8px;padding:12px 16px;text-decoration:none;font-weight:700;">Ir a Mi control</a></nav>
     <section><h2>Estado de pagos</h2><div class="estado-grid"><button class="estado-dato estado-pagado" data-filtro-estado="Pagado" type="button">Pagado<strong id="contador-pagado">0</strong></button><button class="estado-dato estado-parcial" data-filtro-estado="Parcial" type="button">Parcial<strong id="contador-parcial">0</strong></button><button class="estado-dato estado-pendiente" data-filtro-estado="No pagado" type="button">Pendiente<strong id="contador-pendiente">0</strong></button><button class="estado-dato estado-total" data-filtro-estado="Todos" type="button">Total jornadas<strong id="contador-total">0</strong></button></div></section>
+    <section hidden><h2>Mi control</h2><p>Registra tus trabajos sin mezclarlos con los pagos de ayudantes.</p>
+      <form id="formulario-trabajo">
+        <input id="trabajo-id" type="hidden">
+        <div class="fila">
+          <label>Tipo <select id="trabajo-tipo"><option value="faena">Faena</option><option value="presupuesto">Presupuesto</option><option value="reparacion">Reparación</option></select></label>
+          <label>Fecha de inicio <input id="trabajo-fecha-inicio" type="date" required></label>
+        </div>
+        <div class="fila"><label>Fecha final (opcional) <input id="trabajo-fecha-fin" type="date"></label><label>Cliente <input id="trabajo-cliente" required></label></div>
+        <div class="fila"><label>Obra o reparación <input id="trabajo-obra" required></label><label>Ubicación / dirección <input id="trabajo-ubicacion"></label></div>
+        <div class="fila"><label>Población <input id="trabajo-poblacion"></label><label>Presupuesto existente <select id="trabajo-presupuesto"><option value="">Sin vincular</option></select></label></div>
+        <div class="fila"><label>Importe (€) <input id="trabajo-importe" type="number" min="0" step="0.01" value="0"></label><label>Estado de cobro <select id="trabajo-estado"><option>No cobrado</option><option>Cobrado</option></select></label></div>
+        <div class="fila"><label>Forma de cobro <input id="trabajo-forma" placeholder="Efectivo, transferencia..."></label><label>Observaciones <input id="trabajo-observaciones"></label></div>
+        <button type="submit">Guardar trabajo y añadir al calendario</button><div id="mensaje-trabajo" class="mensaje"></div>
+      </form>
+      <div class="lista-general"><table><thead><tr><th>Fechas</th><th>Tipo</th><th>Cliente</th><th>Obra</th><th>Presupuesto</th><th>Importe</th><th>Cobro</th><th>Acciones</th></tr></thead><tbody id="lista-trabajos"><tr><td colspan="8">Cargando...</td></tr></tbody></table></div>
+    </section>
     <section><h2>Seleccionar ayudante</h2><div id="ayudantes" class="ayudantes">Cargando...</div></section>
     <section>
       <h2>Añadir ayudante</h2>
@@ -85,7 +106,7 @@
         <input id="editar-id" type="hidden">
         <div class="fila">
           <label>Día <input id="fecha-general" type="date" required></label>
-          <label>Tipo <select id="tipo-general" required><option value="faena">Faena a 3º</option><option value="presupuesto">Presupuesto Alucarpin</option></select></label>
+          <label>Tipo <select id="tipo-general" required><option value="faena">Faena a 3º</option><option value="presupuesto">Presupuesto Alucarpin</option><option value="reparacion">Reparación</option></select></label>
         </div>
         <div class="fila">
           <label>Cliente <input id="cliente-general" required></label>
@@ -143,6 +164,7 @@
       return fetch(url, { ...options, signal: controller.signal, headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` } })
         .finally(() => clearTimeout(temporizador));
     };
+      const mostrarFecha = fecha => { const partes = String(fecha || '').split('-'); return partes.length === 3 ? `${partes[2]}/${partes[1]}/${partes[0]}` : fecha; };
     const cerrarSesion = () => { localStorage.removeItem('alucarpin_token'); location.replace('/app/login.html'); };
     let ayudanteId = null;
     let fichajePagoId = null;
@@ -153,6 +175,94 @@
     const mensajeUsuarios = document.querySelector('#mensaje-usuarios');
     const mensajeAyudante = document.querySelector('#mensaje-ayudante');
       const mensajeGeneral = document.querySelector('#mensaje-general');
+
+    const formularioTrabajo = document.querySelector('#formulario-trabajo');
+    const mensajeTrabajo = document.querySelector('#mensaje-trabajo');
+    const tipoTrabajo = document.querySelector('#trabajo-tipo');
+    const presupuestoTrabajo = document.querySelector('#trabajo-presupuesto');
+    const mostrarTipoTrabajo = tipo => ({ faena: 'Faena', presupuesto: 'Presupuesto', reparacion: 'Reparación' }[tipo] || tipo);
+    const mostrarFechaTrabajo = fecha => String(fecha || '').split('-').reverse().join('/');
+
+    const descargarCalendario = async id => {
+      const respuesta = await apiFetch(`${api}/trabajos/${id}/calendario`);
+      if (!respuesta.ok) throw new Error('El trabajo se guardó, pero no se pudo generar el calendario.');
+      const archivo = await respuesta.blob();
+      const enlace = document.createElement('a');
+      enlace.href = URL.createObjectURL(archivo);
+      enlace.download = `alucarpin-trabajo-${id}.ics`;
+      enlace.click();
+      URL.revokeObjectURL(enlace.href);
+    };
+
+    async function cargarPresupuestos() {
+      const respuesta = await apiFetch('/presupuestos');
+      if (!respuesta.ok) throw new Error('No se pudieron cargar los presupuestos.');
+      const lista = await respuesta.json();
+      presupuestoTrabajo.innerHTML = '<option value="">Sin vincular</option>';
+      lista.forEach(item => {
+        const opcion = document.createElement('option');
+        opcion.value = item.num_presupuesto;
+        opcion.textContent = `Nº ${item.num_presupuesto} | ${item.cliente} | ${item.estado || ''}`;
+        presupuestoTrabajo.appendChild(opcion);
+      });
+    }
+
+    async function cargarTrabajos() {
+      const respuesta = await apiFetch('/trabajos');
+      if (!respuesta.ok) throw new Error('No se pudieron cargar tus trabajos.');
+      const lista = await respuesta.json();
+      const cuerpo = document.querySelector('#lista-trabajos');
+      cuerpo.textContent = '';
+      if (!lista.length) { cuerpo.innerHTML = '<tr><td colspan="8">Todavía no hay trabajos propios.</td></tr>'; return; }
+      lista.forEach(trabajo => {
+        const fila = document.createElement('tr');
+        fila.innerHTML = `<td>${mostrarFechaTrabajo(trabajo.fecha_inicio)}${trabajo.fecha_fin ? ` - ${mostrarFechaTrabajo(trabajo.fecha_fin)}` : ''}</td><td>${mostrarTipoTrabajo(trabajo.tipo)}</td><td>${trabajo.cliente}</td><td>${trabajo.obra}</td><td>${trabajo.num_presupuesto || '-'}</td><td>${Number(trabajo.importe || 0).toFixed(2)} €</td><td>${trabajo.estado_cobro}</td><td class="agenda-acciones"><button type="button" class="calendario-trabajo">Calendario</button><button type="button" class="borrar-trabajo">Borrar</button></td>`;
+        fila.querySelector('.calendario-trabajo').onclick = () => descargarCalendario(trabajo.id).catch(error => { mensajeTrabajo.textContent = error.message; mensajeTrabajo.className = 'mensaje error'; });
+        fila.querySelector('.borrar-trabajo').onclick = async () => {
+          if (!confirm(`¿Borrar el trabajo de ${trabajo.cliente}?`)) return;
+          const borrado = await apiFetch(`/trabajos/${trabajo.id}`, { method: 'DELETE' });
+          if (!borrado.ok) { mensajeTrabajo.textContent = 'No se pudo borrar el trabajo.'; mensajeTrabajo.className = 'mensaje error'; return; }
+          await cargarTrabajos();
+        };
+        cuerpo.appendChild(fila);
+      });
+    }
+
+    tipoTrabajo.addEventListener('change', () => {
+      presupuestoTrabajo.required = tipoTrabajo.value === 'presupuesto';
+      presupuestoTrabajo.parentElement.hidden = tipoTrabajo.value !== 'presupuesto';
+    });
+    formularioTrabajo.addEventListener('submit', async event => {
+      event.preventDefault();
+      const datos = {
+        tipo: tipoTrabajo.value,
+        fecha_inicio: document.querySelector('#trabajo-fecha-inicio').value,
+        fecha_fin: document.querySelector('#trabajo-fecha-fin').value || null,
+        cliente: document.querySelector('#trabajo-cliente').value,
+        obra: document.querySelector('#trabajo-obra').value,
+        ubicacion: document.querySelector('#trabajo-ubicacion').value,
+        poblacion: document.querySelector('#trabajo-poblacion').value,
+        observaciones: document.querySelector('#trabajo-observaciones').value,
+        num_presupuesto: presupuestoTrabajo.value || null,
+        importe: Number(document.querySelector('#trabajo-importe').value || 0),
+        estado_cobro: document.querySelector('#trabajo-estado').value,
+        forma_pago: document.querySelector('#trabajo-forma').value,
+        fecha_cobro: null,
+      };
+      mensajeTrabajo.textContent = 'Guardando...';
+      const respuesta = await apiFetch('/trabajos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) });
+      const resultado = await respuesta.json();
+      if (!respuesta.ok) { mensajeTrabajo.textContent = resultado.detail || 'No se pudo guardar el trabajo.'; mensajeTrabajo.className = 'mensaje error'; return; }
+      try { await descargarCalendario(resultado.id); } catch (error) { mensajeTrabajo.textContent = error.message; mensajeTrabajo.className = 'mensaje error'; }
+      mensajeTrabajo.textContent = 'Trabajo guardado y calendario generado.';
+      mensajeTrabajo.className = 'mensaje exito';
+      formularioTrabajo.reset();
+      document.querySelector('#trabajo-fecha-inicio').valueAsDate = new Date();
+      tipoTrabajo.dispatchEvent(new Event('change'));
+      await cargarTrabajos();
+    });
+    document.querySelector('#trabajo-fecha-inicio').valueAsDate = new Date();
+    tipoTrabajo.dispatchEvent(new Event('change'));
 
         async function cargarListadoGeneral() {
           const respuestaAyudantes = await apiFetch(`${api}/ayudantes`);
@@ -195,8 +305,8 @@
             const fila = document.createElement('tr');
             fila.dataset.ayudanteId = fichaje.ayudante_id;
             fila.className = fichaje.estadoPago === 'Pagado' ? 'pagado' : fichaje.estadoPago === 'Parcial' ? 'parcial' : 'pendiente';
-            const tipo = fichaje.tipo_destino === 'presupuesto' ? 'Presupuesto Alucarpin' : 'Faena a 3º';
-            fila.innerHTML = `<td>${fichaje.nombreAyudante}</td><td>${tipo}</td><td>${fichaje.fecha}</td><td>${fichaje.cliente || ''}</td><td>${fichaje.obra}</td><td>${fichaje.ubicacion || ''}</td><td>${fichaje.poblacion || ''}</td><td class="acciones"><button type="button">Modificar</button><button type="button" class="borrar">Borrar</button></td>`;
+            const tipo = fichaje.tipo_destino === 'presupuesto' ? 'Presupuesto Alucarpin' : fichaje.tipo_destino === 'reparacion' ? 'Reparación' : 'Faena a 3º';
+            fila.innerHTML = `<td>${fichaje.nombreAyudante}</td><td>${tipo}</td><td>${mostrarFecha(fichaje.fecha)}</td><td>${fichaje.cliente || ''}</td><td>${fichaje.obra}</td><td>${fichaje.ubicacion || ''}</td><td>${fichaje.poblacion || ''}</td><td class="acciones"><button type="button">Modificar</button><button type="button" class="borrar">Borrar</button></td>`;
             fila.onclick = () => seleccionarFichajeGeneral(fichaje, fila);
             fila.querySelector('.acciones button:first-child').onclick = event => { event.stopPropagation(); seleccionarFichajeGeneral(fichaje, fila); };
             fila.querySelector('.borrar').onclick = async event => { event.stopPropagation(); await borrarFichaje(fichaje); };
@@ -425,6 +535,8 @@
       document.querySelector('#lista-general').innerHTML = `<tr><td colspan="8">${error.message}</td></tr>`;
     });
     cargarUsuarios().catch(error => { mensajeUsuarios.textContent = error.message; mensajeUsuarios.className = 'mensaje error'; });
+    cargarPresupuestos().catch(error => { mensajeTrabajo.textContent = error.message; mensajeTrabajo.className = 'mensaje error'; });
+    cargarTrabajos().catch(error => { document.querySelector('#lista-trabajos').innerHTML = `<tr><td colspan="8">${error.message}</td></tr>`; });
   </script>
   <script src="/app/pwa.js"></script>
 </body>

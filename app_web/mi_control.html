@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AlucarpinSamitier | Mi control</title>
+  <style>
+    :root { font-family: Segoe UI, sans-serif; color: #223238; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f3f1eb; }
+    main { width: min(1000px, 100%); margin: auto; padding: 24px 16px 40px; }
+    header { background: #293f4a; color: #fff; border-radius: 14px; padding: 22px; }
+    h1, h2 { margin: 0 0 10px; }
+    nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
+    nav a { background: #d45d3f; color: #fff; border-radius: 8px; padding: 12px 16px; text-decoration: none; font-weight: 700; }
+    section { background: #fff; border: 1px solid #ddd8cc; border-radius: 12px; padding: 18px; margin-top: 16px; }
+    form { display: grid; gap: 12px; }
+    label { font-weight: 700; display: grid; gap: 6px; }
+    input, select, button { min-height: 46px; border-radius: 8px; font: inherit; }
+    input, select { border: 1px solid #b9c4c2; padding: 10px; }
+    button { background: #d45d3f; color: #fff; border: 0; font-weight: 700; cursor: pointer; padding: 10px 14px; }
+    .fila { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .mensaje { min-height: 24px; font-weight: 700; }
+    .error { color: #a52e2e; }
+    .exito { color: #1c6b42; }
+    .lista { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 780px; }
+    th, td { border-bottom: 1px solid #ddd8cc; padding: 10px 8px; text-align: left; }
+    th { background: #eef3f1; }
+    .acciones { display: flex; gap: 8px; }
+    .acciones button { min-height: 38px; padding: 7px 12px; }
+    .borrar { background: #f4cccc; color: #7b2020; }
+    @media (max-width: 560px) { .fila { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header><h1>Mi control</h1><p>Mis trabajos, ingresos y calendario</p></header>
+    <nav><a href="/app/agenda.html">Agenda y citas</a><a href="/app/administrador.html">Ir a Ayudantes</a><a href="#" id="cerrar">Cerrar sesión</a></nav>
+    <section>
+      <h2>Registrar trabajo</h2>
+      <form id="formulario">
+        <div class="fila"><label>Tipo <select id="tipo"><option value="faena">Faena</option><option value="presupuesto">Presupuesto</option><option value="reparacion">Reparación</option></select></label><label>Fecha de inicio <input id="fecha-inicio" type="date" required></label></div>
+        <div class="fila"><label>Fecha final <input id="fecha-fin" type="date"></label><label>Cliente <input id="cliente" required></label></div>
+        <div class="fila"><label>Obra o reparación <input id="obra" required></label><label>Dirección / ubicación <input id="ubicacion"></label></div>
+        <div class="fila"><label>Población <input id="poblacion"></label><label>Presupuesto existente <select id="presupuesto"><option value="">Sin vincular</option></select></label></div>
+        <div class="fila"><label>Importe (€) <input id="importe" type="number" min="0" step="0.01" value="0"></label><label>Cobro <select id="estado"><option>No cobrado</option><option>Cobrado</option></select></label></div>
+        <div class="fila"><label>Forma de cobro <input id="forma" placeholder="Efectivo, transferencia..."></label><label>Observaciones <input id="observaciones"></label></div>
+        <button type="submit">Guardar y añadir al calendario</button><div id="mensaje" class="mensaje"></div>
+      </form>
+    </section>
+    <section><h2>Mis trabajos</h2><div class="lista"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Cliente</th><th>Obra</th><th>Presupuesto</th><th>Importe</th><th>Cobro</th><th>Acciones</th></tr></thead><tbody id="lista"><tr><td colspan="8">Cargando...</td></tr></tbody></table></div></section>
+  </main>
+  <script>
+    const token = localStorage.getItem('alucarpin_token');
+    if (!token) location.replace('/app/login.html');
+    const apiFetch = (url, options = {}) => fetch(url, { ...options, headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` } });
+    const formulario = document.querySelector('#formulario');
+    const tipo = document.querySelector('#tipo');
+    const presupuesto = document.querySelector('#presupuesto');
+    const mensaje = document.querySelector('#mensaje');
+    const fecha = value => String(value || '').split('-').reverse().join('/');
+    const tipos = { faena: 'Faena', presupuesto: 'Presupuesto', reparacion: 'Reparación' };
+    tipo.onchange = () => { presupuesto.parentElement.hidden = tipo.value !== 'presupuesto'; presupuesto.required = tipo.value === 'presupuesto'; };
+    document.querySelector('#cerrar').onclick = event => { event.preventDefault(); localStorage.removeItem('alucarpin_token'); location.replace('/app/login.html'); };
+    async function cargarPresupuestos() {
+      const respuesta = await apiFetch('/presupuestos');
+      if (!respuesta.ok) throw new Error('No se pudieron cargar los presupuestos.');
+      const lista = await respuesta.json();
+      presupuesto.innerHTML = '<option value="">Sin vincular</option>';
+      lista.forEach(item => { const opcion = document.createElement('option'); opcion.value = item.num_presupuesto; opcion.textContent = `Nº ${item.num_presupuesto} | ${item.cliente} | ${item.estado || ''}`; presupuesto.appendChild(opcion); });
+    }
+    async function calendario(id) {
+      const respuesta = await apiFetch(`/trabajos/${id}/calendario`);
+      if (!respuesta.ok) throw new Error('No se pudo generar el calendario.');
+      const enlace = document.createElement('a'); enlace.href = URL.createObjectURL(await respuesta.blob()); enlace.download = `alucarpin-trabajo-${id}.ics`; enlace.click(); URL.revokeObjectURL(enlace.href);
+    }
+    async function cargarTrabajos() {
+      const respuesta = await apiFetch('/trabajos'); if (!respuesta.ok) throw new Error('No se pudieron cargar tus trabajos.');
+      const trabajos = await respuesta.json(); const cuerpo = document.querySelector('#lista'); cuerpo.textContent = '';
+      if (!trabajos.length) { cuerpo.innerHTML = '<tr><td colspan="8">Todavía no hay trabajos.</td></tr>'; return; }
+      trabajos.forEach(trabajo => { const fila = document.createElement('tr'); fila.innerHTML = `<td>${fecha(trabajo.fecha_inicio)}${trabajo.fecha_fin ? ` - ${fecha(trabajo.fecha_fin)}` : ''}</td><td>${tipos[trabajo.tipo]}</td><td>${trabajo.cliente}</td><td>${trabajo.obra}</td><td>${trabajo.num_presupuesto || '-'}</td><td>${Number(trabajo.importe || 0).toFixed(2)} €</td><td>${trabajo.estado_cobro}</td><td class="acciones"><button type="button" class="cal">Calendario</button><button type="button" class="borrar">Borrar</button></td>`; fila.querySelector('.cal').onclick = () => calendario(trabajo.id).catch(error => { mensaje.textContent = error.message; mensaje.className = 'mensaje error'; }); fila.querySelector('.borrar').onclick = async () => { if (!confirm('¿Borrar este trabajo?')) return; await apiFetch(`/trabajos/${trabajo.id}`, { method: 'DELETE' }); await cargarTrabajos(); }; cuerpo.appendChild(fila); });
+    }
+    formulario.onsubmit = async event => { event.preventDefault(); const datos = { tipo: tipo.value, fecha_inicio: document.querySelector('#fecha-inicio').value, fecha_fin: document.querySelector('#fecha-fin').value || null, cliente: document.querySelector('#cliente').value, obra: document.querySelector('#obra').value, ubicacion: document.querySelector('#ubicacion').value, poblacion: document.querySelector('#poblacion').value, observaciones: document.querySelector('#observaciones').value, num_presupuesto: presupuesto.value || null, importe: Number(document.querySelector('#importe').value || 0), estado_cobro: document.querySelector('#estado').value, forma_pago: document.querySelector('#forma').value, fecha_cobro: null }; const respuesta = await apiFetch('/trabajos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) }); const resultado = await respuesta.json(); if (!respuesta.ok) { mensaje.textContent = resultado.detail || 'No se pudo guardar.'; mensaje.className = 'mensaje error'; return; } await calendario(resultado.id); mensaje.textContent = 'Guardado y añadido al calendario.'; mensaje.className = 'mensaje exito'; formulario.reset(); document.querySelector('#fecha-inicio').valueAsDate = new Date(); tipo.dispatchEvent(new Event('change')); await cargarTrabajos(); };
+    document.querySelector('#fecha-inicio').valueAsDate = new Date(); tipo.dispatchEvent(new Event('change')); Promise.all([cargarPresupuestos(), cargarTrabajos()]).catch(error => { mensaje.textContent = error.message; mensaje.className = 'mensaje error'; });
+  </script>
+</body>
+</html>

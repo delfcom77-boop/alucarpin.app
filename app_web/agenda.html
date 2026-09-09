@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AlucarpinSamitier | Agenda</title>
+  <style>
+    :root { font-family: Segoe UI, sans-serif; color: #223238; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f3f1eb; }
+    main { width: min(1000px, 100%); margin: auto; padding: 24px 16px 40px; }
+    header { background: #293f4a; color: #fff; border-radius: 14px; padding: 22px; }
+    h1, h2 { margin: 0 0 10px; }
+    nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
+    nav a { background: #d45d3f; color: #fff; border-radius: 8px; padding: 12px 16px; text-decoration: none; font-weight: 700; }
+    section { background: #fff; border: 1px solid #ddd8cc; border-radius: 12px; padding: 18px; margin-top: 16px; }
+    form { display: grid; gap: 12px; }
+    label { font-weight: 700; display: grid; gap: 6px; }
+    input, select, button { min-height: 46px; border-radius: 8px; font: inherit; }
+    input, select { border: 1px solid #b9c4c2; padding: 10px; }
+    button { background: #d45d3f; color: #fff; border: 0; font-weight: 700; cursor: pointer; padding: 10px 14px; }
+    .fila { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .mensaje { min-height: 24px; font-weight: 700; }
+    .error { color: #a52e2e; }
+    .exito { color: #1c6b42; }
+    .lista { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 900px; }
+    th, td { border-bottom: 1px solid #ddd8cc; padding: 10px 8px; text-align: left; }
+    th { background: #eef3f1; }
+    .acciones { display: flex; flex-wrap: wrap; gap: 8px; }
+    .acciones button { min-height: 38px; padding: 7px 12px; }
+    .borrar { background: #f4cccc; color: #7b2020; }
+    @media (max-width: 560px) { .fila { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header><h1>Agenda y citas</h1><p>Visitas, reuniones, llamadas y reparaciones pendientes</p></header>
+    <nav><a href="/app/mi_control.html">Mi control</a><a href="/app/administrador.html">Ayudantes</a></nav>
+    <section>
+      <h2>Nueva cita</h2>
+      <form id="formulario">
+        <div class="fila"><label>Fecha <input id="fecha" type="date" required></label><label>Hora <input id="hora" type="time" required></label></div>
+        <div><label>Tipo <select id="tipo"><option value="visita">Visita para valorar</option><option value="reparacion">Reparación</option><option value="reunion">Reunión</option><option value="llamada">Llamada</option><option value="presupuesto">Presupuesto</option><option value="otro">Otro</option></select></label></div>
+        <div class="fila"><label>Cliente <input id="cliente"></label><label>Teléfono <input id="telefono" type="tel"></label></div>
+        <div class="fila"><label>Dirección <input id="ubicacion"></label><label>Población <input id="poblacion"></label></div>
+        <label>Qué tengo que hacer <input id="observaciones" placeholder="Valorar reparación, reunión, revisar medidas..."></label>
+        <button type="submit">Guardar y añadir al calendario</button><div id="mensaje" class="mensaje"></div>
+      </form>
+    </section>
+    <section><h2>Próximas citas</h2><div class="lista"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Tipo</th><th>Cliente</th><th>Dirección</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista"><tr><td colspan="7">Cargando...</td></tr></tbody></table></div></section>
+  </main>
+  <script>
+    const token = localStorage.getItem('alucarpin_token');
+    if (!token) location.replace('/app/login.html');
+    const apiFetch = (url, options = {}) => fetch(url, { ...options, headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` } });
+    const formulario = document.querySelector('#formulario');
+    const mensaje = document.querySelector('#mensaje');
+    const tipos = { visita: 'Visita', reparacion: 'Reparación', reunion: 'Reunión', llamada: 'Llamada', presupuesto: 'Presupuesto', otro: 'Otro' };
+    const fechaTexto = valor => String(valor || '').split('-').reverse().join('/');
+    const valor = id => document.querySelector(`#${id}`).value;
+    document.querySelector('#fecha').valueAsDate = new Date();
+    document.querySelector('#hora').value = '09:00';
+    async function calendario(id) { const respuesta = await apiFetch(`/citas/${id}/calendario`); if (!respuesta.ok) throw new Error('No se pudo generar el calendario.'); const enlace = document.createElement('a'); enlace.href = URL.createObjectURL(await respuesta.blob()); enlace.download = `alucarpin-cita-${id}.ics`; enlace.click(); URL.revokeObjectURL(enlace.href); }
+    async function cargar() {
+      const respuesta = await apiFetch('/citas'); if (!respuesta.ok) throw new Error('No se pudieron cargar las citas.');
+      const citas = await respuesta.json(); const cuerpo = document.querySelector('#lista'); cuerpo.textContent = '';
+      if (!citas.length) { cuerpo.innerHTML = '<tr><td colspan="7">No hay citas agendadas.</td></tr>'; return; }
+      citas.forEach(cita => { const fila = document.createElement('tr'); fila.innerHTML = `<td>${fechaTexto(cita.fecha)}</td><td>${cita.hora}</td><td>${tipos[cita.tipo] || cita.tipo}</td><td>${cita.cliente || '-'}</td><td>${[cita.ubicacion, cita.poblacion].filter(Boolean).join(', ') || '-'}</td><td>${cita.estado}</td><td class="acciones"><button type="button" class="cal">Calendario</button><button type="button" class="realizada">Marcar realizada</button><button type="button" class="borrar">Borrar</button></td>`; fila.querySelector('.cal').onclick = () => calendario(cita.id).catch(error => mostrarError(error.message)); fila.querySelector('.realizada').onclick = async () => { await apiFetch(`/citas/${cita.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...cita, fecha: cita.fecha, hora: cita.hora }) }); await cargar(); }; fila.querySelector('.borrar').onclick = async () => { if (!confirm('¿Borrar esta cita?')) return; await apiFetch(`/citas/${cita.id}`, { method: 'DELETE' }); await cargar(); }; cuerpo.appendChild(fila); });
+    }
+    const mostrarError = texto => { mensaje.textContent = texto; mensaje.className = 'mensaje error'; };
+    formulario.onsubmit = async event => { event.preventDefault(); const datos = { fecha: valor('fecha'), hora: valor('hora'), tipo: valor('tipo'), cliente: valor('cliente'), ubicacion: valor('ubicacion'), poblacion: valor('poblacion'), telefono: valor('telefono'), observaciones: valor('observaciones'), estado: 'Pendiente' }; const respuesta = await apiFetch('/citas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) }); const resultado = await respuesta.json(); if (!respuesta.ok) { mostrarError(resultado.detail || 'No se pudo guardar la cita.'); return; } await calendario(resultado.id); mensaje.textContent = 'Cita guardada y añadida al calendario.'; mensaje.className = 'mensaje exito'; formulario.reset(); document.querySelector('#fecha').valueAsDate = new Date(); document.querySelector('#hora').value = '09:00'; await cargar(); };
+    cargar().catch(error => mostrarError(error.message));
+  </script>
+</body>
+</html>
