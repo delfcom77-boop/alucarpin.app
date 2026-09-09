@@ -43,10 +43,10 @@
     <nav><a href="/app/inicio.html">Volver al menú</a></nav>
     <button id="sincronizar-calendario" type="button">Sincronizar todo con el calendario</button>
       <div class="agenda-menu" aria-label="Secciones de agenda">
-        <button type="button" class="seleccionado" data-seccion-agenda="citas">Nueva cita</button>
-        <button type="button" data-seccion-agenda="notas">Nueva nota</button>
+        <button type="button" class="seleccionado" data-seccion-agenda="citas">NUEVA CITA</button>
+        <button type="button" data-seccion-agenda="notas">NUEVA NOTA</button>
       </div>
-    <h2 id="titulo-seccion">Nueva cita</h2>
+    <h2 id="titulo-seccion">NUEVA CITA</h2>
     <section data-seccion-contenido="citas">
       <form id="formulario">
         <div class="fila"><label>Fecha de la cita <input id="fecha" type="date" required></label><label>Hora de la cita / visita <input id="hora" type="time" required></label></div>
@@ -58,7 +58,7 @@
       </form>
     </section>
     <section class="seguimiento" data-seccion-contenido="notas" hidden>
-      <h2>Recordarme una llamada</h2>
+      <h2>NUEVA NOTA</h2>
       <form id="formulario-seguimiento">
         <div><label>Me llamó el día <input id="seguimiento-fecha-llamada" type="date" required></label></div>
         <div><label>Hora del recordatorio diario <input id="seguimiento-hora" type="time" required></label></div>
@@ -84,7 +84,7 @@
       const seccion = boton.dataset.seccionAgenda;
       document.querySelectorAll('[data-seccion-contenido]').forEach(elemento => { elemento.hidden = elemento.dataset.seccionContenido !== seccion; });
       document.querySelectorAll('[data-seccion-agenda]').forEach(elemento => elemento.classList.toggle('seleccionado', elemento === boton));
-      document.querySelector('#titulo-seccion').textContent = seccion === 'notas' ? 'Nueva nota' : 'Nueva cita';
+      document.querySelector('#titulo-seccion').textContent = seccion === 'notas' ? 'NUEVA NOTA' : 'NUEVA CITA';
     });
     const tipos = { visita: 'Visita', reparacion: 'Reparación', reunion: 'Reunión', llamada: 'Llamada', presupuesto: 'Presupuesto', otro: 'Otro' };
     const fechaTexto = valor => String(valor || '').split('-').reverse().join('/');
