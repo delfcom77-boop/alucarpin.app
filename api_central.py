@@ -657,11 +657,13 @@ def calendario_seguimiento(seguimiento_id: int, usuario=Depends(administrador)):
     titulo = f"Llamar" + (f": {seguimiento['cliente']}" if seguimiento["cliente"] else "")
     fecha_llamada = seguimiento["fecha_llamada"] or ""
     descripcion = " | ".join(filter(None, [f"Llamada recibida el {fecha_llamada}", seguimiento["motivo"], seguimiento["observaciones"], seguimiento["telefono"]]))
+    recurrencia = ["RRULE:FREQ=DAILY"] if seguimiento["estado"] == "Pendiente" else []
     contenido = "\r\n".join([
         "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Alucarpin//Agenda//ES", "BEGIN:VEVENT",
         f"UID:alucarpin-seguimiento-{seguimiento_id}@alucarpin.app", f"DTSTAMP:{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}",
         f"DTSTART:{inicio.strftime('%Y%m%dT%H%M%S')}", f"DTEND:{fin.strftime('%Y%m%dT%H%M%S')}",
         f"SUMMARY:{_ics_escape(titulo)}", f"DESCRIPTION:{_ics_escape(descripcion)}",
+        *recurrencia,
         "BEGIN:VALARM", "TRIGGER:-PT0M", "ACTION:DISPLAY", f"DESCRIPTION:{_ics_escape(titulo)}", "END:VALARM",
         "END:VEVENT", "END:VCALENDAR", "",
     ])
@@ -705,7 +707,8 @@ def calendario_completo(usuario=Depends(administrador)):
         fin = inicio + timedelta(minutes=15)
         titulo = f"Llamar" + (f": {seguimiento['cliente']}" if seguimiento["cliente"] else "")
         descripcion = " | ".join(filter(None, [f"Llamada recibida el {seguimiento['fecha_llamada']}", seguimiento["motivo"], seguimiento["observaciones"], seguimiento["telefono"]]))
-        eventos.append([f"UID:alucarpin-seguimiento-{seguimiento['id']}@alucarpin.app", f"DTSTART:{inicio.strftime('%Y%m%dT%H%M%S')}", f"DTEND:{fin.strftime('%Y%m%dT%H%M%S')}", f"SUMMARY:{_ics_escape(titulo)}", f"DESCRIPTION:{_ics_escape(descripcion)}", "BEGIN:VALARM", "TRIGGER:-PT0M", "ACTION:DISPLAY", f"DESCRIPTION:{_ics_escape(titulo)}", "END:VALARM"])
+        recurrencia = ["RRULE:FREQ=DAILY"] if seguimiento["estado"] == "Pendiente" else []
+        eventos.append([f"UID:alucarpin-seguimiento-{seguimiento['id']}@alucarpin.app", f"DTSTART:{inicio.strftime('%Y%m%dT%H%M%S')}", f"DTEND:{fin.strftime('%Y%m%dT%H%M%S')}", f"SUMMARY:{_ics_escape(titulo)}", f"DESCRIPTION:{_ics_escape(descripcion)}", *recurrencia, "BEGIN:VALARM", "TRIGGER:-PT0M", "ACTION:DISPLAY", f"DESCRIPTION:{_ics_escape(titulo)}", "END:VALARM"])
 
     lineas = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Alucarpin//Agenda//ES"]
     for evento in eventos:
