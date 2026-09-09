@@ -119,6 +119,11 @@ class SeguimientoUpdate(SeguimientoCreate):
     pass
 
 
+class SilencioCalendarioCreate(BaseModel):
+    fecha: date
+    motivo: str = "Sin sonido"
+
+
 class PagoCreate(BaseModel):
     ayudante_id: int
     desde: date
@@ -224,6 +229,7 @@ def inicializar_base_datos():
                     actualizado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            db.execute("CREATE TABLE IF NOT EXISTS calendario_silencios (fecha DATE PRIMARY KEY, motivo TEXT NOT NULL DEFAULT 'Sin sonido')")
             db.execute("ALTER TABLE seguimientos_agenda ADD COLUMN IF NOT EXISTS fecha_llamada DATE")
             db.execute("ALTER TABLE seguimientos_agenda ADD COLUMN IF NOT EXISTS ubicacion TEXT NOT NULL DEFAULT ''")
             db.execute("ALTER TABLE seguimientos_agenda ADD COLUMN IF NOT EXISTS poblacion TEXT NOT NULL DEFAULT ''")
@@ -312,6 +318,10 @@ def inicializar_base_datos():
                 estado TEXT NOT NULL DEFAULT 'Pendiente',
                 creado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 actualizado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS calendario_silencios (
+                fecha TEXT PRIMARY KEY,
+                motivo TEXT NOT NULL DEFAULT 'Sin sonido'
             );
         """)
         columnas_seguimientos = {
@@ -544,6 +554,17 @@ def listar_alarmas(usuario=Depends(administrador)):
     return sorted(alarmas, key=lambda item: (str(item.get("fecha") or ""), str(item.get("hora") or "")))
 
 
+@app.post("/calendario/silenciar")
+def silenciar_dia(datos: SilencioCalendarioCreate, usuario=Depends(administrador)):
+    fecha = datos.fecha.isoformat()
+    with conexion() as db:
+        if DATABASE_URL:
+            db.execute("INSERT INTO calendario_silencios (fecha, motivo) VALUES (?, ?) ON CONFLICT (fecha) DO UPDATE SET motivo = EXCLUDED.motivo", (fecha, datos.motivo.strip() or "Sin sonido"))
+        else:
+            db.execute("INSERT OR REPLACE INTO calendario_silencios (fecha, motivo) VALUES (?, ?)", (fecha, datos.motivo.strip() or "Sin sonido"))
+    return {"fecha": fecha, "silenciado": True}
+
+
 @app.post("/citas", status_code=201)
 def crear_cita(datos: CitaCreate, usuario=Depends(administrador)):
     valores = datos.model_dump()
@@ -714,6 +735,8 @@ def calendario_completo(usuario=Depends(administrador)):
         trabajos = db.execute("SELECT * FROM trabajos_propios ORDER BY fecha_inicio, id").fetchall()
         citas = db.execute("SELECT * FROM citas_agenda ORDER BY fecha, hora, id").fetchall()
         seguimientos = db.execute("SELECT * FROM seguimientos_agenda ORDER BY fecha_recordatorio, hora, id").fetchall()
+        silencios = db.execute("SELECT fecha FROM calendario_silencios").fetchall()
+    fechas_silenciadas = {fila["fecha"].isoformat() if hasattr(fila["fecha"], "isoformat") else str(fila["fecha"]) for fila in silencios}
 
     from datetime import timedelta
     for trabajo in trabajos:
@@ -739,14 +762,18 @@ def calendario_completo(usuario=Depends(administrador)):
         eventos.append([f"UID:alucarpin-cita-{cita['id']}@alucarpin.app", f"DTSTART:{inicio.strftime('%Y%m%dT%H%M%S')}", f"DTEND:{fin.strftime('%Y%m%dT%H%M%S')}", f"SUMMARY:{_ics_escape(titulo)}", f"LOCATION:{_ics_escape(ubicacion)}", f"DESCRIPTION:{_ics_escape(cita['observaciones'])}"])
 
     for seguimiento in seguimientos:
-        fecha_texto = seguimiento["fecha_recordatorio"].strftime("%Y%m%d") if hasattr(seguimiento["fecha_recordatorio"], "strftime") else str(seguimiento["fecha_recordatorio"]).replace("-", "")
-        inicio = datetime.strptime(f"{fecha_texto} {seguimiento['hora']}", "%Y%m%d %H:%M")
-        fin = inicio + timedelta(minutes=15)
         titulo = f"Llamar" + (f": {seguimiento['cliente']}" if seguimiento["cliente"] else "")
         ubicacion = ", ".join(filter(None, [seguimiento["ubicacion"], seguimiento["poblacion"]]))
         descripcion = " | ".join(filter(None, [f"Llamada recibida el {seguimiento['fecha_llamada']}", seguimiento["motivo"], seguimiento["observaciones"], ubicacion, seguimiento["telefono"]]))
-        recurrencia = ["RRULE:FREQ=DAILY;COUNT=365"] if seguimiento["estado"] == "Pendiente" else []
-        eventos.append([f"UID:alucarpin-seguimiento-{seguimiento['id']}@alucarpin.app", f"DTSTART:{inicio.strftime('%Y%m%dT%H%M%S')}", f"DTEND:{fin.strftime('%Y%m%dT%H%M%S')}", f"SUMMARY:{_ics_escape(titulo)}", f"DESCRIPTION:{_ics_escape(descripcion)}", *recurrencia, "BEGIN:VALARM", "TRIGGER:-PT0M", "ACTION:DISPLAY", f"DESCRIPTION:{_ics_escape(titulo)}", "END:VALARM"])
+        inicio_fecha = seguimiento["fecha_recordatorio"] if hasattr(seguimiento["fecha_recordatorio"], "strftime") else date.fromisoformat(str(seguimiento["fecha_recordatorio"]))
+        for dias in range(365 if seguimiento["estado"] == "Pendiente" else 1):
+            fecha_evento = inicio_fecha + timedelta(days=dias)
+            fecha_iso = fecha_evento.isoformat()
+            fecha_texto = fecha_evento.strftime("%Y%m%d")
+            inicio = datetime.strptime(f"{fecha_texto} {seguimiento['hora']}", "%Y%m%d %H:%M")
+            fin = inicio + timedelta(minutes=15)
+            alarma = [] if fecha_evento.weekday() >= 5 or fecha_iso in fechas_silenciadas else ["BEGIN:VALARM", "TRIGGER:-PT0M", "ACTION:DISPLAY", f"DESCRIPTION:{_ics_escape(titulo)}", "END:VALARM"]
+            eventos.append([f"UID:alucarpin-seguimiento-{seguimiento['id']}-{fecha_iso}@alucarpin.app", f"DTSTART:{inicio.strftime('%Y%m%dT%H%M%S')}", f"DTEND:{fin.strftime('%Y%m%dT%H%M%S')}", f"SUMMARY:{_ics_escape(titulo)}", f"DESCRIPTION:{_ics_escape(descripcion)}", *alarma])
 
     lineas = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Alucarpin//Agenda//ES", "X-WR-CALNAME:Alucarpin"]
     for evento in eventos:

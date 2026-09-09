@@ -110,6 +110,11 @@ CREATE TABLE IF NOT EXISTS seguimientos_agenda (
 CREATE INDEX IF NOT EXISTS idx_seguimientos_agenda_estado_fecha
     ON seguimientos_agenda (estado, fecha_recordatorio, hora);
 
+CREATE TABLE IF NOT EXISTS calendario_silencios (
+    fecha DATE PRIMARY KEY,
+    motivo TEXT NOT NULL DEFAULT 'Sin sonido'
+);
+
 ALTER TABLE seguimientos_agenda
     ADD COLUMN IF NOT EXISTS fecha_llamada DATE;
 
