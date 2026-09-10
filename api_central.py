@@ -66,6 +66,10 @@ class FichajeUpdate(BaseModel):
     num_presupuesto: Optional[str] = None
 
 
+class FichajeVinculacion(BaseModel):
+    faena_id: Optional[int] = None
+
+
 class TrabajoCreate(BaseModel):
     tipo: Literal["faena", "presupuesto", "reparacion"]
     fecha_inicio: date
@@ -1585,6 +1589,36 @@ def borrar_fichaje(fichaje_id: int, usuario=Depends(administrador)):
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Fichaje no encontrado")
         return {"eliminado": True, "id": fichaje_id}
+
+
+@app.patch("/fichajes/{fichaje_id}/vinculacion")
+def vincular_fichaje(
+    fichaje_id: int,
+    vinculacion: FichajeVinculacion,
+    usuario=Depends(administrador),
+):
+    with conexion() as db:
+        if not db.execute(
+            "SELECT 1 FROM fichajes_ayudantes WHERE id = ?", (fichaje_id,)
+        ).fetchone():
+            raise HTTPException(status_code=404, detail="Fichaje no encontrado")
+        if vinculacion.faena_id is not None and not db.execute(
+            "SELECT 1 FROM faenas WHERE id = ?", (vinculacion.faena_id,)
+        ).fetchone():
+            raise HTTPException(status_code=400, detail="La faena seleccionada no existe")
+        db.execute(
+            "UPDATE fichajes_ayudantes SET faena_id_vinculada = ?, "
+            "estado_procesamiento = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?",
+            (
+                vinculacion.faena_id,
+                "Vinculado" if vinculacion.faena_id is not None else "Pendiente",
+                fichaje_id,
+            ),
+        )
+        fila = db.execute(
+            "SELECT * FROM fichajes_ayudantes WHERE id = ?", (fichaje_id,)
+        ).fetchone()
+    return dict(fila)
 
 
 @app.get("/fichajes/{fichaje_id}/pago")

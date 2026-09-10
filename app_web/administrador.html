@@ -116,6 +116,7 @@
           <label>Ubicación <input id="ubicacion-general"></label>
           <label>Población <input id="poblacion-general"></label>
         </div>
+        <label>Faena vinculada <select id="faena-general"><option value="">Sin vincular</option></select></label>
         <button type="submit">Guardar modificación</button>
       </form>
     </section>
@@ -206,6 +207,7 @@
     const mensajeUsuarios = document.querySelector('#mensaje-usuarios');
     const mensajeAyudante = document.querySelector('#mensaje-ayudante');
       const mensajeGeneral = document.querySelector('#mensaje-general');
+      const faenaGeneral = document.querySelector('#faena-general');
     const liquidacionDesde = document.querySelector('#liquidacion-desde');
     const liquidacionHasta = document.querySelector('#liquidacion-hasta');
     const mensajeLiquidaciones = document.querySelector('#mensaje-liquidaciones');
@@ -376,6 +378,7 @@
           document.querySelector('#obra-general').value = fichaje.obra || '';
           document.querySelector('#ubicacion-general').value = fichaje.ubicacion || '';
           document.querySelector('#poblacion-general').value = fichaje.poblacion || '';
+          faenaGeneral.value = fichaje.faena_id_vinculada || '';
           document.querySelector('#fecha-general').value = fichaje.fecha;
           document.querySelector('#editar-id').value = fichaje.id;
           cargarFichajes().catch(mostrarError);
@@ -522,6 +525,19 @@
       if (!lista.length) gastoDestino.innerHTML = '<option value="">No hay destinos disponibles</option>';
     }
 
+    async function cargarFaenasVinculacion() {
+      const respuesta = await apiFetch('/faenas');
+      if (!respuesta.ok) throw new Error('No se pudieron cargar las faenas.');
+      const lista = await respuesta.json();
+      faenaGeneral.innerHTML = '<option value="">Sin vincular</option>';
+      lista.forEach(faena => {
+        const opcion = document.createElement('option');
+        opcion.value = faena.id;
+        opcion.textContent = `#${faena.id} | ${faena.fecha || ''} | ${faena.cliente} | ${faena.obra}`;
+        faenaGeneral.appendChild(opcion);
+      });
+    }
+
     gastoTipo.addEventListener('change', () => cargarDestinosGasto().catch(error => {
       mensajeAltaGasto.textContent = error.message;
       mensajeAltaGasto.className = 'mensaje error';
@@ -651,6 +667,8 @@
       if (!id) { mensajeGeneral.textContent = 'Selecciona una línea del listado.'; return; }
       const respuesta = await apiFetch(`${api}/fichajes/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fecha: document.querySelector('#fecha-general').value, tipo_destino: document.querySelector('#tipo-general').value, cliente: document.querySelector('#cliente-general').value, obra: document.querySelector('#obra-general').value, ubicacion: document.querySelector('#ubicacion-general').value, poblacion: document.querySelector('#poblacion-general').value }) });
       if (!respuesta.ok) { const resultado = await respuesta.json(); mensajeGeneral.textContent = resultado.detail || 'No se pudo modificar.'; return; }
+      const vinculacion = await apiFetch(`${api}/fichajes/${id}/vinculacion`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ faena_id: faenaGeneral.value ? Number(faenaGeneral.value) : null }) });
+      if (!vinculacion.ok) { const resultado = await vinculacion.json(); mensajeGeneral.textContent = resultado.detail || 'No se pudo vincular la faena.'; mensajeGeneral.className = 'mensaje error'; return; }
       mensajeGeneral.textContent = 'Fichaje modificado correctamente.';
       mensajeGeneral.className = 'mensaje exito';
       await cargarListadoGeneral();
@@ -814,6 +832,7 @@
     cargarUsuarios().catch(error => { mensajeUsuarios.textContent = error.message; mensajeUsuarios.className = 'mensaje error'; });
     cargarPresupuestos().catch(error => { mensajeTrabajo.textContent = error.message; mensajeTrabajo.className = 'mensaje error'; });
     cargarTrabajos().catch(error => { document.querySelector('#lista-trabajos').innerHTML = `<tr><td colspan="8">${error.message}</td></tr>`; });
+    cargarFaenasVinculacion().catch(error => { mensajeGeneral.textContent = error.message; mensajeGeneral.className = 'mensaje error'; });
     cargarLiquidaciones().catch(error => { mensajeLiquidaciones.textContent = error.message; mensajeLiquidaciones.className = 'mensaje error'; });
     cargarGastos().catch(error => { mensajeGastos.textContent = error.message; mensajeGastos.className = 'mensaje error'; });
     cargarDestinosGasto().catch(error => { mensajeAltaGasto.textContent = error.message; mensajeAltaGasto.className = 'mensaje error'; });
