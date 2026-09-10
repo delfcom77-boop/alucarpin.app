@@ -714,9 +714,25 @@
     document.querySelector('#guardar-pagos-jornadas').onclick = async () => {
       const mensajePago = document.querySelector('#mensaje-pago-jornada');
       if (!jornadasPago.length) { mensajePago.textContent = 'No hay jornadas para guardar.'; return; }
+      const errores = [];
       for (const jornada of jornadasPago) {
         const respuesta = await apiFetch(`${api}/fichajes/${jornada.id}/pago`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(jornada.pago) });
-        if (!respuesta.ok) { mensajePago.textContent = 'No se pudo guardar una de las jornadas.'; mensajePago.className = 'mensaje error'; return; }
+        if (!respuesta.ok) {
+          let detalle = `HTTP ${respuesta.status}`;
+          try {
+            const resultado = await respuesta.json();
+            detalle = resultado.detail || detalle;
+          } catch (_) {
+            // Conserva el estado HTTP si la respuesta no es JSON.
+          }
+          errores.push(`${mostrarFecha(jornada.fecha)} - ${jornada.obra || 'Sin obra'}: ${detalle}`);
+        }
+      }
+      if (errores.length) {
+        mensajePago.textContent = `No se pudieron guardar ${errores.length} jornada(s): ${errores.join(' | ')}`;
+        mensajePago.className = 'mensaje error';
+        await cargarFichajes();
+        return;
       }
       mensajePago.textContent = 'Pagos del periodo guardados correctamente.';
       mensajePago.className = 'mensaje exito';
