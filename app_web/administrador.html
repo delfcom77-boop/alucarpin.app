@@ -313,7 +313,16 @@
           const lista = await respuestaAyudantes.json();
           const grupos = await Promise.all(lista.map(async ayudante => {
             const respuesta = await apiFetch(`${api}/ayudantes/${ayudante.id}/fichajes`);
-            if (!respuesta.ok) throw new Error(`Fichajes: HTTP ${respuesta.status}`);
+            if (!respuesta.ok) {
+              let detalle = `HTTP ${respuesta.status}`;
+              try {
+                const resultado = await respuesta.json();
+                detalle = resultado.detail || detalle;
+              } catch (_) {
+                // Mantiene el código HTTP si el servidor no devuelve JSON.
+              }
+              throw new Error(`Fichajes de ${ayudante.nombre}: ${detalle}`);
+            }
             return (await respuesta.json()).map(fichaje => ({ ...fichaje, nombreAyudante: ayudante.nombre }));
           }));
           registrosGenerales = await Promise.all(grupos.flat().sort((a, b) => b.fecha.localeCompare(a.fecha) || b.id - a.id).map(async fichaje => {
