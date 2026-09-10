@@ -191,7 +191,8 @@
     const apiFetch = (url, options = {}) => {
       const controller = new AbortController();
       const temporizador = setTimeout(() => controller.abort(), 10000);
-      return fetch(url, { ...options, signal: controller.signal, headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` } })
+      const metodo = (options.method || 'GET').toUpperCase();
+      return fetch(url, { ...options, cache: metodo === 'GET' ? 'no-store' : options.cache, signal: controller.signal, headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` } })
         .finally(() => clearTimeout(temporizador));
     };
       const mostrarFecha = fecha => { const partes = String(fecha || '').split('-'); return partes.length === 3 ? `${partes[2]}/${partes[1]}/${partes[0]}` : fecha; };
@@ -741,11 +742,15 @@
         mensajePago.textContent = `No se pudieron guardar ${errores.length} jornada(s): ${errores.join(' | ')}`;
         mensajePago.className = 'mensaje error';
         await cargarFichajes();
+        await cargarListadoGeneral();
+        await cargarGastos();
         return;
       }
       mensajePago.textContent = 'Pagos del periodo guardados correctamente.';
       mensajePago.className = 'mensaje exito';
       await cargarFichajes();
+      await cargarListadoGeneral();
+      await cargarGastos();
     };
     function actualizarResumen(dias) {
       const total = jornadasPago.reduce((suma, jornada) => suma + Number(jornada.pago.importe || 0), 0);
