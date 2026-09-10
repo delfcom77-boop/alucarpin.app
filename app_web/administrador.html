@@ -137,18 +137,48 @@
         <div class="dato">Estado<strong id="estado">Pendiente</strong></div>
       </div>
     </section>
-    <section hidden>
-      <form id="formulario">
+    <section>
+      <h2>Liquidaciones guardadas</h2>
+      <div class="fila">
+        <label>Desde <input id="liquidacion-desde" type="date"></label>
+        <label>Hasta <input id="liquidacion-hasta" type="date"></label>
+      </div>
+      <div class="lista-general"><table><thead><tr><th>Ayudante</th><th>Periodo</th><th>Días</th><th>Total</th><th>Pagado</th><th>Pendiente</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista-liquidaciones"><tr><td colspan="8">Cargando...</td></tr></tbody></table></div>
+      <div id="mensaje-liquidaciones" class="mensaje"></div>
+    </section>
+    <section>
+      <h2>Gastos registrados</h2>
+      <div class="fila">
+        <label>Tipo <select id="filtro-gastos"><option value="">Todos</option><option value="faena">Faenas</option><option value="presupuesto">Presupuestos</option></select></label>
+        <label>Estado <select id="filtro-estado-gastos"><option value="">Todos</option><option value="No pagado">No pagado</option><option value="Parcial">Parcial</option><option value="Pagado">Pagado</option></select></label>
+      </div>
+      <div class="lista-general"><table><thead><tr><th>Tipo</th><th>Fecha</th><th>Proveedor</th><th>Concepto</th><th>Importe</th><th>Pagado</th><th>Pendiente</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista-gastos"><tr><td colspan="9">Cargando...</td></tr></tbody></table></div>
+      <div id="mensaje-gastos" class="mensaje"></div>
+    </section>
+    <section>
+      <h2>Añadir gasto</h2>
+      <form id="formulario-gasto">
+        <div class="fila"><label>Tipo <select id="gasto-tipo"><option value="faena">Faena</option><option value="presupuesto">Presupuesto</option></select></label><label>Destino <select id="gasto-destino" required></select></label></div>
+        <div class="fila"><label>Concepto <input id="gasto-concepto" required></label><label>Proveedor <input id="gasto-proveedor"></label></div>
+        <div class="fila"><label>Fecha <input id="gasto-fecha" type="date"></label><label>Importe (€) <input id="gasto-importe" type="number" min="0" step="0.01" value="0" required></label></div>
+        <div class="fila"><label>Forma de pago <input id="gasto-forma"></label><label>Estado <select id="gasto-estado"><option>No pagado</option><option>Parcial</option><option>Pagado</option></select></label></div>
+        <button type="submit">Guardar gasto</button><div id="mensaje-alta-gasto" class="mensaje"></div>
+      </form>
+    </section>
+    <section>
+      <h2>Crear liquidación</h2>
+      <form id="formulario-liquidacion">
         <div class="fila">
-          <label>Desde <input id="desde" type="date" required></label>
-          <label>Hasta <input id="hasta" type="date" required></label>
+          <label>Ayudante <select id="liquidacion-ayudante" required></select></label>
+          <label>Desde <input id="liquidacion-form-desde" type="date" required></label>
         </div>
         <div class="fila">
-          <label>Precio por día (€) <input id="precio" type="number" min="0" step="0.01" required></label>
-          <label>Importe pagado (€) <input id="pagado" type="number" min="0" step="0.01" value="0" required></label>
+          <label>Hasta <input id="liquidacion-form-hasta" type="date" required></label>
+          <label>Precio por día (€) <input id="liquidacion-precio" type="number" min="0" step="0.01" required></label>
         </div>
-        <button type="submit">Calcular y guardar pago</button>
-        <div id="mensaje" class="mensaje"></div>
+        <div class="fila"><label>Importe pagado (€) <input id="liquidacion-pagado" type="number" min="0" step="0.01" value="0" required></label><span></span></div>
+        <button type="submit">Guardar liquidación</button>
+        <div id="mensaje-liquidacion-form" class="mensaje"></div>
       </form>
     </section>
     <section><h2>Fichajes del periodo</h2><div id="fichajes">Selecciona un ayudante y un rango de fechas.</div></section>
@@ -175,6 +205,19 @@
     const mensajeUsuarios = document.querySelector('#mensaje-usuarios');
     const mensajeAyudante = document.querySelector('#mensaje-ayudante');
       const mensajeGeneral = document.querySelector('#mensaje-general');
+    const liquidacionDesde = document.querySelector('#liquidacion-desde');
+    const liquidacionHasta = document.querySelector('#liquidacion-hasta');
+    const mensajeLiquidaciones = document.querySelector('#mensaje-liquidaciones');
+    const filtroGastos = document.querySelector('#filtro-gastos');
+    const filtroEstadoGastos = document.querySelector('#filtro-estado-gastos');
+    const mensajeGastos = document.querySelector('#mensaje-gastos');
+    const formularioLiquidacion = document.querySelector('#formulario-liquidacion');
+    const liquidacionAyudante = document.querySelector('#liquidacion-ayudante');
+    const mensajeLiquidacionForm = document.querySelector('#mensaje-liquidacion-form');
+    const formularioGasto = document.querySelector('#formulario-gasto');
+    const gastoTipo = document.querySelector('#gasto-tipo');
+    const gastoDestino = document.querySelector('#gasto-destino');
+    const mensajeAltaGasto = document.querySelector('#mensaje-alta-gasto');
 
     const formularioTrabajo = document.querySelector('#formulario-trabajo');
     const mensajeTrabajo = document.querySelector('#mensaje-trabajo');
@@ -342,12 +385,177 @@
     const fechaSemana = new Date(fechaHoy); fechaSemana.setDate(fechaHoy.getDate() - ((fechaHoy.getDay() + 6) % 7));
     const ultimoDiaLaborable = new Date(fechaSemana); ultimoDiaLaborable.setDate(fechaSemana.getDate() + 4);
     desde.valueAsDate = fechaSemana; hasta.valueAsDate = ultimoDiaLaborable;
+    liquidacionDesde.valueAsDate = fechaSemana;
+    liquidacionHasta.valueAsDate = ultimoDiaLaborable;
+
+    async function cargarLiquidaciones() {
+      const parametros = new URLSearchParams();
+      if (ayudanteId !== null) parametros.set('ayudante_id', ayudanteId);
+      if (liquidacionDesde.value) parametros.set('desde', liquidacionDesde.value);
+      if (liquidacionHasta.value) parametros.set('hasta', liquidacionHasta.value);
+      const respuesta = await apiFetch(`${api}/liquidaciones?${parametros}`);
+      if (!respuesta.ok) throw new Error('No se pudieron cargar las liquidaciones.');
+      const lista = await respuesta.json();
+      const cuerpo = document.querySelector('#lista-liquidaciones');
+      cuerpo.textContent = '';
+      if (!lista.length) {
+        cuerpo.innerHTML = '<tr><td colspan="8">No hay liquidaciones en este periodo.</td></tr>';
+        return;
+      }
+      lista.forEach(liquidacion => {
+        const fila = document.createElement('tr');
+        fila.className = liquidacion.estado === 'Pagado' ? 'pagado' : 'pendiente';
+        fila.innerHTML = `<td>${liquidacion.ayudante}</td><td>${mostrarFecha(liquidacion.desde)} - ${mostrarFecha(liquidacion.hasta)}</td><td>${liquidacion.dias}</td><td>${Number(liquidacion.total || 0).toFixed(2)} €</td><td>${Number(liquidacion.importe_pagado || 0).toFixed(2)} €</td><td>${Number(liquidacion.pendiente || 0).toFixed(2)} €</td><td>${liquidacion.estado}</td><td class="acciones"><button type="button" class="editar-liquidacion">Editar</button><button type="button" class="borrar borrar-liquidacion">Borrar</button></td>`;
+        fila.querySelector('.editar-liquidacion').onclick = async () => {
+          const importeTexto = prompt('Importe pagado:', liquidacion.importe_pagado || 0);
+          if (importeTexto === null || Number.isNaN(Number(importeTexto)) || Number(importeTexto) < 0) return;
+          const respuesta = await apiFetch(`/liquidaciones/${liquidacion.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ayudante_id: liquidacion.ayudante_id, desde: liquidacion.desde, hasta: liquidacion.hasta, precio_dia: liquidacion.precio_dia, importe_pagado: Number(importeTexto), fecha_pago: Number(importeTexto) > 0 ? new Date().toISOString().slice(0, 10) : null }) });
+          if (!respuesta.ok) { mensajeLiquidaciones.textContent = 'No se pudo modificar la liquidación.'; mensajeLiquidaciones.className = 'mensaje error'; return; }
+          await cargarLiquidaciones();
+        };
+        fila.querySelector('.borrar-liquidacion').onclick = async () => {
+          if (!confirm(`¿Borrar la liquidación de ${liquidacion.ayudante}?`)) return;
+          const respuesta = await apiFetch(`/liquidaciones/${liquidacion.id}`, { method: 'DELETE' });
+          if (!respuesta.ok) { mensajeLiquidaciones.textContent = 'No se pudo borrar la liquidación.'; mensajeLiquidaciones.className = 'mensaje error'; return; }
+          await cargarLiquidaciones();
+        };
+        cuerpo.appendChild(fila);
+      });
+    }
+
+    async function cargarGastos() {
+      const tipo = filtroGastos.value ? `?tipo=${encodeURIComponent(filtroGastos.value)}` : '';
+      const respuesta = await apiFetch(`${api}/gastos${tipo}`);
+      if (!respuesta.ok) throw new Error('No se pudieron cargar los gastos.');
+      const lista = await respuesta.json();
+      const estado = filtroEstadoGastos.value;
+      const filtrada = lista.filter(gasto => !estado || gasto.estado_pago === estado);
+      const cuerpo = document.querySelector('#lista-gastos');
+      cuerpo.textContent = '';
+      if (!filtrada.length) {
+        cuerpo.innerHTML = '<tr><td colspan="9">No hay gastos con estos filtros.</td></tr>';
+        return;
+      }
+      filtrada.forEach(gasto => {
+        const fila = document.createElement('tr');
+        fila.className = gasto.estado_pago === 'Pagado' ? 'pagado' : gasto.estado_pago === 'Parcial' ? 'parcial' : 'pendiente';
+        const tipoTexto = gasto.tipo === 'presupuesto' ? 'Presupuesto' : 'Faena';
+        fila.innerHTML = `<td>${tipoTexto}</td><td>${mostrarFecha(gasto.fecha)}</td><td>${gasto.proveedor || ''}</td><td>${gasto.concepto || ''}</td><td>${Number(gasto.importe || 0).toFixed(2)} €</td><td>${Number(gasto.importe_pagado || 0).toFixed(2)} €</td><td>${Number(gasto.pendiente || 0).toFixed(2)} €</td><td>${gasto.estado_pago || 'No pagado'}</td><td class="acciones"><button type="button" class="historial-gasto">Historial</button><button type="button" class="pagar-gasto">Registrar pago</button><button type="button" class="editar-gasto">Editar</button><button type="button" class="borrar">Borrar</button></td>`;
+        fila.querySelector('.historial-gasto').onclick = async () => {
+          const respuesta = await apiFetch(`/gastos/${gasto.tipo}/${gasto.id}/pagos`);
+          if (!respuesta.ok) { mensajeGastos.textContent = 'No se pudo cargar el historial.'; mensajeGastos.className = 'mensaje error'; return; }
+          const pagos = await respuesta.json();
+          mensajeGastos.textContent = pagos.length
+            ? pagos.map(pago => `${mostrarFecha(pago.fecha)}: ${Number(pago.importe || 0).toFixed(2)} € (${pago.forma_pago})`).join(' | ')
+            : 'Este gasto todavía no tiene pagos registrados.';
+          mensajeGastos.className = 'mensaje';
+        };
+        fila.querySelector('.pagar-gasto').onclick = async () => {
+          const importeTexto = prompt('Importe del pago:', Number(gasto.pendiente || 0).toFixed(2));
+          if (importeTexto === null || Number(importeTexto) <= 0) return;
+          const forma = prompt('Forma de pago:', gasto.forma_pago || 'Transferencia');
+          if (forma === null || !forma.trim()) return;
+          const pago = await apiFetch(`/gastos/${gasto.tipo}/${gasto.id}/pagos`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ importe: Number(importeTexto), forma_pago: forma.trim(), fecha: new Date().toISOString().slice(0, 10), observaciones: '' }) });
+          if (!pago.ok) { mensajeGastos.textContent = 'No se pudo registrar el pago.'; mensajeGastos.className = 'mensaje error'; return; }
+          await cargarGastos();
+        };
+        fila.querySelector('.editar-gasto').onclick = async () => {
+          const concepto = prompt('Concepto del gasto:', gasto.concepto || '');
+          if (concepto === null || !concepto.trim()) return;
+          const importeTexto = prompt('Importe del gasto:', gasto.importe || 0);
+          if (importeTexto === null || Number.isNaN(Number(importeTexto))) return;
+          const estado = prompt('Estado (No pagado, Parcial o Pagado):', gasto.estado_pago || 'No pagado');
+          if (estado === null) return;
+          const datos = {
+            tipo: gasto.tipo,
+            concepto: concepto.trim(),
+            proveedor: gasto.proveedor || '',
+            fecha: gasto.fecha || null,
+            importe: Number(importeTexto),
+            bruto: Number(importeTexto),
+            iva: 0,
+            estado_pago: estado,
+            forma_pago: gasto.forma_pago || '',
+            categoria: gasto.categoria || 'Extras',
+            numero_documento: '',
+          };
+          if (gasto.tipo === 'faena') datos.faena_id = gasto.faena_id;
+          else datos.num_presupuesto = gasto.num_presupuesto;
+          const cambio = await apiFetch(`/gastos/${gasto.tipo}/${gasto.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) });
+          if (!cambio.ok) { mensajeGastos.textContent = 'No se pudo modificar el gasto.'; mensajeGastos.className = 'mensaje error'; return; }
+          await cargarGastos();
+        };
+        fila.querySelector('.borrar').onclick = async () => {
+          if (!confirm(`¿Borrar el gasto de ${gasto.proveedor || 'este proveedor'}?`)) return;
+          const borrado = await apiFetch(`/gastos/${gasto.tipo}/${gasto.id}`, { method: 'DELETE' });
+          if (!borrado.ok) { mensajeGastos.textContent = 'No se pudo borrar el gasto.'; mensajeGastos.className = 'mensaje error'; return; }
+          await cargarGastos();
+        };
+        cuerpo.appendChild(fila);
+      });
+    }
+
+    async function cargarDestinosGasto() {
+      const presupuesto = gastoTipo.value === 'presupuesto';
+      const respuesta = await apiFetch(presupuesto ? '/presupuestos' : '/faenas');
+      if (!respuesta.ok) throw new Error('No se pudieron cargar los destinos de gastos.');
+      const lista = await respuesta.json();
+      gastoDestino.textContent = '';
+      lista.forEach(item => {
+        const opcion = document.createElement('option');
+        opcion.value = presupuesto ? item.num_presupuesto : item.id;
+        opcion.textContent = presupuesto
+          ? `Nº ${item.num_presupuesto} | ${item.cliente}`
+          : `#${item.id} | ${item.cliente} | ${item.obra}`;
+        gastoDestino.appendChild(opcion);
+      });
+      if (!lista.length) gastoDestino.innerHTML = '<option value="">No hay destinos disponibles</option>';
+    }
+
+    gastoTipo.addEventListener('change', () => cargarDestinosGasto().catch(error => {
+      mensajeAltaGasto.textContent = error.message;
+      mensajeAltaGasto.className = 'mensaje error';
+    }));
+    formularioGasto.addEventListener('submit', async event => {
+      event.preventDefault();
+      const tipo = gastoTipo.value;
+      const importe = Number(document.querySelector('#gasto-importe').value || 0);
+      const datos = {
+        tipo,
+        concepto: document.querySelector('#gasto-concepto').value,
+        proveedor: document.querySelector('#gasto-proveedor').value,
+        fecha: document.querySelector('#gasto-fecha').value || null,
+        importe,
+        bruto: importe,
+        iva: 0,
+        estado_pago: document.querySelector('#gasto-estado').value,
+        forma_pago: document.querySelector('#gasto-forma').value,
+        categoria: 'Extras',
+        numero_documento: '',
+      };
+      if (tipo === 'faena') datos.faena_id = Number(gastoDestino.value);
+      else datos.num_presupuesto = gastoDestino.value;
+      const respuesta = await apiFetch('/gastos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) });
+      const resultado = await respuesta.json();
+      if (!respuesta.ok) { mensajeAltaGasto.textContent = resultado.detail || 'No se pudo guardar el gasto.'; mensajeAltaGasto.className = 'mensaje error'; return; }
+      mensajeAltaGasto.textContent = 'Gasto guardado correctamente.';
+      mensajeAltaGasto.className = 'mensaje exito';
+      formularioGasto.reset();
+      await cargarGastos();
+    });
 
     async function cargarAyudantes() {
       const respuesta = await apiFetch(`${api}/ayudantes`);
       if (!respuesta.ok) throw new Error(`Ayudantes: HTTP ${respuesta.status}`);
       const lista = await respuesta.json();
       contenedorAyudantes.textContent = '';
+      liquidacionAyudante.textContent = '';
+      lista.forEach(ayudante => {
+        const opcion = document.createElement('option');
+        opcion.value = ayudante.id;
+        opcion.textContent = ayudante.nombre;
+        liquidacionAyudante.appendChild(opcion);
+      });
       const botonTodos = document.createElement('button');
       botonTodos.type = 'button';
       botonTodos.className = 'ayudante';
@@ -424,6 +632,7 @@
       filtroAyudanteGeneral = Number(id);
       pintarListadoGeneral();
       await cargarFichajes();
+      await cargarLiquidaciones();
     }
 
     document.querySelector('#formulario-edicion').addEventListener('submit', async event => {
@@ -436,6 +645,30 @@
       mensajeGeneral.className = 'mensaje exito';
       await cargarListadoGeneral();
       await cargarFichajes();
+    });
+    formularioLiquidacion.addEventListener('submit', async event => {
+      event.preventDefault();
+      const respuesta = await apiFetch('/liquidaciones', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ayudante_id: Number(liquidacionAyudante.value),
+          desde: document.querySelector('#liquidacion-form-desde').value,
+          hasta: document.querySelector('#liquidacion-form-hasta').value,
+          precio_dia: Number(document.querySelector('#liquidacion-precio').value),
+          importe_pagado: Number(document.querySelector('#liquidacion-pagado').value || 0),
+          fecha_pago: Number(document.querySelector('#liquidacion-pagado').value || 0) > 0 ? new Date().toISOString().slice(0, 10) : null,
+        }),
+      });
+      const resultado = await respuesta.json();
+      if (!respuesta.ok) {
+        mensajeLiquidacionForm.textContent = resultado.detail || 'No se pudo guardar la liquidación.';
+        mensajeLiquidacionForm.className = 'mensaje error';
+        return;
+      }
+      mensajeLiquidacionForm.textContent = `Liquidación guardada: ${resultado.total.toFixed(2)} €.`;
+      mensajeLiquidacionForm.className = 'mensaje exito';
+      await cargarLiquidaciones();
     });
     async function cargarFichajes() {
       if (ayudanteId === null) { actualizarResumen(0); return; }
@@ -499,6 +732,14 @@
       document.querySelector('#resumen').hidden = false;
     }
     [desde, hasta].forEach(item => item.addEventListener('change', () => cargarFichajes().catch(mostrarError)));
+    [liquidacionDesde, liquidacionHasta].forEach(item => item.addEventListener('change', () => cargarLiquidaciones().catch(error => {
+      mensajeLiquidaciones.textContent = error.message;
+      mensajeLiquidaciones.className = 'mensaje error';
+    })));
+    [filtroGastos, filtroEstadoGastos].forEach(item => item.addEventListener('change', () => cargarGastos().catch(error => {
+      mensajeGastos.textContent = error.message;
+      mensajeGastos.className = 'mensaje error';
+    })));
     function mostrarError() {
       mensaje.textContent = 'No se pudo conectar con la API.';
       mensaje.className = 'mensaje error';
@@ -537,6 +778,9 @@
     cargarUsuarios().catch(error => { mensajeUsuarios.textContent = error.message; mensajeUsuarios.className = 'mensaje error'; });
     cargarPresupuestos().catch(error => { mensajeTrabajo.textContent = error.message; mensajeTrabajo.className = 'mensaje error'; });
     cargarTrabajos().catch(error => { document.querySelector('#lista-trabajos').innerHTML = `<tr><td colspan="8">${error.message}</td></tr>`; });
+    cargarLiquidaciones().catch(error => { mensajeLiquidaciones.textContent = error.message; mensajeLiquidaciones.className = 'mensaje error'; });
+    cargarGastos().catch(error => { mensajeGastos.textContent = error.message; mensajeGastos.className = 'mensaje error'; });
+    cargarDestinosGasto().catch(error => { mensajeAltaGasto.textContent = error.message; mensajeAltaGasto.className = 'mensaje error'; });
   </script>
   <script src="/app/pwa.js"></script>
 </body>

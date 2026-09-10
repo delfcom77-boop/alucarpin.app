@@ -133,6 +133,29 @@ class PagoCreate(BaseModel):
     fecha_pago: Optional[date] = None
 
 
+class GastoCreate(BaseModel):
+    tipo: Literal["faena", "presupuesto"]
+    concepto: str = Field(min_length=1)
+    proveedor: str = ""
+    fecha: Optional[date] = None
+    importe: float = Field(default=0, ge=0)
+    bruto: float = Field(default=0, ge=0)
+    iva: float = Field(default=0, ge=0)
+    estado_pago: str = "No pagado"
+    forma_pago: str = ""
+    faena_id: Optional[int] = None
+    num_presupuesto: Optional[str] = None
+    categoria: str = "Extras"
+    numero_documento: str = ""
+
+
+class PagoGastoCreate(BaseModel):
+    fecha: Optional[date] = None
+    importe: float = Field(gt=0)
+    forma_pago: str = "Transferencia"
+    observaciones: str = ""
+
+
 class PagoJornadaUpdate(BaseModel):
     importe: float = Field(default=50, ge=0)
     importe_pagado: float = Field(default=0, ge=0)
@@ -529,6 +552,411 @@ def resumen_gestion(usuario=Depends(administrador)):
     }
 
 
+@app.get("/gastos")
+def listar_gastos(
+    tipo: Optional[Literal["faena", "presupuesto"]] = None,
+    usuario=Depends(administrador),
+):
+    configuraciones = (
+        (("gastos_faenas_extras", "gasto_faenas"), "faena"),
+        (("gastos_presupuestos", "gasto_presupuesto"), "presupuesto"),
+    )
+    resultado = []
+    with conexion() as db:
+        for nombres, tipo_gasto in configuraciones:
+            if tipo and tipo != tipo_gasto:
+                continue
+            tabla = next(
+                (
+                    nombre for nombre in nombres
+                    if db.execute(
+                        "SELECT 1 FROM information_schema.tables "
+                        "WHERE table_schema = 'public' AND table_name = ?",
+                        (nombre,),
+                    ).fetchone()
+                ),
+                None,
+            ) if DATABASE_URL else next(
+                (
+                    nombre for nombre in nombres
+                    if db.execute(
+                        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+                        (nombre,),
+                    ).fetchone()
+                ),
+                None,
+            )
+            if not tabla:
+                continue
+            referencia = "faena_id" if tipo_gasto == "faena" else "num_presupuesto"
+            filas = db.execute(
+                f"SELECT id, {referencia}, proveedor, concepto, importe, "
+                f"COALESCE(importe_pagado, pagado, 0) AS importe_pagado, "
+                f"forma_pago, fecha, estado_pago, categoria FROM {tabla} "
+                f"ORDER BY fecha DESC, id DESC"
+            ).fetchall()
+            for fila in filas:
+                gasto = dict(fila)
+                gasto["tipo"] = tipo_gasto
+                gasto["pendiente"] = round(
+                    max(float(gasto["importe"] or 0) - float(gasto["importe_pagado"] or 0), 0),
+                    2,
+                )
+                resultado.append(gasto)
+    return resultado
+
+
+@app.post("/gastos", status_code=201)
+def crear_gasto(datos: GastoCreate, usuario=Depends(administrador)):
+    if datos.tipo == "faena" and datos.faena_id is None:
+        raise HTTPException(status_code=400, detail="El gasto de faena necesita una faena")
+    if datos.tipo == "presupuesto" and not datos.num_presupuesto:
+        raise HTTPException(status_code=400, detail="El gasto de presupuesto necesita un número")
+
+    nombres = (
+        ("gastos_faenas_extras", "gasto_faenas")
+        if datos.tipo == "faena"
+        else ("gastos_presupuestos", "gasto_presupuesto")
+    )
+    columnas = [
+        "concepto", "proveedor", "fecha", "importe", "bruto", "iva",
+        "estado_pago", "forma_pago", "categoria", "numero_documento",
+    ]
+    valores = [
+        datos.concepto.strip(), datos.proveedor.strip(),
+        datos.fecha.isoformat() if datos.fecha else None, datos.importe,
+        datos.bruto, datos.iva, datos.estado_pago, datos.forma_pago.strip(),
+        datos.categoria.strip(), datos.numero_documento.strip(),
+    ]
+    if datos.tipo == "faena":
+        columnas.insert(0, "faena_id")
+        valores.insert(0, datos.faena_id)
+        columnas.extend(["pagado", "importe_pagado"])
+        valores.extend([0, 0])
+    else:
+        columnas.insert(0, "num_presupuesto")
+        valores.insert(0, datos.num_presupuesto.strip())
+        columnas.extend(["importe_pagado", "resto_pago", "pagado"])
+        valores.extend([0, datos.importe, 0])
+
+    with conexion() as db:
+        if datos.tipo == "faena":
+            existe = db.execute("SELECT 1 FROM faenas WHERE id = ?", (datos.faena_id,)).fetchone()
+        else:
+            existe = db.execute(
+                "SELECT 1 FROM presupuestos WHERE num_presupuesto = ?",
+                (datos.num_presupuesto.strip(),),
+            ).fetchone()
+        if not existe:
+            raise HTTPException(status_code=400, detail="El destino del gasto no existe")
+
+        tabla = next(
+            (
+                nombre for nombre in nombres
+                if db.execute(
+                    "SELECT 1 FROM information_schema.tables "
+                    "WHERE table_schema = 'public' AND table_name = ?",
+                    (nombre,),
+                ).fetchone()
+            ),
+            None,
+        ) if DATABASE_URL else next(
+            (
+                nombre for nombre in nombres
+                if db.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+                    (nombre,),
+                ).fetchone()
+            ),
+            None,
+        )
+        if not tabla:
+            raise HTTPException(status_code=503, detail="La tabla de gastos no está disponible")
+        nombres_columnas = ", ".join(columnas)
+        marcadores = ", ".join("?" for _ in columnas)
+        if DATABASE_URL:
+            fila = db.execute(
+                f"INSERT INTO {tabla} ({nombres_columnas}) VALUES ({marcadores}) RETURNING *",
+                valores,
+            ).fetchone()
+        else:
+            db.execute(
+                f"INSERT INTO {tabla} ({nombres_columnas}) VALUES ({marcadores})",
+                valores,
+            )
+            fila = db.execute(
+                f"SELECT * FROM {tabla} WHERE id = last_insert_rowid()"
+            ).fetchone()
+    resultado = dict(fila)
+    resultado["tipo"] = datos.tipo
+    return resultado
+
+
+@app.patch("/gastos/{tipo}/{gasto_id}")
+def modificar_gasto(
+    tipo: Literal["faena", "presupuesto"],
+    gasto_id: int,
+    datos: GastoCreate,
+    usuario=Depends(administrador),
+):
+    if datos.tipo != tipo:
+        raise HTTPException(status_code=400, detail="El tipo de la ruta y del gasto no coincide")
+    nombres = (
+        ("gastos_faenas_extras", "gasto_faenas")
+        if tipo == "faena"
+        else ("gastos_presupuestos", "gasto_presupuesto")
+    )
+    columnas = ["concepto", "proveedor", "fecha", "importe", "bruto", "iva", "estado_pago", "forma_pago", "categoria", "numero_documento"]
+    valores = [
+        datos.concepto.strip(), datos.proveedor.strip(),
+        datos.fecha.isoformat() if datos.fecha else None, datos.importe,
+        datos.bruto, datos.iva, datos.estado_pago, datos.forma_pago.strip(),
+        datos.categoria.strip(), datos.numero_documento.strip(),
+    ]
+    if tipo == "faena":
+        if datos.faena_id is None:
+            raise HTTPException(status_code=400, detail="El gasto de faena necesita una faena")
+        columnas.insert(0, "faena_id")
+        valores.insert(0, datos.faena_id)
+    else:
+        if not datos.num_presupuesto:
+            raise HTTPException(status_code=400, detail="El gasto de presupuesto necesita un número")
+        columnas.insert(0, "num_presupuesto")
+        valores.insert(0, datos.num_presupuesto.strip())
+    asignaciones = ", ".join(f"{columna} = ?" for columna in columnas)
+
+    with conexion() as db:
+        tabla = next(
+            (
+                nombre for nombre in nombres
+                if db.execute(
+                    "SELECT 1 FROM information_schema.tables "
+                    "WHERE table_schema = 'public' AND table_name = ?",
+                    (nombre,),
+                ).fetchone()
+            ),
+            None,
+        ) if DATABASE_URL else next(
+            (
+                nombre for nombre in nombres
+                if db.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+                    (nombre,),
+                ).fetchone()
+            ),
+            None,
+        )
+        if not tabla:
+            raise HTTPException(status_code=503, detail="La tabla de gastos no está disponible")
+        if tipo == "faena":
+            existe = db.execute("SELECT 1 FROM faenas WHERE id = ?", (datos.faena_id,)).fetchone()
+        else:
+            existe = db.execute(
+                "SELECT 1 FROM presupuestos WHERE num_presupuesto = ?",
+                (datos.num_presupuesto.strip(),),
+            ).fetchone()
+        if not existe:
+            raise HTTPException(status_code=400, detail="El destino del gasto no existe")
+        cursor = db.execute(
+            f"UPDATE {tabla} SET {asignaciones} WHERE id = ?",
+            [*valores, gasto_id],
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Gasto no encontrado")
+        fila = db.execute(f"SELECT * FROM {tabla} WHERE id = ?", (gasto_id,)).fetchone()
+    resultado = dict(fila)
+    resultado["tipo"] = tipo
+    return resultado
+
+
+@app.delete("/gastos/{tipo}/{gasto_id}")
+def borrar_gasto(
+    tipo: Literal["faena", "presupuesto"],
+    gasto_id: int,
+    usuario=Depends(administrador),
+):
+    nombres = (
+        ("gastos_faenas_extras", "gasto_faenas")
+        if tipo == "faena"
+        else ("gastos_presupuestos", "gasto_presupuesto")
+    )
+    with conexion() as db:
+        tabla = next(
+            (
+                nombre for nombre in nombres
+                if db.execute(
+                    "SELECT 1 FROM information_schema.tables "
+                    "WHERE table_schema = 'public' AND table_name = ?",
+                    (nombre,),
+                ).fetchone()
+            ),
+            None,
+        ) if DATABASE_URL else next(
+            (
+                nombre for nombre in nombres
+                if db.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+                    (nombre,),
+                ).fetchone()
+            ),
+            None,
+        )
+        if not tabla:
+            raise HTTPException(status_code=503, detail="La tabla de gastos no está disponible")
+        cursor = db.execute(f"DELETE FROM {tabla} WHERE id = ?", (gasto_id,))
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Gasto no encontrado")
+    return {"eliminado": True, "id": gasto_id, "tipo": tipo}
+
+
+@app.post("/gastos/{tipo}/{gasto_id}/pagos", status_code=201)
+def registrar_pago_gasto(
+    tipo: Literal["faena", "presupuesto"],
+    gasto_id: int,
+    pago: PagoGastoCreate,
+    usuario=Depends(administrador),
+):
+    nombres_gasto = (
+        ("gastos_faenas_extras", "gasto_faenas")
+        if tipo == "faena"
+        else ("gastos_presupuestos", "gasto_presupuesto")
+    )
+    with conexion() as db:
+        tabla_gasto = next(
+            (
+                nombre for nombre in nombres_gasto
+                if db.execute(
+                    "SELECT 1 FROM information_schema.tables "
+                    "WHERE table_schema = 'public' AND table_name = ?",
+                    (nombre,),
+                ).fetchone()
+            ),
+            None,
+        ) if DATABASE_URL else next(
+            (
+                nombre for nombre in nombres_gasto
+                if db.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+                    (nombre,),
+                ).fetchone()
+            ),
+            None,
+        )
+        if not tabla_gasto:
+            raise HTTPException(status_code=503, detail="La tabla de gastos no está disponible")
+        gasto = db.execute(
+            f"SELECT id, importe, COALESCE(importe_pagado, pagado, 0) AS importe_pagado "
+            f"FROM {tabla_gasto} WHERE id = ?",
+            (gasto_id,),
+        ).fetchone()
+        if not gasto:
+            raise HTTPException(status_code=404, detail="Gasto no encontrado")
+
+        nombres_pagos = ("pagos_gastos",)
+        tabla_pagos = next(
+            (
+                nombre for nombre in nombres_pagos
+                if db.execute(
+                    "SELECT 1 FROM information_schema.tables "
+                    "WHERE table_schema = 'public' AND table_name = ?",
+                    (nombre,),
+                ).fetchone()
+            ),
+            None,
+        ) if DATABASE_URL else next(
+            (
+                nombre for nombre in nombres_pagos
+                if db.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+                    (nombre,),
+                ).fetchone()
+            ),
+            None,
+        )
+        if not tabla_pagos:
+            raise HTTPException(status_code=503, detail="La tabla de pagos de gastos no está disponible")
+        importe_pagado = float(gasto["importe_pagado"] or 0) + pago.importe
+        estado = "Pagado" if importe_pagado >= float(gasto["importe"] or 0) else "Parcial"
+        importe_banco = pago.importe if pago.forma_pago.lower() != "efectivo" else 0
+        importe_efectivo = pago.importe if pago.forma_pago.lower() == "efectivo" else 0
+        if DATABASE_URL:
+            fila_pago = db.execute(
+                f"INSERT INTO {tabla_pagos} "
+                "(gasto_id, fecha, importe_banco, importe_efectivo, observaciones, tipo_gasto, importe, forma_pago) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
+                (gasto_id, pago.fecha.isoformat() if pago.fecha else None,
+                 importe_banco, importe_efectivo, pago.observaciones,
+                 tipo, pago.importe, pago.forma_pago),
+            ).fetchone()
+        else:
+            db.execute(
+                f"INSERT INTO {tabla_pagos} "
+                "(gasto_id, fecha, importe_banco, importe_efectivo, observaciones, tipo_gasto, importe, forma_pago) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (gasto_id, pago.fecha.isoformat() if pago.fecha else None,
+                 importe_banco, importe_efectivo, pago.observaciones,
+                 tipo, pago.importe, pago.forma_pago),
+            )
+            fila_pago = db.execute(
+                f"SELECT * FROM {tabla_pagos} WHERE id = last_insert_rowid()"
+            ).fetchone()
+        db.execute(
+            f"UPDATE {tabla_gasto} SET importe_pagado = ?, pagado = ?, estado_pago = ? WHERE id = ?",
+            (importe_pagado, importe_pagado, estado, gasto_id),
+        )
+    return {"pago": dict(fila_pago), "importe_pagado": importe_pagado, "estado_pago": estado}
+
+
+@app.get("/gastos/{tipo}/{gasto_id}/pagos")
+def listar_pagos_gasto(
+    tipo: Literal["faena", "presupuesto"],
+    gasto_id: int,
+    usuario=Depends(administrador),
+):
+    with conexion() as db:
+        existe = db.execute(
+            "SELECT 1 FROM pagos_gastos WHERE gasto_id = ? AND tipo_gasto = ? LIMIT 1",
+            (gasto_id, tipo),
+        ).fetchone()
+        if not existe:
+            nombres_gasto = (
+                ("gastos_faenas_extras", "gasto_faenas")
+                if tipo == "faena"
+                else ("gastos_presupuestos", "gasto_presupuesto")
+            )
+            tabla = next(
+                (
+                    nombre for nombre in nombres_gasto
+                    if db.execute(
+                        "SELECT 1 FROM information_schema.tables "
+                        "WHERE table_schema = 'public' AND table_name = ?",
+                        (nombre,),
+                    ).fetchone()
+                ),
+                None,
+            ) if DATABASE_URL else next(
+                (
+                    nombre for nombre in nombres_gasto
+                    if db.execute(
+                        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+                        (nombre,),
+                    ).fetchone()
+                ),
+                None,
+            )
+            if not tabla or not db.execute(
+                f"SELECT 1 FROM {tabla} WHERE id = ?", (gasto_id,)
+            ).fetchone():
+                raise HTTPException(status_code=404, detail="Gasto no encontrado")
+        filas = db.execute(
+            "SELECT id, gasto_id, fecha, importe_banco, importe_efectivo, "
+            "observaciones, tipo_gasto, importe, forma_pago "
+            "FROM pagos_gastos WHERE gasto_id = ? AND tipo_gasto = ? ORDER BY fecha DESC, id DESC",
+            (gasto_id, tipo),
+        ).fetchall()
+    return [dict(fila) for fila in filas]
+
+
 @app.get("/citas")
 def listar_citas(usuario=Depends(administrador)):
     with conexion() as db:
@@ -817,6 +1245,21 @@ def listar_presupuestos(q: str = "", usuario=Depends(usuario_actual)):
         if "no such table" in str(error).lower() or "does not exist" in str(error).lower():
             return []
         raise HTTPException(status_code=503, detail="La tabla de presupuestos no está disponible") from error
+    return [dict(fila) for fila in filas]
+
+
+@app.get("/faenas")
+def listar_faenas(usuario=Depends(administrador)):
+    try:
+        with conexion() as db:
+            filas = db.execute(
+                "SELECT id, cliente, obra, fecha, ubicacion, poblacion "
+                "FROM faenas ORDER BY fecha DESC, id DESC"
+            ).fetchall()
+    except Exception as error:
+        if "no such table" in str(error).lower() or "does not exist" in str(error).lower():
+            return []
+        raise HTTPException(status_code=503, detail="La tabla de faenas no está disponible") from error
     return [dict(fila) for fila in filas]
 
 
@@ -1222,6 +1665,66 @@ def actualizar_pago_jornada(fichaje_id: int, cambios: PagoJornadaUpdate, usuario
         raise HTTPException(status_code=500, detail="No existe una tabla de gastos compatible")
 
 
+@app.get("/liquidaciones")
+def listar_liquidaciones(
+    ayudante_id: Optional[int] = None,
+    desde: Optional[date] = None,
+    hasta: Optional[date] = None,
+    usuario=Depends(administrador),
+):
+    condiciones = []
+    parametros = []
+    if ayudante_id is not None:
+        condiciones.append("l.ayudante_id = ?")
+        parametros.append(ayudante_id)
+    if desde is not None:
+        condiciones.append("l.hasta >= ?")
+        parametros.append(desde.isoformat())
+    if hasta is not None:
+        condiciones.append("l.desde <= ?")
+        parametros.append(hasta.isoformat())
+    where = f"WHERE {' AND '.join(condiciones)}" if condiciones else ""
+    dia_laborable = (
+        "EXTRACT(DOW FROM f.fecha) NOT IN (0, 6)"
+        if DATABASE_URL
+        else "strftime('%w', f.fecha) NOT IN ('0', '6')"
+    )
+    with conexion() as db:
+        filas = db.execute(
+            f"""
+            SELECT l.id, l.ayudante_id, a.nombre AS ayudante,
+                   l.desde, l.hasta, l.precio_dia, l.importe_pagado,
+                   l.fecha_pago, l.creado_en, l.actualizado_en,
+                   COUNT(f.id) FILTER (WHERE {dia_laborable}) AS dias,
+                   COUNT(f.id) FILTER (WHERE {dia_laborable}) * l.precio_dia AS total
+            FROM liquidaciones l
+            JOIN ayudantes a ON a.id = l.ayudante_id
+            LEFT JOIN fichajes_ayudantes f
+                ON f.ayudante_id = l.ayudante_id
+               AND f.fecha BETWEEN l.desde AND l.hasta
+               AND f.confirmado_ayudante = 1
+            {where}
+            GROUP BY l.id, a.nombre
+            ORDER BY l.desde DESC, l.id DESC
+            """,
+            parametros,
+        ).fetchall()
+    resultado = []
+    for fila in filas:
+        datos = dict(fila)
+        datos["total"] = round(float(datos["total"] or 0), 2)
+        datos["importe_pagado"] = round(float(datos["importe_pagado"] or 0), 2)
+        datos["pendiente"] = round(
+            max(datos["total"] - datos["importe_pagado"], 0), 2
+        )
+        datos["estado"] = (
+            "Pagado" if datos["pendiente"] == 0 and datos["total"] > 0
+            else "Pendiente"
+        )
+        resultado.append(datos)
+    return resultado
+
+
 @app.post("/liquidaciones", status_code=201)
 def crear_liquidacion(pago: PagoCreate, usuario=Depends(administrador)):
     with conexion() as db:
@@ -1258,3 +1761,46 @@ def crear_liquidacion(pago: PagoCreate, usuario=Depends(administrador)):
             )
             accion = "guardado"
         return {"ayudante_id": pago.ayudante_id, "desde": pago.desde, "hasta": pago.hasta, "dias": dias, "precio_dia": pago.precio_dia, "total": total, "importe_pagado": pago.importe_pagado, "pendiente": pendiente, "estado": estado, "accion": accion}
+
+
+@app.patch("/liquidaciones/{liquidacion_id}")
+def modificar_liquidacion(
+    liquidacion_id: int,
+    pago: PagoCreate,
+    usuario=Depends(administrador),
+):
+    with conexion() as db:
+        existente = db.execute(
+            "SELECT 1 FROM liquidaciones WHERE id = ?", (liquidacion_id,)
+        ).fetchone()
+        if not existente:
+            raise HTTPException(status_code=404, detail="Liquidación no encontrada")
+        db.execute(
+            """
+            UPDATE liquidaciones
+            SET ayudante_id = ?, desde = ?, hasta = ?, precio_dia = ?,
+                importe_pagado = ?, fecha_pago = ?, actualizado_en = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (
+                pago.ayudante_id, pago.desde.isoformat(), pago.hasta.isoformat(),
+                pago.precio_dia, pago.importe_pagado,
+                pago.fecha_pago.isoformat() if pago.fecha_pago else None,
+                liquidacion_id,
+            ),
+        )
+        fila = db.execute(
+            "SELECT * FROM liquidaciones WHERE id = ?", (liquidacion_id,)
+        ).fetchone()
+    return dict(fila)
+
+
+@app.delete("/liquidaciones/{liquidacion_id}")
+def borrar_liquidacion(liquidacion_id: int, usuario=Depends(administrador)):
+    with conexion() as db:
+        cursor = db.execute(
+            "DELETE FROM liquidaciones WHERE id = ?", (liquidacion_id,)
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Liquidación no encontrada")
+    return {"eliminado": True, "id": liquidacion_id}
