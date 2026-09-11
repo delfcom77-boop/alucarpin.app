@@ -1306,11 +1306,17 @@ def crear_presupuesto(datos: PresupuestoCreate, usuario=Depends(administrador)):
     columnas = ", ".join(valores.keys())
     marcadores = ", ".join("?" for _ in valores)
     with conexion() as db:
-        db.execute(
-            f"INSERT INTO presupuestos ({columnas}) VALUES ({marcadores})",
-            tuple(valores.values()),
-        )
-        fila = db.execute("SELECT * FROM presupuestos WHERE id = last_insert_rowid()").fetchone()
+        if DATABASE_URL:
+            fila = db.execute(
+                f"INSERT INTO presupuestos ({columnas}) VALUES ({marcadores}) RETURNING *",
+                tuple(valores.values()),
+            ).fetchone()
+        else:
+            db.execute(
+                f"INSERT INTO presupuestos ({columnas}) VALUES ({marcadores})",
+                tuple(valores.values()),
+            )
+            fila = db.execute("SELECT * FROM presupuestos WHERE id = last_insert_rowid()").fetchone()
     return dict(fila)
 
 
@@ -1368,11 +1374,17 @@ def crear_faena(datos: FaenaCreate, usuario=Depends(administrador)):
     columnas = ", ".join(valores.keys())
     marcadores = ", ".join("?" for _ in valores)
     with conexion() as db:
-        db.execute(
-            f"INSERT INTO faenas ({columnas}) VALUES ({marcadores})",
-            tuple(valores.values()),
-        )
-        fila = db.execute("SELECT * FROM faenas WHERE id = last_insert_rowid()").fetchone()
+        if DATABASE_URL:
+            fila = db.execute(
+                f"INSERT INTO faenas ({columnas}) VALUES ({marcadores}) RETURNING *",
+                tuple(valores.values()),
+            ).fetchone()
+        else:
+            db.execute(
+                f"INSERT INTO faenas ({columnas}) VALUES ({marcadores})",
+                tuple(valores.values()),
+            )
+            fila = db.execute("SELECT * FROM faenas WHERE id = last_insert_rowid()").fetchone()
     return dict(fila)
 
 
