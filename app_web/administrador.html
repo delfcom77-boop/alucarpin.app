@@ -205,6 +205,7 @@
       </form>
       <h3>Listado de faenas</h3>
       <label>Buscar faena <input id="filtro-faenas" type="search" placeholder="Cliente, obra o población"></label>
+      <button type="button" id="exportar-faenas">Exportar CSV</button>
       <div class="lista-general">
         <table>
           <thead>
@@ -246,6 +247,7 @@
       </form>
       <h3>Listado de presupuestos</h3>
       <label>Buscar presupuesto <input id="filtro-presupuestos" type="search" placeholder="Cliente o número"></label>
+      <button type="button" id="exportar-presupuestos">Exportar CSV</button>
       <div class="lista-general">
         <table>
           <thead>
@@ -944,8 +946,19 @@
         fila.hidden = Boolean(texto) && !fila.textContent.toLocaleLowerCase().includes(texto);
       });
     };
+    const exportarTablaCsv = (selectorTabla, nombreArchivo) => {
+      const filas = [...document.querySelectorAll(`${selectorTabla} tr`)].filter(fila => !fila.hidden);
+      const contenido = filas.map(fila => [...fila.cells].slice(0, -1).map(celda => `"${celda.textContent.replaceAll('"', '""').trim()}"`).join(';')).join('\r\n');
+      const enlace = document.createElement('a');
+      enlace.href = URL.createObjectURL(new Blob(["\ufeff" + contenido], { type: 'text/csv;charset=utf-8' }));
+      enlace.download = nombreArchivo;
+      enlace.click();
+      URL.revokeObjectURL(enlace.href);
+    };
     document.querySelector('#filtro-faenas').addEventListener('input', () => filtrarTabla('#filtro-faenas', '#lista-faenas'));
     document.querySelector('#filtro-presupuestos').addEventListener('input', () => filtrarTabla('#filtro-presupuestos', '#lista-presupuestos'));
+    document.querySelector('#exportar-faenas').onclick = () => exportarTablaCsv('#lista-faenas', 'faenas.csv');
+    document.querySelector('#exportar-presupuestos').onclick = () => exportarTablaCsv('#lista-presupuestos', 'presupuestos.csv');
 
     const reiniciarFormularioFaena = () => {
       document.querySelector('#formulario-faena').reset();
