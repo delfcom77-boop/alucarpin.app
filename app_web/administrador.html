@@ -927,11 +927,17 @@
         cuerpo.appendChild(fila);
       });
     }
+    const detalleErrorApi = async (respuesta, mensajePredeterminado) => {
+      const cuerpo = await respuesta.json().catch(() => null);
+      if (Array.isArray(cuerpo?.detail)) return cuerpo.detail.map(error => error.msg).join('; ');
+      return cuerpo?.detail || mensajePredeterminado;
+    };
+
     document.querySelector('#formulario-faena').addEventListener('submit', async event => {
       event.preventDefault();
       const id = document.querySelector('#faena-id').value;
       const datos = {
-        cliente: document.querySelector('#faena-cliente').value,
+        cliente: document.querySelector('#faena-cliente').value.trim(),
         obra: document.querySelector('#faena-obra').value || null,
         fecha: document.querySelector('#faena-fecha').value || null,
         ubicacion: document.querySelector('#faena-ubicacion').value || null,
@@ -945,7 +951,7 @@
       const url = id ? `/faenas/${id}` : '/faenas';
       const respuesta = await apiFetch(url, { method: metodo, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) });
       if (!respuesta.ok) {
-        msgFaena.textContent = 'No se pudo guardar la faena.';
+        msgFaena.textContent = await detalleErrorApi(respuesta, 'No se pudo guardar la faena.');
         msgFaena.className = 'mensaje error';
         return;
       }
@@ -999,7 +1005,7 @@
       event.preventDefault();
       const id = document.querySelector('#presupuesto-id').value;
       const datos = {
-        cliente: document.querySelector('#presupuesto-cliente').value,
+        cliente: document.querySelector('#presupuesto-cliente').value.trim(),
         num_presupuesto: document.querySelector('#presupuesto-num').value || null,
         fecha: document.querySelector('#presupuesto-fecha').value || null,
         bruto: Number(document.querySelector('#presupuesto-bruto').value || 0),
@@ -1016,7 +1022,7 @@
       const url = id ? `/presupuestos/${id}` : '/presupuestos';
       const respuesta = await apiFetch(url, { method: metodo, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) });
       if (!respuesta.ok) {
-        msgPresupuesto.textContent = 'No se pudo guardar el presupuesto.';
+        msgPresupuesto.textContent = await detalleErrorApi(respuesta, 'No se pudo guardar el presupuesto.');
         msgPresupuesto.className = 'mensaje error';
         return;
       }
