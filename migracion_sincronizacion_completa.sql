@@ -108,3 +108,6 @@ CREATE INDEX IF NOT EXISTS idx_faenas_fecha ON faenas (fecha);
 CREATE INDEX IF NOT EXISTS idx_presupuestos_numero ON presupuestos (num_presupuesto);
 CREATE INDEX IF NOT EXISTS idx_gastos_presupuesto ON gastos_presupuestos (num_presupuesto);
 CREATE INDEX IF NOT EXISTS idx_gastos_faena ON gastos_faenas_extras (faena_id);
+
+SELECT setval(pg_get_serial_sequence('faenas', 'id'), COALESCE((SELECT MAX(id) FROM faenas), 0) + 1, false);
+SELECT setval(pg_get_serial_sequence('presupuestos', 'id'), COALESCE((SELECT MAX(id) FROM presupuestos), 0) + 1, false);

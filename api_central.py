@@ -247,6 +247,20 @@ def inicializar_base_datos():
     if DATABASE_URL:
         with conexion() as db:
             inicializar_usuarios(db)
+            db.execute("""
+                SELECT setval(
+                    pg_get_serial_sequence('faenas', 'id'),
+                    COALESCE((SELECT MAX(id) FROM faenas), 0) + 1,
+                    false
+                )
+            """)
+            db.execute("""
+                SELECT setval(
+                    pg_get_serial_sequence('presupuestos', 'id'),
+                    COALESCE((SELECT MAX(id) FROM presupuestos), 0) + 1,
+                    false
+                )
+            """)
             db.execute("ALTER TABLE fichajes_ayudantes ADD COLUMN IF NOT EXISTS num_presupuesto TEXT")
             db.execute("""
                 CREATE TABLE IF NOT EXISTS trabajos_propios (
