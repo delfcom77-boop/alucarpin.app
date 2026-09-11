@@ -947,8 +947,10 @@
       });
     };
     const exportarTablaCsv = (selectorTabla, nombreArchivo) => {
+      const tabla = document.querySelector(selectorTabla).closest('table');
+      const encabezados = [...tabla.querySelectorAll('thead th')].slice(0, -1).map(celda => `"${celda.textContent.replaceAll('"', '""').trim()}"`).join(';');
       const filas = [...document.querySelectorAll(`${selectorTabla} tr`)].filter(fila => !fila.hidden);
-      const contenido = filas.map(fila => [...fila.cells].slice(0, -1).map(celda => `"${celda.textContent.replaceAll('"', '""').trim()}"`).join(';')).join('\r\n');
+      const contenido = [encabezados, ...filas.map(fila => [...fila.cells].slice(0, -1).map(celda => `"${celda.textContent.replaceAll('"', '""').trim()}"`).join(';'))].join('\r\n');
       const enlace = document.createElement('a');
       enlace.href = URL.createObjectURL(new Blob(["\ufeff" + contenido], { type: 'text/csv;charset=utf-8' }));
       enlace.download = nombreArchivo;
