@@ -200,6 +200,7 @@
         </div>
         <label>Ayudantes <input id="faena-ayudantes" placeholder="Sí/No"></label>
         <button type="submit" id="btn-faena-submit">Crear faena</button>
+        <button type="button" id="btn-faena-cancelar" hidden>Cancelar edición</button>
         <div id="mensaje-faena" class="mensaje"></div>
       </form>
       <h3>Listado de faenas</h3>
@@ -239,6 +240,7 @@
           <label>Presupuesto Final (€) <input id="presupuesto-final" type="number" min="0" step="0.01" value="0"></label>
         </div>
         <button type="submit" id="btn-presupuesto-submit">Crear presupuesto</button>
+        <button type="button" id="btn-presupuesto-cancelar" hidden>Cancelar edición</button>
         <div id="mensaje-presupuesto" class="mensaje"></div>
       </form>
       <h3>Listado de presupuestos</h3>
@@ -914,6 +916,7 @@
           document.querySelector('#faena-precio').value = faena.precio || 0;
           document.querySelector('#faena-ayudantes').value = faena.ayudantes || '';
           document.querySelector('#btn-faena-submit').textContent = 'Actualizar faena';
+          document.querySelector('#btn-faena-cancelar').hidden = false;
           window.scrollTo(0, document.querySelector('#formulario-faena').offsetTop - 100);
         };
         fila.querySelector('.borrar-faena').onclick = async () => {
@@ -932,6 +935,15 @@
       if (Array.isArray(cuerpo?.detail)) return cuerpo.detail.map(error => error.msg).join('; ');
       return cuerpo?.detail || mensajePredeterminado;
     };
+
+    const reiniciarFormularioFaena = () => {
+      document.querySelector('#formulario-faena').reset();
+      document.querySelector('#faena-id').value = '';
+      document.querySelector('#btn-faena-submit').textContent = 'Crear faena';
+      document.querySelector('#btn-faena-cancelar').hidden = true;
+      document.querySelector('#mensaje-faena').textContent = '';
+    };
+    document.querySelector('#btn-faena-cancelar').onclick = reiniciarFormularioFaena;
 
     document.querySelector('#formulario-faena').addEventListener('submit', async event => {
       event.preventDefault();
@@ -962,9 +974,7 @@
       }
       msgFaena.textContent = id ? 'Faena actualizada correctamente.' : 'Faena creada correctamente.';
       msgFaena.className = 'mensaje exito';
-      document.querySelector('#formulario-faena').reset();
-      document.querySelector('#faena-id').value = '';
-      document.querySelector('#btn-faena-submit').textContent = 'Crear faena';
+      reiniciarFormularioFaena();
       await cargarFaenasLista();
     });
 
@@ -993,6 +1003,7 @@
           document.querySelector('#presupuesto-estado').value = presupuesto.estado || 'Presupuesto';
           document.querySelector('#presupuesto-final').value = presupuesto.presupuesto_final || 0;
           document.querySelector('#btn-presupuesto-submit').textContent = 'Actualizar presupuesto';
+          document.querySelector('#btn-presupuesto-cancelar').hidden = false;
           window.scrollTo(0, document.querySelector('#formulario-presupuesto').offsetTop - 100);
         };
         fila.querySelector('.borrar-presupuesto').onclick = async () => {
@@ -1006,6 +1017,15 @@
         cuerpo.appendChild(fila);
       });
     }
+    const reiniciarFormularioPresupuesto = () => {
+      document.querySelector('#formulario-presupuesto').reset();
+      document.querySelector('#presupuesto-id').value = '';
+      document.querySelector('#btn-presupuesto-submit').textContent = 'Crear presupuesto';
+      document.querySelector('#btn-presupuesto-cancelar').hidden = true;
+      document.querySelector('#mensaje-presupuesto').textContent = '';
+    };
+    document.querySelector('#btn-presupuesto-cancelar').onclick = reiniciarFormularioPresupuesto;
+
     document.querySelector('#formulario-presupuesto').addEventListener('submit', async event => {
       event.preventDefault();
       const id = document.querySelector('#presupuesto-id').value;
@@ -1038,9 +1058,7 @@
       }
       msgPresupuesto.textContent = id ? 'Presupuesto actualizado correctamente.' : 'Presupuesto creado correctamente.';
       msgPresupuesto.className = 'mensaje exito';
-      document.querySelector('#formulario-presupuesto').reset();
-      document.querySelector('#presupuesto-id').value = '';
-      document.querySelector('#btn-presupuesto-submit').textContent = 'Crear presupuesto';
+      reiniciarFormularioPresupuesto();
       await cargarPresupuestosLista();
     });
 
