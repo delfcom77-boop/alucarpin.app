@@ -1451,7 +1451,32 @@ def borrar_faena(faena_id: int, usuario=Depends(administrador)):
 def listar_trabajos(usuario=Depends(administrador)):
     with conexion() as db:
         filas = db.execute(
-            "SELECT * FROM trabajos_propios ORDER BY fecha_inicio DESC, id DESC"
+         """
+         SELECT id, fecha_inicio, fecha_fin, tipo, cliente, obra, ubicacion,
+             poblacion, observaciones, num_presupuesto, importe,
+             estado_cobro, forma_pago, fecha_cobro, 'propio' AS origen,
+             id AS origen_id
+         FROM trabajos_propios
+         UNION ALL
+         SELECT id, fecha AS fecha_inicio, NULL AS fecha_fin, 'faena' AS tipo,
+             cliente, obra, ubicacion, poblacion, NULL AS observaciones,
+             NULL AS num_presupuesto, precio AS importe,
+             'No cobrado' AS estado_cobro, NULL AS forma_pago,
+             NULL AS fecha_cobro, 'faena' AS origen, id AS origen_id
+         FROM faenas
+         UNION ALL
+         SELECT id, fecha AS fecha_inicio, NULL AS fecha_fin,
+             'presupuesto' AS tipo, cliente,
+             'Presupuesto' AS obra, NULL AS ubicacion, NULL AS poblacion,
+             NULL AS observaciones, num_presupuesto,
+             presupuesto_final AS importe,
+             CASE WHEN estado = 'Completado' THEN 'Cobrado'
+               ELSE 'No cobrado' END AS estado_cobro,
+             NULL AS forma_pago, NULL AS fecha_cobro,
+             'presupuesto' AS origen, id AS origen_id
+         FROM presupuestos
+         ORDER BY fecha_inicio DESC, origen_id DESC
+         """
         ).fetchall()
     return [dict(fila) for fila in filas]
 
