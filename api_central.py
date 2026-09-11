@@ -188,6 +188,52 @@ class AyudanteUpdate(BaseModel):
     nombre: str = Field(min_length=1)
 
 
+class FaenaCreate(BaseModel):
+    cliente: str = Field(min_length=1)
+    obra: Optional[str] = None
+    fecha: Optional[date] = None
+    ubicacion: Optional[str] = None
+    poblacion: Optional[str] = None
+    precio: float = Field(default=0, ge=0)
+    ayudantes: Optional[str] = None
+
+
+class FaenaUpdate(BaseModel):
+    cliente: Optional[str] = None
+    obra: Optional[str] = None
+    fecha: Optional[date] = None
+    ubicacion: Optional[str] = None
+    poblacion: Optional[str] = None
+    precio: Optional[float] = Field(default=None, ge=0)
+    ayudantes: Optional[str] = None
+
+
+class PresupuestoCreate(BaseModel):
+    cliente: str = Field(min_length=1)
+    num_presupuesto: Optional[str] = None
+    fecha: Optional[date] = None
+    bruto: float = Field(default=0, ge=0)
+    iva: float = Field(default=0, ge=0)
+    total_iva: float = Field(default=0, ge=0)
+    presupuesto_iva: float = Field(default=0, ge=0)
+    efectivo: float = Field(default=0, ge=0)
+    estado: Optional[str] = None
+    presupuesto_final: float = Field(default=0, ge=0)
+
+
+class PresupuestoUpdate(BaseModel):
+    cliente: Optional[str] = None
+    num_presupuesto: Optional[str] = None
+    fecha: Optional[date] = None
+    bruto: Optional[float] = Field(default=None, ge=0)
+    iva: Optional[float] = Field(default=None, ge=0)
+    total_iva: Optional[float] = Field(default=None, ge=0)
+    presupuesto_iva: Optional[float] = Field(default=None, ge=0)
+    efectivo: Optional[float] = Field(default=None, ge=0)
+    estado: Optional[str] = None
+    presupuesto_final: Optional[float] = Field(default=None, ge=0)
+
+
 def conexion():
     if DATABASE_URL:
         return ConexionPostgres(DATABASE_URL)
@@ -1238,7 +1284,7 @@ def listar_presupuestos(q: str = "", usuario=Depends(usuario_actual)):
         with conexion() as db:
             filas = db.execute(
                 """
-                SELECT id, cliente, num_presupuesto, fecha, presupuesto_final, estado
+                SELECT id, cliente, num_presupuesto, fecha, bruto, iva, total_iva, presupuesto_iva, efectivo, estado, presupuesto_final
                 FROM presupuestos
                 WHERE (? = '' OR cliente LIKE ? OR num_presupuesto LIKE ?)
                 ORDER BY id DESC
@@ -1252,12 +1298,59 @@ def listar_presupuestos(q: str = "", usuario=Depends(usuario_actual)):
     return [dict(fila) for fila in filas]
 
 
+@app.post("/presupuestos", status_code=201)
+def crear_presupuesto(datos: PresupuestoCreate, usuario=Depends(administrador)):
+    valores = datos.model_dump()
+    if valores.get("fecha"):
+        valores["fecha"] = valores["fecha"].isoformat()
+    columnas = ", ".join(valores.keys())
+    marcadores = ", ".join("?" for _ in valores)
+    with conexion() as db:
+        db.execute(
+            f"INSERT INTO presupuestos ({columnas}) VALUES ({marcadores})",
+            tuple(valores.values()),
+        )
+        fila = db.execute("SELECT * FROM presupuestos WHERE id = last_insert_rowid()").fetchone()
+    return dict(fila)
+
+
+@app.patch("/presupuestos/{presupuesto_id}")
+def modificar_presupuesto(presupuesto_id: int, datos: PresupuestoUpdate, usuario=Depends(administrador)):
+    cambios = datos.model_dump(exclude_unset=True)
+    if not cambios:
+        raise HTTPException(status_code=400, detail="No hay datos para modificar")
+    if cambios.get("fecha"):
+        cambios["fecha"] = cambios["fecha"].isoformat()
+    with conexion() as db:
+        existente = db.execute(
+            "SELECT 1 FROM presupuestos WHERE id = ?", (presupuesto_id,)
+        ).fetchone()
+        if not existente:
+            raise HTTPException(status_code=404, detail="Presupuesto no encontrado")
+        set_clause = ", ".join(f"{clave} = ?" for clave in cambios.keys())
+        db.execute(
+            f"UPDATE presupuestos SET {set_clause} WHERE id = ?",
+            tuple(list(cambios.values()) + [presupuesto_id]),
+        )
+        fila = db.execute("SELECT * FROM presupuestos WHERE id = ?", (presupuesto_id,)).fetchone()
+    return dict(fila)
+
+
+@app.delete("/presupuestos/{presupuesto_id}")
+def borrar_presupuesto(presupuesto_id: int, usuario=Depends(administrador)):
+    with conexion() as db:
+        cursor = db.execute("DELETE FROM presupuestos WHERE id = ?", (presupuesto_id,))
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Presupuesto no encontrado")
+    return {"eliminado": True, "id": presupuesto_id}
+
+
 @app.get("/faenas")
 def listar_faenas(usuario=Depends(administrador)):
     try:
         with conexion() as db:
             filas = db.execute(
-                "SELECT id, cliente, obra, fecha, ubicacion, poblacion "
+                "SELECT id, cliente, obra, fecha, ubicacion, poblacion, precio, ayudantes "
                 "FROM faenas ORDER BY fecha DESC, id DESC"
             ).fetchall()
     except Exception as error:
@@ -1265,6 +1358,53 @@ def listar_faenas(usuario=Depends(administrador)):
             return []
         raise HTTPException(status_code=503, detail="La tabla de faenas no está disponible") from error
     return [dict(fila) for fila in filas]
+
+
+@app.post("/faenas", status_code=201)
+def crear_faena(datos: FaenaCreate, usuario=Depends(administrador)):
+    valores = datos.model_dump()
+    if valores.get("fecha"):
+        valores["fecha"] = valores["fecha"].isoformat()
+    columnas = ", ".join(valores.keys())
+    marcadores = ", ".join("?" for _ in valores)
+    with conexion() as db:
+        db.execute(
+            f"INSERT INTO faenas ({columnas}) VALUES ({marcadores})",
+            tuple(valores.values()),
+        )
+        fila = db.execute("SELECT * FROM faenas WHERE id = last_insert_rowid()").fetchone()
+    return dict(fila)
+
+
+@app.patch("/faenas/{faena_id}")
+def modificar_faena(faena_id: int, datos: FaenaUpdate, usuario=Depends(administrador)):
+    cambios = datos.model_dump(exclude_unset=True)
+    if not cambios:
+        raise HTTPException(status_code=400, detail="No hay datos para modificar")
+    if cambios.get("fecha"):
+        cambios["fecha"] = cambios["fecha"].isoformat()
+    with conexion() as db:
+        existente = db.execute(
+            "SELECT 1 FROM faenas WHERE id = ?", (faena_id,)
+        ).fetchone()
+        if not existente:
+            raise HTTPException(status_code=404, detail="Faena no encontrada")
+        set_clause = ", ".join(f"{clave} = ?" for clave in cambios.keys())
+        db.execute(
+            f"UPDATE faenas SET {set_clause} WHERE id = ?",
+            tuple(list(cambios.values()) + [faena_id]),
+        )
+        fila = db.execute("SELECT * FROM faenas WHERE id = ?", (faena_id,)).fetchone()
+    return dict(fila)
+
+
+@app.delete("/faenas/{faena_id}")
+def borrar_faena(faena_id: int, usuario=Depends(administrador)):
+    with conexion() as db:
+        cursor = db.execute("DELETE FROM faenas WHERE id = ?", (faena_id,))
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Faena no encontrada")
+    return {"eliminado": True, "id": faena_id}
 
 
 @app.get("/trabajos")
