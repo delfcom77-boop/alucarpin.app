@@ -1440,10 +1440,17 @@ def modificar_faena(faena_id: int, datos: FaenaUpdate, usuario=Depends(administr
 
 @app.delete("/faenas/{faena_id}")
 def borrar_faena(faena_id: int, usuario=Depends(administrador)):
-    with conexion() as db:
-        cursor = db.execute("DELETE FROM faenas WHERE id = ?", (faena_id,))
-        if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Faena no encontrada")
+    try:
+        with conexion() as db:
+            cursor = db.execute("DELETE FROM faenas WHERE id = ?", (faena_id,))
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Faena no encontrada")
+    except psycopg.errors.ForeignKeyViolation as error:
+        raise HTTPException(
+            status_code=409,
+            detail="No se puede borrar: la faena tiene gastos o pagos vinculados. "
+                   "Desvincula esos datos o solicita una eliminación completa.",
+        ) from error
     return {"eliminado": True, "id": faena_id}
 
 
