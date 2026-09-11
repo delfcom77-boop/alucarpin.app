@@ -182,6 +182,77 @@
         <div id="mensaje-liquidacion-form" class="mensaje"></div>
       </form>
     </section>
+    <section>
+      <h2>Gestión de Faenas</h2>
+      <form id="formulario-faena">
+        <input id="faena-id" type="hidden">
+        <div class="fila">
+          <label>Cliente <input id="faena-cliente" required></label>
+          <label>Obra <input id="faena-obra"></label>
+        </div>
+        <div class="fila">
+          <label>Fecha <input id="faena-fecha" type="date"></label>
+          <label>Ubicación <input id="faena-ubicacion"></label>
+        </div>
+        <div class="fila">
+          <label>Población <input id="faena-poblacion"></label>
+          <label>Precio (€) <input id="faena-precio" type="number" min="0" step="0.01" value="0"></label>
+        </div>
+        <label>Ayudantes <input id="faena-ayudantes" placeholder="Sí/No"></label>
+        <button type="submit" id="btn-faena-submit">Crear faena</button>
+        <div id="mensaje-faena" class="mensaje"></div>
+      </form>
+      <h3>Listado de faenas</h3>
+      <div class="lista-general">
+        <table>
+          <thead>
+            <tr><th>Cliente</th><th>Obra</th><th>Fecha</th><th>Ubicación</th><th>Población</th><th>Precio</th><th>Ayudantes</th><th>Acciones</th></tr>
+          </thead>
+          <tbody id="lista-faenas">
+            <tr><td colspan="8">Cargando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <section>
+      <h2>Gestión de Presupuestos</h2>
+      <form id="formulario-presupuesto">
+        <input id="presupuesto-id" type="hidden">
+        <div class="fila">
+          <label>Cliente <input id="presupuesto-cliente" required></label>
+          <label>Nº Presupuesto <input id="presupuesto-num"></label>
+        </div>
+        <div class="fila">
+          <label>Fecha <input id="presupuesto-fecha" type="date"></label>
+          <label>Bruto (€) <input id="presupuesto-bruto" type="number" min="0" step="0.01" value="0"></label>
+        </div>
+        <div class="fila">
+          <label>IVA (€) <input id="presupuesto-iva" type="number" min="0" step="0.01" value="0"></label>
+          <label>Total IVA (€) <input id="presupuesto-total-iva" type="number" min="0" step="0.01" value="0"></label>
+        </div>
+        <div class="fila">
+          <label>Presupuesto IVA (€) <input id="presupuesto-presupuesto-iva" type="number" min="0" step="0.01" value="0"></label>
+          <label>Efectivo (€) <input id="presupuesto-efectivo" type="number" min="0" step="0.01" value="0"></label>
+        </div>
+        <div class="fila">
+          <label>Estado <select id="presupuesto-estado"><option>Presupuesto</option><option>Aceptado</option><option>Rechazado</option><option>Completado</option></select></label>
+          <label>Presupuesto Final (€) <input id="presupuesto-final" type="number" min="0" step="0.01" value="0"></label>
+        </div>
+        <button type="submit" id="btn-presupuesto-submit">Crear presupuesto</button>
+        <div id="mensaje-presupuesto" class="mensaje"></div>
+      </form>
+      <h3>Listado de presupuestos</h3>
+      <div class="lista-general">
+        <table>
+          <thead>
+            <tr><th>Cliente</th><th>Nº Presupuesto</th><th>Fecha</th><th>Bruto</th><th>IVA</th><th>Estado</th><th>Total</th><th>Acciones</th></tr>
+          </thead>
+          <tbody id="lista-presupuestos">
+            <tr><td colspan="8">Cargando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
     <section><h2>Fichajes del periodo</h2><div id="fichajes">Selecciona un ayudante y un rango de fechas.</div></section>
     <section><h2>Usuarios y contraseñas</h2><div class="lista-general"><table><thead><tr><th>Usuario</th><th>Rol</th><th>Ayudante</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="usuarios"><tr><td colspan="5">Cargando...</td></tr></tbody></table></div><div id="mensaje-usuarios" class="mensaje"></div></section>
   </main>
@@ -822,6 +893,141 @@
         cuerpo.appendChild(fila);
       });
     }
+    // === CRUD FAENAS ===
+    async function cargarFaenasLista() {
+      const respuesta = await apiFetch('/faenas');
+      if (!respuesta.ok) throw new Error('No se pudieron cargar las faenas.');
+      const lista = await respuesta.json();
+      const cuerpo = document.querySelector('#lista-faenas');
+      cuerpo.textContent = '';
+      if (!lista.length) { cuerpo.innerHTML = '<tr><td colspan="8">No hay faenas registradas.</td></tr>'; return; }
+      lista.forEach(faena => {
+        const fila = document.createElement('tr');
+        fila.innerHTML = `<td>${faena.cliente}</td><td>${faena.obra || '-'}</td><td>${faena.fecha || '-'}</td><td>${faena.ubicacion || '-'}</td><td>${faena.poblacion || '-'}</td><td>${Number(faena.precio || 0).toFixed(2)} €</td><td>${faena.ayudantes || '-'}</td><td class="acciones"><button type="button" class="editar-faena">Editar</button><button type="button" class="borrar-faena">Borrar</button></td>`;
+        fila.querySelector('.editar-faena').onclick = () => {
+          document.querySelector('#faena-id').value = faena.id;
+          document.querySelector('#faena-cliente').value = faena.cliente;
+          document.querySelector('#faena-obra').value = faena.obra || '';
+          document.querySelector('#faena-fecha').value = faena.fecha || '';
+          document.querySelector('#faena-ubicacion').value = faena.ubicacion || '';
+          document.querySelector('#faena-poblacion').value = faena.poblacion || '';
+          document.querySelector('#faena-precio').value = faena.precio || 0;
+          document.querySelector('#faena-ayudantes').value = faena.ayudantes || '';
+          document.querySelector('#btn-faena-submit').textContent = 'Actualizar faena';
+          window.scrollTo(0, document.querySelector('#formulario-faena').offsetTop - 100);
+        };
+        fila.querySelector('.borrar-faena').onclick = async () => {
+          if (!confirm(`¿Borrar la faena de ${faena.cliente}?`)) return;
+          const borrada = await apiFetch(`/faenas/${faena.id}`, { method: 'DELETE' });
+          if (!borrada.ok) { document.querySelector('#mensaje-faena').textContent = 'No se pudo borrar la faena.'; document.querySelector('#mensaje-faena').className = 'mensaje error'; return; }
+          await cargarFaenasLista();
+          document.querySelector('#mensaje-faena').textContent = 'Faena borrada correctamente.';
+          document.querySelector('#mensaje-faena').className = 'mensaje exito';
+        };
+        cuerpo.appendChild(fila);
+      });
+    }
+    document.querySelector('#formulario-faena').addEventListener('submit', async event => {
+      event.preventDefault();
+      const id = document.querySelector('#faena-id').value;
+      const datos = {
+        cliente: document.querySelector('#faena-cliente').value,
+        obra: document.querySelector('#faena-obra').value || null,
+        fecha: document.querySelector('#faena-fecha').value || null,
+        ubicacion: document.querySelector('#faena-ubicacion').value || null,
+        poblacion: document.querySelector('#faena-poblacion').value || null,
+        precio: Number(document.querySelector('#faena-precio').value || 0),
+        ayudantes: document.querySelector('#faena-ayudantes').value || null,
+      };
+      const msgFaena = document.querySelector('#mensaje-faena');
+      msgFaena.textContent = 'Guardando...';
+      const metodo = id ? 'PATCH' : 'POST';
+      const url = id ? `/faenas/${id}` : '/faenas';
+      const respuesta = await apiFetch(url, { method: metodo, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) });
+      if (!respuesta.ok) {
+        msgFaena.textContent = 'No se pudo guardar la faena.';
+        msgFaena.className = 'mensaje error';
+        return;
+      }
+      msgFaena.textContent = id ? 'Faena actualizada correctamente.' : 'Faena creada correctamente.';
+      msgFaena.className = 'mensaje exito';
+      document.querySelector('#formulario-faena').reset();
+      document.querySelector('#faena-id').value = '';
+      document.querySelector('#btn-faena-submit').textContent = 'Crear faena';
+      await cargarFaenasLista();
+    });
+
+    // === CRUD PRESUPUESTOS ===
+    async function cargarPresupuestosLista() {
+      const respuesta = await apiFetch('/presupuestos');
+      if (!respuesta.ok) throw new Error('No se pudieron cargar los presupuestos.');
+      const lista = await respuesta.json();
+      const cuerpo = document.querySelector('#lista-presupuestos');
+      cuerpo.textContent = '';
+      if (!lista.length) { cuerpo.innerHTML = '<tr><td colspan="8">No hay presupuestos registrados.</td></tr>'; return; }
+      lista.forEach(presupuesto => {
+        const fila = document.createElement('tr');
+        const total = Number(presupuesto.presupuesto_final || 0);
+        fila.innerHTML = `<td>${presupuesto.cliente}</td><td>${presupuesto.num_presupuesto || '-'}</td><td>${presupuesto.fecha || '-'}</td><td>${Number(presupuesto.bruto || 0).toFixed(2)} €</td><td>${Number(presupuesto.iva || 0).toFixed(2)} €</td><td>${presupuesto.estado || '-'}</td><td>${total.toFixed(2)} €</td><td class="acciones"><button type="button" class="editar-presupuesto">Editar</button><button type="button" class="borrar-presupuesto">Borrar</button></td>`;
+        fila.querySelector('.editar-presupuesto').onclick = () => {
+          document.querySelector('#presupuesto-id').value = presupuesto.id;
+          document.querySelector('#presupuesto-cliente').value = presupuesto.cliente;
+          document.querySelector('#presupuesto-num').value = presupuesto.num_presupuesto || '';
+          document.querySelector('#presupuesto-fecha').value = presupuesto.fecha || '';
+          document.querySelector('#presupuesto-bruto').value = presupuesto.bruto || 0;
+          document.querySelector('#presupuesto-iva').value = presupuesto.iva || 0;
+          document.querySelector('#presupuesto-total-iva').value = presupuesto.total_iva || 0;
+          document.querySelector('#presupuesto-presupuesto-iva').value = presupuesto.presupuesto_iva || 0;
+          document.querySelector('#presupuesto-efectivo').value = presupuesto.efectivo || 0;
+          document.querySelector('#presupuesto-estado').value = presupuesto.estado || 'Presupuesto';
+          document.querySelector('#presupuesto-final').value = presupuesto.presupuesto_final || 0;
+          document.querySelector('#btn-presupuesto-submit').textContent = 'Actualizar presupuesto';
+          window.scrollTo(0, document.querySelector('#formulario-presupuesto').offsetTop - 100);
+        };
+        fila.querySelector('.borrar-presupuesto').onclick = async () => {
+          if (!confirm(`¿Borrar el presupuesto ${presupuesto.num_presupuesto} de ${presupuesto.cliente}?`)) return;
+          const borrado = await apiFetch(`/presupuestos/${presupuesto.id}`, { method: 'DELETE' });
+          if (!borrado.ok) { document.querySelector('#mensaje-presupuesto').textContent = 'No se pudo borrar el presupuesto.'; document.querySelector('#mensaje-presupuesto').className = 'mensaje error'; return; }
+          await cargarPresupuestosLista();
+          document.querySelector('#mensaje-presupuesto').textContent = 'Presupuesto borrado correctamente.';
+          document.querySelector('#mensaje-presupuesto').className = 'mensaje exito';
+        };
+        cuerpo.appendChild(fila);
+      });
+    }
+    document.querySelector('#formulario-presupuesto').addEventListener('submit', async event => {
+      event.preventDefault();
+      const id = document.querySelector('#presupuesto-id').value;
+      const datos = {
+        cliente: document.querySelector('#presupuesto-cliente').value,
+        num_presupuesto: document.querySelector('#presupuesto-num').value || null,
+        fecha: document.querySelector('#presupuesto-fecha').value || null,
+        bruto: Number(document.querySelector('#presupuesto-bruto').value || 0),
+        iva: Number(document.querySelector('#presupuesto-iva').value || 0),
+        total_iva: Number(document.querySelector('#presupuesto-total-iva').value || 0),
+        presupuesto_iva: Number(document.querySelector('#presupuesto-presupuesto-iva').value || 0),
+        efectivo: Number(document.querySelector('#presupuesto-efectivo').value || 0),
+        estado: document.querySelector('#presupuesto-estado').value,
+        presupuesto_final: Number(document.querySelector('#presupuesto-final').value || 0),
+      };
+      const msgPresupuesto = document.querySelector('#mensaje-presupuesto');
+      msgPresupuesto.textContent = 'Guardando...';
+      const metodo = id ? 'PATCH' : 'POST';
+      const url = id ? `/presupuestos/${id}` : '/presupuestos';
+      const respuesta = await apiFetch(url, { method: metodo, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) });
+      if (!respuesta.ok) {
+        msgPresupuesto.textContent = 'No se pudo guardar el presupuesto.';
+        msgPresupuesto.className = 'mensaje error';
+        return;
+      }
+      msgPresupuesto.textContent = id ? 'Presupuesto actualizado correctamente.' : 'Presupuesto creado correctamente.';
+      msgPresupuesto.className = 'mensaje exito';
+      document.querySelector('#formulario-presupuesto').reset();
+      document.querySelector('#presupuesto-id').value = '';
+      document.querySelector('#btn-presupuesto-submit').textContent = 'Crear presupuesto';
+      await cargarPresupuestosLista();
+    });
+
     cargarAyudantes().catch(error => {
       contenedorAyudantes.textContent = error.message;
       contenedorAyudantes.className = 'mensaje error';
@@ -836,6 +1042,8 @@
     cargarLiquidaciones().catch(error => { mensajeLiquidaciones.textContent = error.message; mensajeLiquidaciones.className = 'mensaje error'; });
     cargarGastos().catch(error => { mensajeGastos.textContent = error.message; mensajeGastos.className = 'mensaje error'; });
     cargarDestinosGasto().catch(error => { mensajeAltaGasto.textContent = error.message; mensajeAltaGasto.className = 'mensaje error'; });
+    cargarFaenasLista().catch(error => { document.querySelector('#lista-faenas').innerHTML = `<tr><td colspan="8">Error: ${error.message}</td></tr>`; });
+    cargarPresupuestosLista().catch(error => { document.querySelector('#lista-presupuestos').innerHTML = `<tr><td colspan="8">Error: ${error.message}</td></tr>`; });
   </script>
   <script src="/app/pwa.js"></script>
 </body>
