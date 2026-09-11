@@ -946,6 +946,11 @@
         ayudantes: document.querySelector('#faena-ayudantes').value || null,
       };
       const msgFaena = document.querySelector('#mensaje-faena');
+      if (!datos.cliente) {
+        msgFaena.textContent = 'El cliente es obligatorio.';
+        msgFaena.className = 'mensaje error';
+        return;
+      }
       msgFaena.textContent = 'Guardando...';
       const metodo = id ? 'PATCH' : 'POST';
       const url = id ? `/faenas/${id}` : '/faenas';
@@ -1017,6 +1022,11 @@
         presupuesto_final: Number(document.querySelector('#presupuesto-final').value || 0),
       };
       const msgPresupuesto = document.querySelector('#mensaje-presupuesto');
+      if (!datos.cliente) {
+        msgPresupuesto.textContent = 'El cliente es obligatorio.';
+        msgPresupuesto.className = 'mensaje error';
+        return;
+      }
       msgPresupuesto.textContent = 'Guardando...';
       const metodo = id ? 'PATCH' : 'POST';
       const url = id ? `/presupuestos/${id}` : '/presupuestos';
