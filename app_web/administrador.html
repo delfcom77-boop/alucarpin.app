@@ -204,6 +204,7 @@
         <div id="mensaje-faena" class="mensaje"></div>
       </form>
       <h3>Listado de faenas</h3>
+      <label>Buscar faena <input id="filtro-faenas" type="search" placeholder="Cliente, obra o población"></label>
       <div class="lista-general">
         <table>
           <thead>
@@ -244,6 +245,7 @@
         <div id="mensaje-presupuesto" class="mensaje"></div>
       </form>
       <h3>Listado de presupuestos</h3>
+      <label>Buscar presupuesto <input id="filtro-presupuestos" type="search" placeholder="Cliente o número"></label>
       <div class="lista-general">
         <table>
           <thead>
@@ -929,12 +931,21 @@
         };
         cuerpo.appendChild(fila);
       });
+      filtrarTabla('#filtro-faenas', '#lista-faenas');
     }
     const detalleErrorApi = async (respuesta, mensajePredeterminado) => {
       const cuerpo = await respuesta.json().catch(() => null);
       if (Array.isArray(cuerpo?.detail)) return cuerpo.detail.map(error => error.msg).join('; ');
       return cuerpo?.detail || mensajePredeterminado;
     };
+    const filtrarTabla = (selectorFiltro, selectorCuerpo) => {
+      const texto = document.querySelector(selectorFiltro).value.trim().toLocaleLowerCase();
+      document.querySelectorAll(`${selectorCuerpo} tr`).forEach(fila => {
+        fila.hidden = Boolean(texto) && !fila.textContent.toLocaleLowerCase().includes(texto);
+      });
+    };
+    document.querySelector('#filtro-faenas').addEventListener('input', () => filtrarTabla('#filtro-faenas', '#lista-faenas'));
+    document.querySelector('#filtro-presupuestos').addEventListener('input', () => filtrarTabla('#filtro-presupuestos', '#lista-presupuestos'));
 
     const reiniciarFormularioFaena = () => {
       document.querySelector('#formulario-faena').reset();
@@ -1016,6 +1027,7 @@
         };
         cuerpo.appendChild(fila);
       });
+      filtrarTabla('#filtro-presupuestos', '#lista-presupuestos');
     }
     const reiniciarFormularioPresupuesto = () => {
       document.querySelector('#formulario-presupuesto').reset();
