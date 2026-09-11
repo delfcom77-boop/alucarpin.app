@@ -208,6 +208,19 @@ DELETE /presupuestos/{id}                  # Borrar presupuesto
 
 ### Trabajos, Citas, Seguimientos
 
+### Gestión desde la web
+
+En `/app/administrador.html`, los usuarios administradores pueden gestionar directamente faenas y presupuestos:
+
+- Crear, editar y borrar registros desde sus formularios y tablas.
+- Cancelar una edición sin modificar el registro existente.
+- Buscar faenas por cliente, obra, ubicación o población.
+- Buscar presupuestos por cliente o número.
+- Exportar a CSV las filas visibles después de aplicar un filtro.
+- Validar clientes vacíos antes de enviar el formulario; la API aplica la misma validación.
+
+Los archivos CSV incluyen encabezados, usan `;` como separador y excluyen la columna de acciones para abrirlos directamente en Excel.
+
 ```http
 GET    /trabajos
 POST   /trabajos
