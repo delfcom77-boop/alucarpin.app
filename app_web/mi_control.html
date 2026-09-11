@@ -62,7 +62,6 @@
     const fecha = value => String(value || '').split('-').reverse().join('/');
     const tipos = { faena: 'Faena', presupuesto: 'Presupuesto', reparacion: 'Reparación' };
     tipo.onchange = () => { presupuesto.parentElement.hidden = tipo.value !== 'presupuesto'; presupuesto.required = tipo.value === 'presupuesto'; };
-    document.querySelector('#cerrar').onclick = event => { event.preventDefault(); localStorage.removeItem('alucarpin_token'); location.replace('/app/login.html'); };
     async function cargarPresupuestos() {
       const respuesta = await apiFetch('/presupuestos');
       if (!respuesta.ok) throw new Error('No se pudieron cargar los presupuestos.');
