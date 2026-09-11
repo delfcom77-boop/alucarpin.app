@@ -1315,6 +1315,9 @@ def listar_presupuestos(q: str = "", usuario=Depends(usuario_actual)):
 @app.post("/presupuestos", status_code=201)
 def crear_presupuesto(datos: PresupuestoCreate, usuario=Depends(administrador)):
     valores = datos.model_dump()
+    valores["cliente"] = valores["cliente"].strip()
+    if not valores["cliente"]:
+        raise HTTPException(status_code=400, detail="El cliente es obligatorio")
     if valores.get("fecha"):
         valores["fecha"] = valores["fecha"].isoformat()
     columnas = ", ".join(valores.keys())
@@ -1339,6 +1342,10 @@ def modificar_presupuesto(presupuesto_id: int, datos: PresupuestoUpdate, usuario
     cambios = datos.model_dump(exclude_unset=True)
     if not cambios:
         raise HTTPException(status_code=400, detail="No hay datos para modificar")
+    if "cliente" in cambios:
+        cambios["cliente"] = (cambios["cliente"] or "").strip()
+        if not cambios["cliente"]:
+            raise HTTPException(status_code=400, detail="El cliente es obligatorio")
     if cambios.get("fecha"):
         cambios["fecha"] = cambios["fecha"].isoformat()
     with conexion() as db:
@@ -1383,6 +1390,9 @@ def listar_faenas(usuario=Depends(administrador)):
 @app.post("/faenas", status_code=201)
 def crear_faena(datos: FaenaCreate, usuario=Depends(administrador)):
     valores = datos.model_dump()
+    valores["cliente"] = valores["cliente"].strip()
+    if not valores["cliente"]:
+        raise HTTPException(status_code=400, detail="El cliente es obligatorio")
     if valores.get("fecha"):
         valores["fecha"] = valores["fecha"].isoformat()
     columnas = ", ".join(valores.keys())
@@ -1407,6 +1417,10 @@ def modificar_faena(faena_id: int, datos: FaenaUpdate, usuario=Depends(administr
     cambios = datos.model_dump(exclude_unset=True)
     if not cambios:
         raise HTTPException(status_code=400, detail="No hay datos para modificar")
+    if "cliente" in cambios:
+        cambios["cliente"] = (cambios["cliente"] or "").strip()
+        if not cambios["cliente"]:
+            raise HTTPException(status_code=400, detail="El cliente es obligatorio")
     if cambios.get("fecha"):
         cambios["fecha"] = cambios["fecha"].isoformat()
     with conexion() as db:
