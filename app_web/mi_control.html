@@ -109,10 +109,11 @@
       if (!visibles.length) { listaCitas.innerHTML = '<tr><td colspan="8">No hay citas para este filtro.</td></tr>'; return; }
       visibles.forEach(cita => {
         const fila = document.createElement('tr');
-        fila.innerHTML = `<td>${fecha(cita.fecha)}</td><td>${cita.hora || ''}</td><td>${tiposCita[cita.tipo] || cita.tipo}</td><td>${cita.cliente || ''}</td><td>${[cita.ubicacion, cita.poblacion].filter(Boolean).join(' | ')}</td><td>${cita.observaciones || ''}</td><td>${cita.estado || 'Pendiente'}</td><td><button type="button" class="convertir-cita" ${cita.estado === 'Realizada' ? 'disabled' : ''}>${cita.estado === 'Realizada' ? 'Realizada' : 'Convertir'}</button></td>`;
+        const convertible = ['faena', 'presupuesto', 'reparacion'].includes(cita.tipo);
+        fila.innerHTML = `<td>${fecha(cita.fecha)}</td><td>${cita.hora || ''}</td><td>${tiposCita[cita.tipo] || cita.tipo}</td><td>${cita.cliente || ''}</td><td>${[cita.ubicacion, cita.poblacion].filter(Boolean).join(' | ')}</td><td>${cita.observaciones || ''}</td><td>${cita.estado || 'Pendiente'}</td><td><button type="button" class="convertir-cita" ${cita.estado === 'Realizada' || !convertible ? 'disabled' : ''}>${cita.estado === 'Realizada' ? 'Realizada' : convertible ? 'Convertir' : 'Solo cita'}</button></td>`;
         fila.querySelector('.convertir-cita').onclick = async () => {
           const convertir = await apiFetch(`/citas/${cita.id}/convertir`, { method: 'POST' });
-          if (!convertir.ok) { mensaje.textContent = 'No se pudo convertir la cita.'; mensaje.className = 'mensaje error'; return; }
+          if (!convertir.ok) { const detalle = await convertir.json().catch(() => ({})); mensaje.textContent = detalle.detail || 'No se pudo convertir la cita.'; mensaje.className = 'mensaje error'; return; }
           mensaje.textContent = 'Cita convertida en trabajo pendiente de revisar.';
           mensaje.className = 'mensaje exito';
           await cargarCitas();
