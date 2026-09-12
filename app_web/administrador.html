@@ -543,7 +543,7 @@
         fila.querySelector('.pagar-gasto').onclick = async () => {
           const importeTexto = prompt('Importe del pago:', Number(gasto.pendiente || 0).toFixed(2));
           if (importeTexto === null || Number(importeTexto) <= 0) return;
-          const forma = prompt('Forma de pago:', gasto.forma_pago || 'Transferencia');
+          const forma = prompt('Forma de pago:', gasto.forma_pago || 'Efectivo');
           if (forma === null || !forma.trim()) return;
           const pago = await apiFetch(`/gastos/${gasto.tipo}/${gasto.id}/pagos`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ importe: Number(importeTexto), forma_pago: forma.trim(), fecha: new Date().toISOString().slice(0, 10), observaciones: '' }) });
           if (!pago.ok) { mensajeGastos.textContent = 'No se pudo registrar el pago.'; mensajeGastos.className = 'mensaje error'; return; }
