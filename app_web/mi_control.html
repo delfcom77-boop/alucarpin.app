@@ -49,6 +49,11 @@
         <button type="submit">Guardar y añadir al calendario</button><div id="mensaje" class="mensaje"></div>
       </form>
     </section>
+    <section>
+      <h2>Citas pendientes</h2>
+      <label>Mostrar tipo <select id="filtro-tipo-citas"><option value="">Todas</option><option value="faena">Faenas</option><option value="presupuesto">Presupuestos</option><option value="reparacion">Reparaciones</option></select></label>
+      <div class="lista"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Tipo</th><th>Cliente</th><th>Dirección</th><th>Descripción</th><th>Estado</th></tr></thead><tbody id="lista-citas"><tr><td colspan="7">Cargando...</td></tr></tbody></table></div>
+    </section>
     <section><h2>Mis trabajos</h2><label>Mostrar tipo <select id="filtro-tipo-trabajos"><option value="">Todos</option><option value="faena">Faenas</option><option value="presupuesto">Presupuestos</option><option value="reparacion">Reparaciones</option></select></label><div class="lista"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Origen</th><th>Cliente</th><th>Obra</th><th>Presupuesto</th><th>Importe</th><th>Cobro</th><th>Acciones</th></tr></thead><tbody id="lista"><tr><td colspan="9">Cargando...</td></tr></tbody></table></div></section>
     <dialog id="dialogo-edicion"><form method="dialog" id="formulario-edicion-trabajo"><h2>Editar registro</h2><label>Cliente <input id="editar-cliente" required></label><label>Obra <input id="editar-obra"></label><label>Fecha <input id="editar-fecha" type="date"></label><label>Importe (€) <input id="editar-importe" type="number" min="0" step="0.01"></label><label>Estado <select id="editar-estado"><option value="No cobrado">No cobrado</option><option value="Cobrado">Cobrado</option><option value="Presupuesto">Presupuesto</option><option value="Aceptado">Aceptado</option><option value="Rechazado">Rechazado</option><option value="Completado">Completado</option></select></label><div class="acciones"><button value="cancelar" type="button" id="cancelar-edicion-trabajo">Cancelar</button><button value="guardar" type="submit">Guardar cambios</button></div><div id="mensaje-edicion-trabajo" class="mensaje"></div></form></dialog>
   </main>
@@ -61,10 +66,13 @@
     const presupuesto = document.querySelector('#presupuesto');
     const mensaje = document.querySelector('#mensaje');
     const filtroTipoTrabajos = document.querySelector('#filtro-tipo-trabajos');
+    const filtroTipoCitas = document.querySelector('#filtro-tipo-citas');
+    const listaCitas = document.querySelector('#lista-citas');
     const dialogoEdicion = document.querySelector('#dialogo-edicion');
     let trabajoEnEdicion = null;
     const fecha = value => String(value || '').split('-').reverse().join('/');
     const tipos = { faena: 'Faena', presupuesto: 'Presupuesto', reparacion: 'Reparación' };
+    const tiposCita = { faena: 'Faena', presupuesto: 'Presupuesto', reparacion: 'Reparación', visita: 'Visita', reunion: 'Reunión', llamada: 'Llamada', otro: 'Otro' };
     tipo.onchange = () => { presupuesto.parentElement.hidden = tipo.value !== 'presupuesto'; presupuesto.required = tipo.value === 'presupuesto'; };
     async function cargarPresupuestos() {
       const respuesta = await apiFetch('/presupuestos');
@@ -91,8 +99,23 @@
     }
     function filtrarTrabajos() { const tipoSeleccionado = filtroTipoTrabajos.value; document.querySelectorAll('#lista tr').forEach(fila => { fila.hidden = Boolean(tipoSeleccionado) && fila.dataset.tipo !== tipoSeleccionado; }); }
     filtroTipoTrabajos.onchange = filtrarTrabajos;
+    async function cargarCitas() {
+      const respuesta = await apiFetch('/citas');
+      if (!respuesta.ok) throw new Error('No se pudieron cargar las citas.');
+      const citas = await respuesta.json();
+      listaCitas.textContent = '';
+      const tipoSeleccionado = filtroTipoCitas.value;
+      const visibles = citas.filter(cita => !tipoSeleccionado || cita.tipo === tipoSeleccionado);
+      if (!visibles.length) { listaCitas.innerHTML = '<tr><td colspan="7">No hay citas para este filtro.</td></tr>'; return; }
+      visibles.forEach(cita => {
+        const fila = document.createElement('tr');
+        fila.innerHTML = `<td>${fecha(cita.fecha)}</td><td>${cita.hora || ''}</td><td>${tiposCita[cita.tipo] || cita.tipo}</td><td>${cita.cliente || ''}</td><td>${[cita.ubicacion, cita.poblacion].filter(Boolean).join(' | ')}</td><td>${cita.observaciones || ''}</td><td>${cita.estado || 'Pendiente'}</td>`;
+        listaCitas.appendChild(fila);
+      });
+    }
+    filtroTipoCitas.onchange = () => cargarCitas().catch(error => { mensaje.textContent = error.message; mensaje.className = 'mensaje error'; });
     formulario.onsubmit = async event => { event.preventDefault(); const datos = { tipo: tipo.value, fecha_inicio: document.querySelector('#fecha-inicio').value, fecha_fin: document.querySelector('#fecha-fin').value || null, cliente: document.querySelector('#cliente').value, obra: document.querySelector('#obra').value, ubicacion: document.querySelector('#ubicacion').value, poblacion: document.querySelector('#poblacion').value, observaciones: document.querySelector('#observaciones').value, num_presupuesto: presupuesto.value || null, importe: Number(document.querySelector('#importe').value || 0), estado_cobro: document.querySelector('#estado').value, forma_pago: document.querySelector('#forma').value, fecha_cobro: null }; const respuesta = await apiFetch('/trabajos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) }); const resultado = await respuesta.json(); if (!respuesta.ok) { mensaje.textContent = resultado.detail || 'No se pudo guardar.'; mensaje.className = 'mensaje error'; return; } if (resultado.origen === 'propio') await calendario(resultado.id); mensaje.textContent = resultado.origen === 'propio' ? 'Reparación guardada y añadida al calendario.' : 'Trabajo creado en su sección correspondiente.'; mensaje.className = 'mensaje exito'; formulario.reset(); document.querySelector('#fecha-inicio').valueAsDate = new Date(); tipo.dispatchEvent(new Event('change')); await cargarTrabajos(); };
-    document.querySelector('#fecha-inicio').valueAsDate = new Date(); tipo.dispatchEvent(new Event('change')); Promise.all([cargarPresupuestos(), cargarTrabajos()]).catch(error => { mensaje.textContent = error.message; mensaje.className = 'mensaje error'; });
+    document.querySelector('#fecha-inicio').valueAsDate = new Date(); tipo.dispatchEvent(new Event('change')); Promise.all([cargarPresupuestos(), cargarTrabajos(), cargarCitas()]).catch(error => { mensaje.textContent = error.message; mensaje.className = 'mensaje error'; });
   </script>
 </body>
 </html>
