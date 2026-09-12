@@ -395,6 +395,22 @@ curl -X DELETE \
 
 ---
 
+## Fichajes, pagos y validacion
+
+```http
+GET    /ayudantes/{id}/fichajes
+POST   /fichajes
+PATCH  /fichajes/{id}
+DELETE /fichajes/{id}
+PATCH  /fichajes/{id}/pago
+GET    /fichajes/{id}/pago
+PATCH  /fichajes/{id}/validacion
+```
+
+Al crear un fichaje, la aplicacion genera automaticamente el destino provisional segun `tipo_destino`: `faena`, `presupuesto` o `reparacion`. El pago de la jornada se guarda en `pagos_jornadas` y no depende de la validacion contable.
+
+---
+
 ## Códigos de Respuesta HTTP
 
 | Código | Significado |

@@ -103,6 +103,30 @@ ALTER TABLE fichajes_ayudantes
     ADD COLUMN IF NOT EXISTS estado_procesamiento TEXT DEFAULT 'Pendiente';
 ALTER TABLE fichajes_ayudantes
     ADD COLUMN IF NOT EXISTS gasto_id BIGINT;
+ALTER TABLE fichajes_ayudantes
+    ADD COLUMN IF NOT EXISTS presupuesto_id BIGINT REFERENCES presupuestos(id);
+ALTER TABLE fichajes_ayudantes
+    ADD COLUMN IF NOT EXISTS trabajo_propio_id BIGINT REFERENCES trabajos_propios(id);
+ALTER TABLE fichajes_ayudantes
+    ADD COLUMN IF NOT EXISTS estado_revision TEXT NOT NULL DEFAULT 'Pendiente de revisar';
+ALTER TABLE faenas
+    ADD COLUMN IF NOT EXISTS estado_revision TEXT NOT NULL DEFAULT 'Validado';
+ALTER TABLE presupuestos
+    ADD COLUMN IF NOT EXISTS estado_revision TEXT NOT NULL DEFAULT 'Validado';
+ALTER TABLE trabajos_propios
+    ADD COLUMN IF NOT EXISTS estado_revision TEXT NOT NULL DEFAULT 'Validado';
+
+CREATE TABLE IF NOT EXISTS pagos_jornadas (
+    id BIGSERIAL PRIMARY KEY,
+    fichaje_id BIGINT NOT NULL UNIQUE REFERENCES fichajes_ayudantes(id) ON DELETE CASCADE,
+    importe DOUBLE PRECISION NOT NULL DEFAULT 0,
+    importe_pagado DOUBLE PRECISION NOT NULL DEFAULT 0,
+    forma_pago TEXT NOT NULL DEFAULT 'Efectivo',
+    estado_pago TEXT NOT NULL DEFAULT 'No pagado',
+    fecha_pago DATE,
+    creado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    actualizado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 
 CREATE INDEX IF NOT EXISTS idx_faenas_fecha ON faenas (fecha);
 CREATE INDEX IF NOT EXISTS idx_presupuestos_numero ON presupuestos (num_presupuesto);

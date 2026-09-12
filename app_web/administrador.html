@@ -438,12 +438,30 @@
             fila.dataset.ayudanteId = fichaje.ayudante_id;
             fila.className = fichaje.estadoPago === 'Pagado' ? 'pagado' : fichaje.estadoPago === 'Parcial' ? 'parcial' : 'pendiente';
             const tipo = fichaje.tipo_destino === 'presupuesto' ? 'Presupuesto Alucarpin' : fichaje.tipo_destino === 'reparacion' ? 'Reparación' : 'Faena a 3º';
-            fila.innerHTML = `<td>${fichaje.nombreAyudante}</td><td>${tipo}</td><td>${mostrarFecha(fichaje.fecha)}</td><td>${fichaje.cliente || ''}</td><td>${fichaje.obra}</td><td>${fichaje.ubicacion || ''}</td><td>${fichaje.poblacion || ''}</td><td class="acciones"><button type="button">Modificar</button><button type="button" class="borrar">Borrar</button></td>`;
+            fila.innerHTML = `<td>${fichaje.nombreAyudante}</td><td>${tipo}</td><td>${mostrarFecha(fichaje.fecha)}</td><td>${fichaje.cliente || ''}</td><td>${fichaje.obra}</td><td>${fichaje.ubicacion || ''}</td><td>${fichaje.poblacion || ''}</td><td class="acciones"><button type="button">Modificar</button><button type="button" class="validar" ${fichaje.estado_revision === 'Validado' ? 'disabled' : ''}>${fichaje.estado_revision === 'Validado' ? 'Validado' : 'Validar'}</button><button type="button" class="borrar">Borrar</button></td>`;
             fila.onclick = () => seleccionarFichajeGeneral(fichaje, fila);
             fila.querySelector('.acciones button:first-child').onclick = event => { event.stopPropagation(); seleccionarFichajeGeneral(fichaje, fila); };
+            fila.querySelector('.validar').onclick = async event => { event.stopPropagation(); await validarFichaje(fichaje); };
             fila.querySelector('.borrar').onclick = async event => { event.stopPropagation(); await borrarFichaje(fichaje); };
             cuerpo.appendChild(fila);
           });
+        }
+
+        async function validarFichaje(fichaje) {
+          const respuesta = await apiFetch(`${api}/fichajes/${fichaje.id}/validacion`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ estado: 'Validado' }),
+          });
+          if (!respuesta.ok) {
+            const resultado = await respuesta.json().catch(() => ({}));
+            mensajeGeneral.textContent = resultado.detail || 'No se pudo validar el trabajo.';
+            mensajeGeneral.className = 'mensaje error';
+            return;
+          }
+          mensajeGeneral.textContent = 'Trabajo validado correctamente.';
+          mensajeGeneral.className = 'mensaje exito';
+          await cargarListadoGeneral();
         }
 
         function seleccionarFichajeGeneral(fichaje, fila) {

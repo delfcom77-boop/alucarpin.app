@@ -58,9 +58,13 @@ id (INTEGER) | nombre (TEXT) | activo (INTEGER)
 
 #### `fichajes_ayudantes`
 ```sql
-id | ayudante_id | fecha | tipo_destino | cliente | obra | ubicacion | poblacion
-| num_presupuesto | confirmado_ayudante | sincronizado
+ id | ayudante_id | fecha | tipo_destino | cliente | obra | ubicacion | poblacion
+| num_presupuesto | faena_id_vinculada | presupuesto_id | trabajo_propio_id
+| estado_revision | confirmado_ayudante | sincronizado
 ```
+
+#### `pagos_jornadas`
+Registra el pago de cada jornada de forma independiente de su faena, presupuesto o reparacion. Una jornada puede estar `Pagado` y continuar `Pendiente de revisar` hasta que el administrador valide el trabajo.
 
 #### `faenas`
 ```sql
@@ -101,10 +105,10 @@ sincronizar_datos_app()
 ### Flujo 2: Procesamiento Local
 
 ```
-1. Seleccionar fichaje descargado
-2. Vincular a faena (dropdown con faenas locales)
-3. Registrar pago (PATCH /fichajes/{id}/pago)
-   └── Crea gasto automático si es necesario
+1. El ayudante registra el tipo de trabajo y sus datos.
+2. La app crea automaticamente una faena, presupuesto provisional o reparacion.
+3. El administrador revisa y valida el trabajo desde la app o el programa.
+4. El pago de la jornada se registra independientemente (PATCH /fichajes/{id}/pago).
 ```
 
 ### Flujo 3: Subida (Local → Supabase)

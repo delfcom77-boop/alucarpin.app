@@ -137,10 +137,47 @@ ALTER TABLE seguimientos_agenda
 ALTER TABLE fichajes_ayudantes
     ADD COLUMN IF NOT EXISTS num_presupuesto TEXT;
 
+ALTER TABLE fichajes_ayudantes
+    ADD COLUMN IF NOT EXISTS faena_id_vinculada BIGINT REFERENCES faenas(id);
+
+ALTER TABLE fichajes_ayudantes
+    ADD COLUMN IF NOT EXISTS presupuesto_id BIGINT REFERENCES presupuestos(id);
+
+ALTER TABLE fichajes_ayudantes
+    ADD COLUMN IF NOT EXISTS trabajo_propio_id BIGINT REFERENCES trabajos_propios(id);
+
+ALTER TABLE fichajes_ayudantes
+    ADD COLUMN IF NOT EXISTS estado_revision TEXT NOT NULL DEFAULT 'Pendiente de revisar';
+
+ALTER TABLE faenas
+    ADD COLUMN IF NOT EXISTS estado_revision TEXT NOT NULL DEFAULT 'Validado';
+
+ALTER TABLE presupuestos
+    ADD COLUMN IF NOT EXISTS estado_revision TEXT NOT NULL DEFAULT 'Validado';
+
+ALTER TABLE trabajos_propios
+    ADD COLUMN IF NOT EXISTS estado_revision TEXT NOT NULL DEFAULT 'Validado';
+
+CREATE TABLE IF NOT EXISTS pagos_jornadas (
+    id BIGSERIAL PRIMARY KEY,
+    fichaje_id BIGINT NOT NULL UNIQUE REFERENCES fichajes_ayudantes(id) ON DELETE CASCADE,
+    importe DOUBLE PRECISION NOT NULL DEFAULT 0,
+    importe_pagado DOUBLE PRECISION NOT NULL DEFAULT 0,
+    forma_pago TEXT NOT NULL DEFAULT 'Efectivo',
+    estado_pago TEXT NOT NULL DEFAULT 'No pagado',
+    fecha_pago DATE,
+    creado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    actualizado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_pagos_jornadas_fichaje
+    ON pagos_jornadas (fichaje_id);
+
 ALTER TABLE ayudantes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE usuarios ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fichajes_ayudantes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE liquidaciones ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pagos_jornadas ENABLE ROW LEVEL SECURITY;
 
 CREATE OR REPLACE FUNCTION alucarpin_rellenar_fechas()
 RETURNS TRIGGER AS $$
