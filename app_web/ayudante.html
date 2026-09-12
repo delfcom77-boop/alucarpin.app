@@ -149,6 +149,12 @@
 
     formulario.addEventListener('submit', async event => {
       event.preventDefault();
+      if (!fecha.value) {
+        mensaje.textContent = 'Indica el día trabajado antes de guardar.';
+        mensaje.className = 'mensaje error';
+        fecha.focus();
+        return;
+      }
       mensaje.textContent = 'Guardando...';
       mensaje.className = 'mensaje';
       const datos = { ayudante_id: Number(ayudanteId), fecha: fecha.value, tipo_destino: tipoDestino.value, cliente: document.querySelector('#cliente').value, obra: document.querySelector('#obra').value, ubicacion: document.querySelector('#ubicacion').value, poblacion: document.querySelector('#poblacion').value, num_presupuesto: tipoDestino.value === 'presupuesto' ? (presupuesto.value || null) : null };

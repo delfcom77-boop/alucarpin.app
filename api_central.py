@@ -1790,8 +1790,11 @@ def listar_fichajes(
 def crear_fichaje(fichaje: FichajeCreate, usuario=Depends(usuario_actual)):
     if usuario["rol"] == "ayudante" and fichaje.ayudante_id != usuario["ayudante_id"]:
         raise HTTPException(status_code=403, detail="No puedes registrar otro ayudante")
+    if not fichaje.fecha:
+        raise HTTPException(status_code=422, detail="Indica el día trabajado antes de guardar")
     try:
         with conexion() as db:
+            fecha_trabajo = fichaje.fecha.isoformat()
             num_presupuesto = fichaje.num_presupuesto.strip() if fichaje.num_presupuesto else None
             cliente = fichaje.cliente.strip()
             obra = fichaje.obra.strip()
@@ -1811,7 +1814,7 @@ def crear_fichaje(fichaje: FichajeCreate, usuario=Depends(usuario_actual)):
                       AND lower(trim(coalesce(ubicacion, ''))) = lower(trim(?))
                     ORDER BY id LIMIT 1
                     """,
-                    (cliente, obra, fichaje.fecha.isoformat(), ubicacion),
+                    (cliente, obra, fecha_trabajo, ubicacion),
                 ).fetchone()
                 if existente:
                     faena_id = existente["id"]
@@ -1821,7 +1824,7 @@ def crear_fichaje(fichaje: FichajeCreate, usuario=Depends(usuario_actual)):
                     )
                 else:
                     columnas = "cliente, obra, fecha, ubicacion, poblacion, precio, ayudantes, estado_revision"
-                    valores = (cliente, obra, fichaje.fecha.isoformat(), ubicacion, poblacion, 0, "Sí", estado_revision)
+                    valores = (cliente, obra, fecha_trabajo, ubicacion, poblacion, 0, "Sí", estado_revision)
                     if DATABASE_URL:
                         faena_id = db.execute(
                             f"INSERT INTO faenas ({columnas}) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
@@ -1845,7 +1848,7 @@ def crear_fichaje(fichaje: FichajeCreate, usuario=Depends(usuario_actual)):
                     if DATABASE_URL:
                         presupuesto_id = db.execute(
                             "INSERT INTO presupuestos (cliente, num_presupuesto, fecha, bruto, iva, total_iva, presupuesto_iva, efectivo, estado, presupuesto_final, estado_revision) VALUES (?, NULL, ?, 0, 0, 0, 0, 0, 'Presupuesto', 0, ?) RETURNING id",
-                            (cliente, fichaje.fecha.isoformat(), estado_revision),
+                            (cliente, fecha_trabajo, estado_revision),
                         ).fetchone()["id"]
                     else:
                         raise HTTPException(status_code=503, detail="La creación de presupuestos provisionales requiere la aplicación publicada")
@@ -1860,7 +1863,7 @@ def crear_fichaje(fichaje: FichajeCreate, usuario=Depends(usuario_actual)):
                         VALUES ('reparacion', ?, NULL, ?, ?, ?, ?, '', NULL, 0, 'No cobrado', '', NULL, ?)
                         RETURNING id
                         """,
-                        (fichaje.fecha.isoformat(), cliente, obra, ubicacion, poblacion, estado_revision),
+                        (fecha_trabajo, cliente, obra, ubicacion, poblacion, estado_revision),
                     ).fetchone()["id"]
                 else:
                     db.execute(
@@ -1873,7 +1876,7 @@ def crear_fichaje(fichaje: FichajeCreate, usuario=Depends(usuario_actual)):
                         (fichaje.fecha.isoformat(), cliente, obra, ubicacion, poblacion, estado_revision),
                     )
                     trabajo_propio_id = db.execute("SELECT id FROM trabajos_propios WHERE id = last_insert_rowid()").fetchone()["id"]
-            parametros = (fichaje.ayudante_id, fichaje.fecha.isoformat(), fichaje.tipo_destino, cliente, obra, ubicacion, poblacion, num_presupuesto, faena_id, presupuesto_id, trabajo_propio_id, estado_revision)
+            parametros = (fichaje.ayudante_id, fecha_trabajo, fichaje.tipo_destino, cliente, obra, ubicacion, poblacion, num_presupuesto, faena_id, presupuesto_id, trabajo_propio_id, estado_revision)
             if DATABASE_URL:
                 fila = db.execute(
                     "INSERT INTO fichajes_ayudantes (ayudante_id, fecha, tipo_destino, cliente, obra, ubicacion, poblacion, num_presupuesto, faena_id_vinculada, presupuesto_id, trabajo_propio_id, estado_revision, confirmado_ayudante, sincronizado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1) RETURNING *",
