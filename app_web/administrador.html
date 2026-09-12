@@ -628,7 +628,14 @@
       lista.forEach(faena => {
         const opcion = document.createElement('option');
         opcion.value = faena.id;
-        opcion.textContent = `#${faena.id} | ${faena.fecha || ''} | ${faena.cliente} | ${faena.obra}`;
+        opcion.textContent = [
+          `#${faena.id}`,
+          faena.cliente,
+          faena.obra,
+          faena.ubicacion,
+          faena.poblacion,
+          faena.fecha,
+        ].filter(Boolean).join(' | ');
         faenaGeneral.appendChild(opcion);
       });
     }
