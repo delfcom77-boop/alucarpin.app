@@ -250,6 +250,7 @@ def conexion():
 def inicializar_base_datos():
     if DATABASE_URL:
         with conexion() as db:
+            db.execute("SELECT pg_advisory_xact_lock(72938421)")
             inicializar_usuarios(db)
             db.execute("""
                 SELECT setval(
