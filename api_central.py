@@ -1509,6 +1509,7 @@ def listar_trabajos(usuario=Depends(administrador)):
              estado_cobro, forma_pago, fecha_cobro, estado_revision, 'propio' AS origen,
              id AS origen_id
          FROM trabajos_propios
+         WHERE tipo = 'reparacion'
          UNION ALL
          SELECT id, fecha AS fecha_inicio, NULL AS fecha_fin, 'faena' AS tipo,
              cliente, obra, ubicacion, poblacion, NULL AS observaciones,
@@ -1536,28 +1537,44 @@ def listar_trabajos(usuario=Depends(administrador)):
 @app.post("/trabajos", status_code=201)
 def crear_trabajo(datos: TrabajoCreate, usuario=Depends(administrador)):
     valores = _trabajo_datos(datos)
-    columnas = ", ".join(valores)
-    marcadores = ", ".join("?" for _ in valores)
     with conexion() as db:
-        if valores["num_presupuesto"]:
-            presupuesto = db.execute(
-                "SELECT 1 FROM presupuestos WHERE num_presupuesto = ? LIMIT 1",
-                (valores["num_presupuesto"],),
+        estado_revision = "Pendiente de revisar"
+        if datos.tipo == "faena":
+            existente = db.execute(
+                "SELECT id FROM faenas WHERE lower(trim(cliente)) = lower(trim(?)) "
+                "AND lower(trim(coalesce(obra, ''))) = lower(trim(?)) AND fecha = ? "
+                "AND lower(trim(coalesce(ubicacion, ''))) = lower(trim(?)) LIMIT 1",
+                (datos.cliente, datos.obra, datos.fecha.isoformat(), datos.ubicacion),
             ).fetchone()
+            if existente:
+                ident = existente["id"]
+                db.execute("UPDATE faenas SET estado_revision = ? WHERE id = ?", (estado_revision, ident))
+            else:
+                fila = db.execute(
+                    "INSERT INTO faenas (cliente, obra, fecha, ubicacion, poblacion, precio, ayudantes, estado_revision) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
+                    (datos.cliente, datos.obra, datos.fecha.isoformat(), datos.ubicacion,
+                     datos.poblacion, datos.importe, "Sí", estado_revision),
+                ).fetchone()
+                ident = fila["id"]
+            return {**dict(db.execute("SELECT * FROM faenas WHERE id = ?", (ident,)).fetchone()), "origen": "faena", "origen_id": ident}
+        if datos.tipo == "presupuesto":
+            numero = datos.num_presupuesto or None
+            fila = db.execute(
+                "INSERT INTO presupuestos (cliente, num_presupuesto, fecha, bruto, iva, total_iva, presupuesto_iva, efectivo, estado, presupuesto_final, estado_revision) "
+                "VALUES (?, ?, ?, ?, 0, ?, ?, 0, 'Presupuesto', ?, ?) RETURNING *",
+                (datos.cliente, numero, datos.fecha.isoformat(), datos.importe, datos.importe, datos.importe, datos.importe, estado_revision),
+            ).fetchone()
+            return {**dict(fila), "tipo": "presupuesto", "obra": "Presupuesto", "fecha_inicio": fila["fecha"], "importe": fila["presupuesto_final"], "origen": "presupuesto", "origen_id": fila["id"]}
+        columnas = ", ".join(valores)
+        marcadores = ", ".join("?" for _ in valores)
+        if valores["num_presupuesto"]:
+            presupuesto = db.execute("SELECT 1 FROM presupuestos WHERE num_presupuesto = ? LIMIT 1", (valores["num_presupuesto"],)).fetchone()
             if not presupuesto:
                 raise HTTPException(status_code=400, detail="El presupuesto seleccionado no existe")
-        if DATABASE_URL:
-            fila = db.execute(
-                f"INSERT INTO trabajos_propios ({columnas}) VALUES ({marcadores}) RETURNING *",
-                tuple(valores.values()),
-            ).fetchone()
-        else:
-            db.execute(
-                f"INSERT INTO trabajos_propios ({columnas}) VALUES ({marcadores})",
-                tuple(valores.values()),
-            )
-            fila = db.execute("SELECT * FROM trabajos_propios WHERE id = last_insert_rowid()").fetchone()
-    return dict(fila)
+        db.execute(f"INSERT INTO trabajos_propios ({columnas}) VALUES ({marcadores})", tuple(valores.values()))
+        fila = db.execute("SELECT * FROM trabajos_propios WHERE id = last_insert_rowid()").fetchone()
+    return {**dict(fila), "origen": "propio", "origen_id": fila["id"]}
 
 
 @app.patch("/trabajos/{trabajo_id}")
