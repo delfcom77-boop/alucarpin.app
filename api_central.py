@@ -90,6 +90,10 @@ class TrabajoUpdate(TrabajoCreate):
     pass
 
 
+class ValidacionTrabajo(BaseModel):
+    estado: Literal["Pendiente de revisar", "Validado", "Rechazado"]
+
+
 class CitaCreate(BaseModel):
     fecha: date
     hora: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
@@ -262,6 +266,12 @@ def inicializar_base_datos():
                 )
             """)
             db.execute("ALTER TABLE fichajes_ayudantes ADD COLUMN IF NOT EXISTS num_presupuesto TEXT")
+            db.execute("ALTER TABLE fichajes_ayudantes ADD COLUMN IF NOT EXISTS trabajo_propio_id BIGINT")
+            db.execute("ALTER TABLE fichajes_ayudantes ADD COLUMN IF NOT EXISTS presupuesto_id BIGINT")
+            db.execute("ALTER TABLE fichajes_ayudantes ADD COLUMN IF NOT EXISTS estado_revision TEXT NOT NULL DEFAULT 'Pendiente de revisar'")
+            db.execute("ALTER TABLE faenas ADD COLUMN IF NOT EXISTS estado_revision TEXT NOT NULL DEFAULT 'Validado'")
+            db.execute("ALTER TABLE presupuestos ADD COLUMN IF NOT EXISTS estado_revision TEXT NOT NULL DEFAULT 'Validado'")
+            db.execute("ALTER TABLE trabajos_propios ADD COLUMN IF NOT EXISTS estado_revision TEXT NOT NULL DEFAULT 'Validado'")
             db.execute("""
                 CREATE TABLE IF NOT EXISTS pagos_jornadas (
                     id BIGSERIAL PRIMARY KEY,
@@ -455,6 +465,16 @@ def inicializar_base_datos():
             db.execute("ALTER TABLE fichajes_ayudantes ADD COLUMN tipo_destino TEXT NOT NULL DEFAULT 'faena'")
         if "num_presupuesto" not in columnas:
             db.execute("ALTER TABLE fichajes_ayudantes ADD COLUMN num_presupuesto TEXT")
+        if "trabajo_propio_id" not in columnas:
+            db.execute("ALTER TABLE fichajes_ayudantes ADD COLUMN trabajo_propio_id INTEGER")
+        if "presupuesto_id" not in columnas:
+            db.execute("ALTER TABLE fichajes_ayudantes ADD COLUMN presupuesto_id INTEGER")
+        if "estado_revision" not in columnas:
+            db.execute("ALTER TABLE fichajes_ayudantes ADD COLUMN estado_revision TEXT NOT NULL DEFAULT 'Pendiente de revisar'")
+        for tabla in ("faenas", "presupuestos", "trabajos_propios"):
+            columnas_tabla = {fila[1] for fila in db.execute(f"PRAGMA table_info({tabla})")}
+            if "estado_revision" not in columnas_tabla:
+                db.execute(f"ALTER TABLE {tabla} ADD COLUMN estado_revision TEXT NOT NULL DEFAULT 'Validado'")
 
         tablas = {
             fila[0]
@@ -1486,7 +1506,7 @@ def listar_trabajos(usuario=Depends(administrador)):
          """
          SELECT id, fecha_inicio, fecha_fin, tipo, cliente, obra, ubicacion,
              poblacion, observaciones, num_presupuesto, importe,
-             estado_cobro, forma_pago, fecha_cobro, 'propio' AS origen,
+             estado_cobro, forma_pago, fecha_cobro, estado_revision, 'propio' AS origen,
              id AS origen_id
          FROM trabajos_propios
          UNION ALL
@@ -1494,7 +1514,7 @@ def listar_trabajos(usuario=Depends(administrador)):
              cliente, obra, ubicacion, poblacion, NULL AS observaciones,
              NULL AS num_presupuesto, precio AS importe,
              'No cobrado' AS estado_cobro, NULL AS forma_pago,
-             NULL AS fecha_cobro, 'faena' AS origen, id AS origen_id
+             NULL AS fecha_cobro, estado_revision, 'faena' AS origen, id AS origen_id
          FROM faenas
          UNION ALL
          SELECT id, fecha AS fecha_inicio, NULL AS fecha_fin,
@@ -1504,7 +1524,7 @@ def listar_trabajos(usuario=Depends(administrador)):
              presupuesto_final AS importe,
              CASE WHEN estado = 'Completado' THEN 'Cobrado'
                ELSE 'No cobrado' END AS estado_cobro,
-             NULL AS forma_pago, NULL AS fecha_cobro,
+             NULL AS forma_pago, NULL AS fecha_cobro, estado_revision,
              'presupuesto' AS origen, id AS origen_id
          FROM presupuestos
          ORDER BY fecha_inicio DESC, origen_id DESC
@@ -1773,22 +1793,95 @@ def crear_fichaje(fichaje: FichajeCreate, usuario=Depends(usuario_actual)):
     try:
         with conexion() as db:
             num_presupuesto = fichaje.num_presupuesto.strip() if fichaje.num_presupuesto else None
-            if fichaje.tipo_destino == "presupuesto" and num_presupuesto:
-                presupuesto = db.execute(
-                    "SELECT 1 FROM presupuestos WHERE num_presupuesto = ? LIMIT 1",
-                    (num_presupuesto,),
+            cliente = fichaje.cliente.strip()
+            obra = fichaje.obra.strip()
+            ubicacion = fichaje.ubicacion.strip()
+            poblacion = fichaje.poblacion.strip()
+            faena_id = None
+            trabajo_propio_id = None
+            presupuesto_id = None
+            estado_revision = "Pendiente de revisar"
+            if fichaje.tipo_destino == "faena":
+                existente = db.execute(
+                    """
+                    SELECT id FROM faenas
+                    WHERE lower(trim(cliente)) = lower(trim(?))
+                      AND lower(trim(coalesce(obra, ''))) = lower(trim(?))
+                      AND fecha = ?
+                      AND lower(trim(coalesce(ubicacion, ''))) = lower(trim(?))
+                    ORDER BY id LIMIT 1
+                    """,
+                    (cliente, obra, fichaje.fecha.isoformat(), ubicacion),
                 ).fetchone()
-                if not presupuesto:
-                    raise HTTPException(status_code=400, detail="El presupuesto seleccionado no existe")
-            parametros = (fichaje.ayudante_id, fichaje.fecha.isoformat(), fichaje.tipo_destino, fichaje.cliente.strip(), fichaje.obra.strip(), fichaje.ubicacion.strip(), fichaje.poblacion.strip(), num_presupuesto)
+                if existente:
+                    faena_id = existente["id"]
+                    db.execute(
+                        "UPDATE faenas SET estado_revision = 'Pendiente de revisar' WHERE id = ? AND estado_revision <> 'Validado'",
+                        (faena_id,),
+                    )
+                else:
+                    columnas = "cliente, obra, fecha, ubicacion, poblacion, precio, ayudantes, estado_revision"
+                    valores = (cliente, obra, fichaje.fecha.isoformat(), ubicacion, poblacion, 0, "Sí", estado_revision)
+                    if DATABASE_URL:
+                        faena_id = db.execute(
+                            f"INSERT INTO faenas ({columnas}) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+                            valores,
+                        ).fetchone()["id"]
+                    else:
+                        db.execute(f"INSERT INTO faenas ({columnas}) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", valores)
+                        faena_id = db.execute("SELECT id FROM faenas WHERE id = last_insert_rowid()").fetchone()["id"]
+            elif fichaje.tipo_destino == "presupuesto":
+                if num_presupuesto:
+                    existente = db.execute(
+                        "SELECT id FROM presupuestos WHERE num_presupuesto = ? LIMIT 1",
+                        (num_presupuesto,),
+                    ).fetchone()
+                    if existente:
+                        presupuesto_id = existente["id"]
+                        estado_revision = "Validado"
+                    else:
+                        raise HTTPException(status_code=400, detail="El presupuesto seleccionado no existe")
+                else:
+                    if DATABASE_URL:
+                        presupuesto_id = db.execute(
+                            "INSERT INTO presupuestos (cliente, num_presupuesto, fecha, bruto, iva, total_iva, presupuesto_iva, efectivo, estado, presupuesto_final, estado_revision) VALUES (?, NULL, ?, 0, 0, 0, 0, 0, 'Presupuesto', 0, ?) RETURNING id",
+                            (cliente, fichaje.fecha.isoformat(), estado_revision),
+                        ).fetchone()["id"]
+                    else:
+                        raise HTTPException(status_code=503, detail="La creación de presupuestos provisionales requiere la aplicación publicada")
+            else:
+                if DATABASE_URL:
+                    trabajo_propio_id = db.execute(
+                        """
+                        INSERT INTO trabajos_propios
+                            (tipo, fecha_inicio, fecha_fin, cliente, obra, ubicacion, poblacion,
+                             observaciones, num_presupuesto, importe, estado_cobro, forma_pago,
+                             fecha_cobro, estado_revision)
+                        VALUES ('reparacion', ?, NULL, ?, ?, ?, ?, '', NULL, 0, 'No cobrado', '', NULL, ?)
+                        RETURNING id
+                        """,
+                        (fichaje.fecha.isoformat(), cliente, obra, ubicacion, poblacion, estado_revision),
+                    ).fetchone()["id"]
+                else:
+                    db.execute(
+                        """
+                        INSERT INTO trabajos_propios
+                            (tipo, fecha_inicio, cliente, obra, ubicacion, poblacion,
+                             observaciones, importe, estado_cobro, forma_pago, estado_revision)
+                        VALUES ('reparacion', ?, ?, ?, ?, ?, '', 0, 'No cobrado', '', ?)
+                        """,
+                        (fichaje.fecha.isoformat(), cliente, obra, ubicacion, poblacion, estado_revision),
+                    )
+                    trabajo_propio_id = db.execute("SELECT id FROM trabajos_propios WHERE id = last_insert_rowid()").fetchone()["id"]
+            parametros = (fichaje.ayudante_id, fichaje.fecha.isoformat(), fichaje.tipo_destino, cliente, obra, ubicacion, poblacion, num_presupuesto, faena_id, presupuesto_id, trabajo_propio_id, estado_revision)
             if DATABASE_URL:
                 fila = db.execute(
-                    "INSERT INTO fichajes_ayudantes (ayudante_id, fecha, tipo_destino, cliente, obra, ubicacion, poblacion, num_presupuesto, confirmado_ayudante, sincronizado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1) RETURNING *",
+                    "INSERT INTO fichajes_ayudantes (ayudante_id, fecha, tipo_destino, cliente, obra, ubicacion, poblacion, num_presupuesto, faena_id_vinculada, presupuesto_id, trabajo_propio_id, estado_revision, confirmado_ayudante, sincronizado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1) RETURNING *",
                     parametros,
                 ).fetchone()
             else:
                 db.execute(
-                    "INSERT INTO fichajes_ayudantes (ayudante_id, fecha, tipo_destino, cliente, obra, ubicacion, poblacion, num_presupuesto, confirmado_ayudante, sincronizado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1)",
+                    "INSERT INTO fichajes_ayudantes (ayudante_id, fecha, tipo_destino, cliente, obra, ubicacion, poblacion, num_presupuesto, faena_id_vinculada, presupuesto_id, trabajo_propio_id, estado_revision, confirmado_ayudante, sincronizado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1)",
                     parametros,
                 )
                 fila = db.execute("SELECT * FROM fichajes_ayudantes WHERE id = last_insert_rowid()").fetchone()
@@ -1867,6 +1960,38 @@ def vincular_fichaje(
         fila = db.execute(
             "SELECT * FROM fichajes_ayudantes WHERE id = ?", (fichaje_id,)
         ).fetchone()
+    return dict(fila)
+
+
+@app.patch("/fichajes/{fichaje_id}/validacion")
+def validar_fichaje(
+    fichaje_id: int,
+    cambios: ValidacionTrabajo,
+    usuario=Depends(administrador),
+):
+    with conexion() as db:
+        fichaje = db.execute(
+            "SELECT tipo_destino, faena_id_vinculada, presupuesto_id, trabajo_propio_id FROM fichajes_ayudantes WHERE id = ?",
+            (fichaje_id,),
+        ).fetchone()
+        if not fichaje:
+            raise HTTPException(status_code=404, detail="Fichaje no encontrado")
+        destino = {
+            "faena": ("faenas", fichaje["faena_id_vinculada"]),
+            "presupuesto": ("presupuestos", fichaje["presupuesto_id"]),
+            "reparacion": ("trabajos_propios", fichaje["trabajo_propio_id"]),
+        }[fichaje["tipo_destino"]]
+        if not destino[1]:
+            raise HTTPException(status_code=409, detail="El fichaje todavía no tiene un registro provisional")
+        db.execute(
+            f"UPDATE {destino[0]} SET estado_revision = ? WHERE id = ?",
+            (cambios.estado, destino[1]),
+        )
+        db.execute(
+            "UPDATE fichajes_ayudantes SET estado_revision = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?",
+            (cambios.estado, fichaje_id),
+        )
+        fila = db.execute("SELECT * FROM fichajes_ayudantes WHERE id = ?", (fichaje_id,)).fetchone()
     return dict(fila)
 
 

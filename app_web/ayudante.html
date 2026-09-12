@@ -47,7 +47,7 @@
       <form id="formulario">
         <div><label for="fecha">Día</label><input id="fecha" type="date" required></div>
         <div><label for="tipo-destino">¿Qué trabajo se ha realizado?</label><select id="tipo-destino" required><option value="faena">Faena a 3º</option><option value="presupuesto">Presupuesto Alucarpin</option><option value="reparacion">Reparación</option></select></div>
-        <div id="presupuesto-bloque" hidden><label for="presupuesto">Presupuesto existente</label><select id="presupuesto"><option value="">Pendiente de vincular</option></select></div>
+        <div id="presupuesto-bloque" hidden><label for="presupuesto">Presupuesto existente (opcional)</label><select id="presupuesto"><option value="">Crear presupuesto provisional</option></select></div>
         <div><label for="cliente">Cliente</label><input id="cliente" required maxlength="160"></div>
         <div><label for="obra">Obra</label><input id="obra" required maxlength="160"></div>
         <div><label for="ubicacion">Ubicación</label><input id="ubicacion" maxlength="200"></div>
@@ -96,7 +96,7 @@
       const respuesta = await apiFetch('/presupuestos');
       if (!respuesta.ok) return;
       const lista = await respuesta.json();
-      presupuesto.innerHTML = '<option value="">Pendiente de vincular</option>';
+      presupuesto.innerHTML = '<option value="">Crear presupuesto provisional</option>';
       lista.forEach(item => {
         const opcion = document.createElement('option');
         opcion.value = item.num_presupuesto;
@@ -155,7 +155,10 @@
       const id = formulario.dataset.id;
       const respuesta = await apiFetch(id ? `${api}/fichajes/${id}` : `${api}/fichajes`, { method: id ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) });
       if (!respuesta.ok) { const detalle = await respuesta.json(); mensaje.textContent = detalle.detail || 'No se pudo guardar.'; mensaje.className = 'mensaje error'; return; }
-      mensaje.textContent = 'Día guardado y enviado correctamente.';
+      const resultado = await respuesta.json();
+      mensaje.textContent = resultado.estado_revision === 'Pendiente de revisar'
+        ? 'Trabajo creado y pendiente de revisión.'
+        : 'Día guardado y vinculado correctamente.';
       mensaje.className = 'mensaje ok';
       delete formulario.dataset.id;
       formulario.reset();
