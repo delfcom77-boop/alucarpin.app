@@ -809,8 +809,8 @@
         const importe = Number(jornada.pago.importe ?? 50);
         const importePagado = Number(jornada.pago.importe_pagado ?? 0);
         const estadoCalculado = importePagado >= importe && importe > 0 ? 'Pagado' : importePagado > 0 ? 'Parcial' : 'No pagado';
-        fila.className = vinculada ? '' : 'pendiente';
-        fila.innerHTML = `<td>${jornada.fecha}</td><td>${jornada.obra || ''}${vinculada ? '' : ' <strong>(sin faena vinculada)</strong>'}</td><td><input data-campo="importe" type="number" min="0" step="0.01" value="${importe}" ${vinculada ? '' : 'disabled'}></td><td><input data-campo="importe_pagado" type="number" min="0" step="0.01" value="${importePagado}" ${vinculada ? '' : 'disabled'}></td><td><select data-campo="forma" ${vinculada ? '' : 'disabled'}><option ${jornada.pago.forma_pago === 'Efectivo' ? 'selected' : ''}>Efectivo</option><option ${jornada.pago.forma_pago === 'Transferencia' ? 'selected' : ''}>Transferencia</option></select></td><td>${vinculada ? `<select data-campo="estado"><option ${estadoCalculado === 'No pagado' ? 'selected' : ''}>No pagado</option><option ${estadoCalculado === 'Parcial' ? 'selected' : ''}>Parcial</option><option ${estadoCalculado === 'Pagado' ? 'selected' : ''}>Pagado</option></select>` : 'Vincular faena primero'}</td>`;
+        fila.className = estadoCalculado === 'Pagado' ? 'pagado' : estadoCalculado === 'Parcial' ? 'parcial' : 'pendiente';
+        fila.innerHTML = `<td>${jornada.fecha}</td><td>${jornada.obra || ''}${vinculada ? '' : ' <strong>(sin asignar)</strong>'}</td><td><input data-campo="importe" type="number" min="0" step="0.01" value="${importe}"></td><td><input data-campo="importe_pagado" type="number" min="0" step="0.01" value="${importePagado}"></td><td><select data-campo="forma"><option ${jornada.pago.forma_pago === 'Efectivo' ? 'selected' : ''}>Efectivo</option><option ${jornada.pago.forma_pago === 'Transferencia' ? 'selected' : ''}>Transferencia</option></select></td><td><select data-campo="estado"><option ${estadoCalculado === 'No pagado' ? 'selected' : ''}>No pagado</option><option ${estadoCalculado === 'Parcial' ? 'selected' : ''}>Parcial</option><option ${estadoCalculado === 'Pagado' ? 'selected' : ''}>Pagado</option></select></td>`;
         fila.querySelector('[data-campo="importe"]').oninput = event => jornada.pago.importe = Number(event.target.value);
         fila.querySelector('[data-campo="importe_pagado"]').oninput = event => { jornada.pago.importe_pagado = Number(event.target.value); jornada.pago.estado_pago = jornada.pago.importe_pagado >= jornada.pago.importe && jornada.pago.importe > 0 ? 'Pagado' : jornada.pago.importe_pagado > 0 ? 'Parcial' : 'No pagado'; fila.querySelector('[data-campo="estado"]').value = jornada.pago.estado_pago; };
         fila.querySelector('[data-campo="forma"]').onchange = event => jornada.pago.forma_pago = event.target.value;
@@ -823,10 +823,6 @@
       if (!jornadasPago.length) { mensajePago.textContent = 'No hay jornadas para guardar.'; return; }
       const errores = [];
       for (const jornada of jornadasPago) {
-        if (!jornada.faena_id_vinculada) {
-          errores.push(`${mostrarFecha(jornada.fecha)} - ${jornada.obra || 'Sin obra'}: vincular faena primero`);
-          continue;
-        }
         const respuesta = await apiFetch(`${api}/fichajes/${jornada.id}/pago`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(jornada.pago) });
         if (!respuesta.ok) {
           let detalle = `HTTP ${respuesta.status}`;

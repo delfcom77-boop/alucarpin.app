@@ -263,6 +263,19 @@ def inicializar_base_datos():
             """)
             db.execute("ALTER TABLE fichajes_ayudantes ADD COLUMN IF NOT EXISTS num_presupuesto TEXT")
             db.execute("""
+                CREATE TABLE IF NOT EXISTS pagos_jornadas (
+                    id BIGSERIAL PRIMARY KEY,
+                    fichaje_id INTEGER NOT NULL UNIQUE REFERENCES fichajes_ayudantes(id) ON DELETE CASCADE,
+                    importe DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    importe_pagado DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    forma_pago TEXT NOT NULL DEFAULT 'Efectivo',
+                    estado_pago TEXT NOT NULL DEFAULT 'No pagado',
+                    fecha_pago DATE,
+                    creado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    actualizado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            db.execute("""
                 CREATE TABLE IF NOT EXISTS trabajos_propios (
                     id BIGSERIAL PRIMARY KEY,
                     tipo TEXT NOT NULL,
@@ -357,6 +370,18 @@ def inicializar_base_datos():
                 creado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 actualizado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (ayudante_id) REFERENCES ayudantes(id)
+            );
+            CREATE TABLE IF NOT EXISTS pagos_jornadas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fichaje_id INTEGER NOT NULL UNIQUE,
+                importe REAL NOT NULL DEFAULT 0,
+                importe_pagado REAL NOT NULL DEFAULT 0,
+                forma_pago TEXT NOT NULL DEFAULT 'Efectivo',
+                estado_pago TEXT NOT NULL DEFAULT 'No pagado',
+                fecha_pago TEXT,
+                creado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                actualizado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (fichaje_id) REFERENCES fichajes_ayudantes(id) ON DELETE CASCADE
             );
             CREATE TABLE IF NOT EXISTS trabajos_propios (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1708,12 +1733,24 @@ def listar_fichajes(
             parametros,
         ).fetchall()
         registros = [dict(fila) for fila in filas]
+        pagos_jornadas = db.execute(
+            "SELECT fichaje_id, importe, importe_pagado FROM pagos_jornadas WHERE fichaje_id IN (SELECT id FROM fichajes_ayudantes WHERE ayudante_id = ?)",
+            (ayudante_id,),
+        ).fetchall()
+        pagos_por_fichaje = {pago["fichaje_id"]: pago for pago in pagos_jornadas}
         pagos = db.execute(
             "SELECT ayudante_id, desde, hasta, precio_dia, importe_pagado FROM liquidaciones WHERE ayudante_id = ?",
             (ayudante_id,),
         ).fetchall()
         for registro in registros:
             registro["pagado"] = False
+            pago_jornada = pagos_por_fichaje.get(registro["id"])
+            if pago_jornada:
+                registro["pagado"] = (
+                    pago_jornada["importe"] > 0
+                    and pago_jornada["importe_pagado"] >= pago_jornada["importe"]
+                )
+                continue
             for pago in pagos:
                 desde_pago = pago["desde"]
                 hasta_pago = pago["hasta"]
@@ -1836,6 +1873,12 @@ def vincular_fichaje(
 @app.get("/fichajes/{fichaje_id}/pago")
 def consultar_pago_jornada(fichaje_id: int, usuario=Depends(administrador)):
     with conexion() as db:
+        pago_jornada = db.execute(
+            "SELECT importe, importe_pagado, forma_pago, estado_pago, fecha_pago FROM pagos_jornadas WHERE fichaje_id = ?",
+            (fichaje_id,),
+        ).fetchone()
+        if pago_jornada:
+            return {"fichaje_id": fichaje_id, **dict(pago_jornada), "creado": True, "origen": "jornada"}
         fichaje = db.execute(
             "SELECT f.id, f.ayudante_id, f.fecha, f.obra, f.faena_id_vinculada, "
             "a.nombre FROM fichajes_ayudantes f JOIN ayudantes a "
@@ -1871,44 +1914,29 @@ def actualizar_pago_jornada(fichaje_id: int, cambios: PagoJornadaUpdate, usuario
             else "Parcial" if cambios.importe_pagado > 0 else "No pagado"
         )
         fichaje = db.execute(
-            "SELECT f.ayudante_id, f.fecha, f.obra, f.faena_id_vinculada, a.nombre "
-            "FROM fichajes_ayudantes f JOIN ayudantes a ON a.id = f.ayudante_id "
-            "WHERE f.id = ?",
+            "SELECT id FROM fichajes_ayudantes WHERE id = ?",
             (fichaje_id,),
         ).fetchone()
-        if not fichaje or not fichaje["faena_id_vinculada"]:
-            raise HTTPException(status_code=400, detail="El fichaje debe estar vinculado a una faena")
-        parametros = (fichaje["faena_id_vinculada"], fichaje["nombre"], fichaje["fecha"])
-        for tabla in ("gastos_faenas_extras", "gasto_faenas"):
-            try:
-                existente = db.execute(
-                    f"SELECT id FROM {tabla} WHERE faena_id = ? AND proveedor = ? "
-                    "AND fecha = ? AND categoria = 'Ayudantes' ORDER BY id DESC LIMIT 1",
-                    parametros,
-                ).fetchone()
-                if existente:
-                    db.execute(
-                        f"UPDATE {tabla} SET importe = ?, bruto = ?, forma_pago = ?, "
-                        "estado_pago = ?, pagado = ?, importe_pagado = ? WHERE id = ?",
-                        (cambios.importe, cambios.importe, cambios.forma_pago,
-                         estado_calculado, cambios.importe_pagado, cambios.importe_pagado, existente["id"]),
-                    )
-                else:
-                    db.execute(
-                        f"INSERT INTO {tabla} "
-                        "(faena_id, concepto, proveedor, bruto, tipo_iva, iva, importe, "
-                        "pagado, importe_pagado, forma_pago, fecha, estado_pago, categoria) "
-                        "VALUES (?, ?, ?, ?, '0', 0, ?, ?, ?, ?, ?, ?, 'Ayudantes')",
-                        (fichaje["faena_id_vinculada"], f"Día trabajado - {fichaje['obra']}",
-                         fichaje["nombre"], cambios.importe, cambios.importe,
-                         cambios.importe_pagado, cambios.importe_pagado,
-                         cambios.forma_pago, fichaje["fecha"], estado_calculado),
-                    )
-                return {"fichaje_id": fichaje_id, "importe": cambios.importe, "importe_pagado": cambios.importe_pagado, "forma_pago": cambios.forma_pago, "estado_pago": estado_calculado}
-            except Exception:
-                if DATABASE_URL:
-                    db.db.rollback()
-        raise HTTPException(status_code=500, detail="No existe una tabla de gastos compatible")
+        if not fichaje:
+            raise HTTPException(status_code=404, detail="Fichaje no encontrado")
+        fecha_pago = date.today().isoformat() if cambios.importe_pagado > 0 else None
+        db.execute(
+            """
+            INSERT INTO pagos_jornadas
+                (fichaje_id, importe, importe_pagado, forma_pago, estado_pago, fecha_pago)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT (fichaje_id) DO UPDATE SET
+                importe = excluded.importe,
+                importe_pagado = excluded.importe_pagado,
+                forma_pago = excluded.forma_pago,
+                estado_pago = excluded.estado_pago,
+                fecha_pago = excluded.fecha_pago,
+                actualizado_en = CURRENT_TIMESTAMP
+            """,
+            (fichaje_id, cambios.importe, cambios.importe_pagado,
+             cambios.forma_pago, estado_calculado, fecha_pago),
+        )
+        return {"fichaje_id": fichaje_id, "importe": cambios.importe, "importe_pagado": cambios.importe_pagado, "forma_pago": cambios.forma_pago, "estado_pago": estado_calculado, "origen": "jornada"}
 
 
 @app.get("/liquidaciones")
