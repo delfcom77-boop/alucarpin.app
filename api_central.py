@@ -97,7 +97,7 @@ class ValidacionTrabajo(BaseModel):
 class CitaCreate(BaseModel):
     fecha: date
     hora: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
-    tipo: Literal["visita", "faena", "reparacion", "reunion", "llamada", "presupuesto", "otro"] = "visita"
+    tipo: Literal["visita", "faena", "presupuesto", "reparacion", "tomar_medidas", "reunion", "llamada", "otro"] = "visita"
     cliente: str = ""
     ubicacion: str = ""
     poblacion: str = ""

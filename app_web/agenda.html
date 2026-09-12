@@ -50,7 +50,7 @@
     <section data-seccion-contenido="citas">
       <form id="formulario">
         <div class="fila"><label>Fecha de la cita <input id="fecha" type="date" required></label><label>Hora de la cita / visita <input id="hora" type="time" required></label></div>
-        <div><label>Tipo <select id="tipo"><option value="visita">Visita para valorar</option><option value="faena">Faena</option><option value="reparacion">Reparación</option><option value="reunion">Reunión</option><option value="llamada">Llamada</option><option value="presupuesto">Presupuesto</option><option value="otro">Otro</option></select></label></div>
+        <div><label>Tipo <select id="tipo"><option value="visita">Visita para valorar</option><option value="faena">Faena</option><option value="presupuesto">Presupuesto</option><option value="reparacion">Reparación</option><option value="tomar_medidas">Tomar medidas</option><option value="reunion">Reunión</option><option value="llamada">Llamada</option><option value="otro">Otro</option></select></label></div>
         <div class="fila"><label>Cliente <input id="cliente"></label><label>Teléfono <input id="telefono" type="tel"></label></div>
         <div class="fila"><label>Dirección <input id="ubicacion"></label><label>Población <input id="poblacion"></label></div>
         <label>Qué tengo que hacer <input id="observaciones" placeholder="Valorar reparación, reunión, revisar medidas..."></label>
@@ -89,7 +89,7 @@
       document.querySelectorAll('[data-seccion-agenda]').forEach(elemento => elemento.classList.toggle('seleccionado', elemento === boton));
       document.querySelector('#titulo-seccion').textContent = seccion === 'notas' ? 'NUEVA NOTA' : 'NUEVA CITA';
     });
-    const tipos = { visita: 'Visita', reparacion: 'Reparación', reunion: 'Reunión', llamada: 'Llamada', presupuesto: 'Presupuesto', otro: 'Otro' };
+    const tipos = { visita: 'Visita para valorar', faena: 'Faena', presupuesto: 'Presupuesto', reparacion: 'Reparación', tomar_medidas: 'Tomar medidas', reunion: 'Reunión', llamada: 'Llamada', otro: 'Otro' };
     const fechaTexto = valor => String(valor || '').split('-').reverse().join('/');
     const valor = id => document.querySelector(`#${id}`).value;
     const sincronizarCalendario = async () => { const respuesta = await apiFetch('/calendario.ics'); if (!respuesta.ok) throw new Error('No se pudo sincronizar el calendario.'); const enlace = document.createElement('a'); enlace.href = URL.createObjectURL(await respuesta.blob()); enlace.download = 'alucarpin-calendario-completo.ics'; enlace.click(); URL.revokeObjectURL(enlace.href); };

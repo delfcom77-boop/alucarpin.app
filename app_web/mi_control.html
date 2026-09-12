@@ -72,7 +72,7 @@
     let trabajoEnEdicion = null;
     const fecha = value => String(value || '').split('-').reverse().join('/');
     const tipos = { faena: 'Faena', presupuesto: 'Presupuesto', reparacion: 'Reparación' };
-    const tiposCita = { faena: 'Faena', presupuesto: 'Presupuesto', reparacion: 'Reparación', visita: 'Visita', reunion: 'Reunión', llamada: 'Llamada', otro: 'Otro' };
+    const tiposCita = { faena: 'Faena', presupuesto: 'Presupuesto', reparacion: 'Reparación', tomar_medidas: 'Tomar medidas', visita: 'Visita para valorar', reunion: 'Reunión', llamada: 'Llamada', otro: 'Otro' };
     tipo.onchange = () => { presupuesto.parentElement.hidden = tipo.value !== 'presupuesto'; presupuesto.required = tipo.value === 'presupuesto'; };
     async function cargarPresupuestos() {
       const respuesta = await apiFetch('/presupuestos');
