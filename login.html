@@ -50,16 +50,26 @@
     formulario.addEventListener('submit', async event => {
       event.preventDefault();
       mensaje.textContent = 'Comprobando...';
-      const respuesta = await fetch('/login', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ usuario: usuario.value, password: password.value }) });
-      const resultado = await respuesta.json();
-      if (!respuesta.ok) { mensaje.textContent = resultado.detail || 'No se pudo iniciar sesión.'; return; }
-      if (recordar.checked) {
-        localStorage.setItem('alucarpin_credenciales', JSON.stringify({ usuario: usuario.value, password: password.value }));
-      } else {
-        localStorage.removeItem('alucarpin_credenciales');
+      const controlador = new AbortController();
+      const temporizador = setTimeout(() => controlador.abort(), 30000);
+      try {
+        const respuesta = await fetch('/login', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ usuario: usuario.value, password: password.value }), signal: controlador.signal });
+        const resultado = await respuesta.json();
+        if (!respuesta.ok) { mensaje.textContent = resultado.detail || 'No se pudo iniciar sesión.'; return; }
+        if (recordar.checked) {
+          localStorage.setItem('alucarpin_credenciales', JSON.stringify({ usuario: usuario.value, password: password.value }));
+        } else {
+          localStorage.removeItem('alucarpin_credenciales');
+        }
+        localStorage.setItem('alucarpin_token', resultado.token);
+        location.href = resultado.rol === 'administrador' ? '/app/inicio.html' : `/app/ayudante.html?ayudante_id=${resultado.ayudante_id}`;
+      } catch (error) {
+        mensaje.textContent = error.name === 'AbortError'
+          ? 'El servidor tarda demasiado en responder. Inténtalo de nuevo.'
+          : 'No se pudo conectar con el servidor.';
+      } finally {
+        clearTimeout(temporizador);
       }
-      localStorage.setItem('alucarpin_token', resultado.token);
-      location.href = resultado.rol === 'administrador' ? '/app/administrador.html' : `/app/ayudante.html?ayudante_id=${resultado.ayudante_id}`;
     });
   </script>
 </body>
