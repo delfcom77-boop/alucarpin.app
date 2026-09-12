@@ -52,7 +52,7 @@
     <section>
       <h2>Citas pendientes</h2>
       <label>Mostrar tipo <select id="filtro-tipo-citas"><option value="">Todas</option><option value="faena">Faenas</option><option value="presupuesto">Presupuestos</option><option value="reparacion">Reparaciones</option></select></label>
-      <div class="lista"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Tipo</th><th>Cliente</th><th>Dirección</th><th>Descripción</th><th>Estado</th></tr></thead><tbody id="lista-citas"><tr><td colspan="7">Cargando...</td></tr></tbody></table></div>
+      <div class="lista"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Tipo</th><th>Cliente</th><th>Dirección</th><th>Descripción</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista-citas"><tr><td colspan="8">Cargando...</td></tr></tbody></table></div>
     </section>
     <section><h2>Mis trabajos</h2><label>Mostrar tipo <select id="filtro-tipo-trabajos"><option value="">Todos</option><option value="faena">Faenas</option><option value="presupuesto">Presupuestos</option><option value="reparacion">Reparaciones</option></select></label><div class="lista"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Origen</th><th>Cliente</th><th>Obra</th><th>Presupuesto</th><th>Importe</th><th>Cobro</th><th>Acciones</th></tr></thead><tbody id="lista"><tr><td colspan="9">Cargando...</td></tr></tbody></table></div></section>
     <dialog id="dialogo-edicion"><form method="dialog" id="formulario-edicion-trabajo"><h2>Editar registro</h2><label>Cliente <input id="editar-cliente" required></label><label>Obra <input id="editar-obra"></label><label>Fecha <input id="editar-fecha" type="date"></label><label>Importe (€) <input id="editar-importe" type="number" min="0" step="0.01"></label><label>Estado <select id="editar-estado"><option value="No cobrado">No cobrado</option><option value="Cobrado">Cobrado</option><option value="Presupuesto">Presupuesto</option><option value="Aceptado">Aceptado</option><option value="Rechazado">Rechazado</option><option value="Completado">Completado</option></select></label><div class="acciones"><button value="cancelar" type="button" id="cancelar-edicion-trabajo">Cancelar</button><button value="guardar" type="submit">Guardar cambios</button></div><div id="mensaje-edicion-trabajo" class="mensaje"></div></form></dialog>
@@ -106,10 +106,18 @@
       listaCitas.textContent = '';
       const tipoSeleccionado = filtroTipoCitas.value;
       const visibles = citas.filter(cita => !tipoSeleccionado || cita.tipo === tipoSeleccionado);
-      if (!visibles.length) { listaCitas.innerHTML = '<tr><td colspan="7">No hay citas para este filtro.</td></tr>'; return; }
+      if (!visibles.length) { listaCitas.innerHTML = '<tr><td colspan="8">No hay citas para este filtro.</td></tr>'; return; }
       visibles.forEach(cita => {
         const fila = document.createElement('tr');
-        fila.innerHTML = `<td>${fecha(cita.fecha)}</td><td>${cita.hora || ''}</td><td>${tiposCita[cita.tipo] || cita.tipo}</td><td>${cita.cliente || ''}</td><td>${[cita.ubicacion, cita.poblacion].filter(Boolean).join(' | ')}</td><td>${cita.observaciones || ''}</td><td>${cita.estado || 'Pendiente'}</td>`;
+        fila.innerHTML = `<td>${fecha(cita.fecha)}</td><td>${cita.hora || ''}</td><td>${tiposCita[cita.tipo] || cita.tipo}</td><td>${cita.cliente || ''}</td><td>${[cita.ubicacion, cita.poblacion].filter(Boolean).join(' | ')}</td><td>${cita.observaciones || ''}</td><td>${cita.estado || 'Pendiente'}</td><td><button type="button" class="convertir-cita" ${cita.estado === 'Realizada' ? 'disabled' : ''}>${cita.estado === 'Realizada' ? 'Realizada' : 'Convertir'}</button></td>`;
+        fila.querySelector('.convertir-cita').onclick = async () => {
+          const convertir = await apiFetch(`/citas/${cita.id}/convertir`, { method: 'POST' });
+          if (!convertir.ok) { mensaje.textContent = 'No se pudo convertir la cita.'; mensaje.className = 'mensaje error'; return; }
+          mensaje.textContent = 'Cita convertida en trabajo pendiente de revisar.';
+          mensaje.className = 'mensaje exito';
+          await cargarCitas();
+          await cargarTrabajos();
+        };
         listaCitas.appendChild(fila);
       });
     }

@@ -1147,6 +1147,42 @@ def borrar_cita(cita_id: int, usuario=Depends(administrador)):
     return {"eliminada": True}
 
 
+@app.post("/citas/{cita_id}/convertir", status_code=201)
+def convertir_cita(cita_id: int, usuario=Depends(administrador)):
+    with conexion() as db:
+        cita = db.execute("SELECT * FROM citas_agenda WHERE id = ?", (cita_id,)).fetchone()
+        if not cita:
+            raise HTTPException(status_code=404, detail="Cita no encontrada")
+        tipo = cita["tipo"]
+        if tipo not in {"faena", "presupuesto", "reparacion"}:
+            raise HTTPException(status_code=400, detail="El tipo de cita no se puede convertir en trabajo")
+        cliente = cita["cliente"] or "Sin cliente"
+        obra = cita["observaciones"] or tipo.title()
+        if tipo == "faena":
+            fila = db.execute(
+                "INSERT INTO faenas (cliente, obra, fecha, ubicacion, poblacion, precio, ayudantes, estado_revision) "
+                "VALUES (?, ?, ?, ?, ?, 0, 'No', 'Pendiente de revisar') RETURNING *",
+                (cliente, obra, cita["fecha"], cita["ubicacion"] or "", cita["poblacion"] or ""),
+            ).fetchone()
+            origen = "faena"
+        elif tipo == "presupuesto":
+            fila = db.execute(
+                "INSERT INTO presupuestos (cliente, num_presupuesto, fecha, bruto, iva, total_iva, presupuesto_iva, efectivo, estado, presupuesto_final, estado_revision) "
+                "VALUES (?, NULL, ?, 0, 0, 0, 0, 0, 'Presupuesto', 0, 'Pendiente de revisar') RETURNING *",
+                (cliente, cita["fecha"]),
+            ).fetchone()
+            origen = "presupuesto"
+        else:
+            fila = db.execute(
+                "INSERT INTO trabajos_propios (tipo, fecha_inicio, cliente, obra, ubicacion, poblacion, observaciones, importe, estado_cobro, estado_revision) "
+                "VALUES ('reparacion', ?, ?, ?, ?, ?, ?, 0, 'No cobrado', 'Pendiente de revisar') RETURNING *",
+                (cita["fecha"], cliente, obra, cita["ubicacion"] or "", cita["poblacion"] or "", cita["observaciones"] or ""),
+            ).fetchone()
+            origen = "propio"
+        db.execute("UPDATE citas_agenda SET estado = 'Realizada', actualizado_en = CURRENT_TIMESTAMP WHERE id = ?", (cita_id,))
+    return {"origen": origen, "origen_id": fila["id"], "trabajo": dict(fila)}
+
+
 @app.get("/citas/{cita_id}/calendario")
 def calendario_cita(cita_id: int, usuario=Depends(administrador)):
     with conexion() as db:
