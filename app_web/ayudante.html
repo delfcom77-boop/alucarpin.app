@@ -52,7 +52,7 @@
         <div><label for="obra">Obra</label><input id="obra" required maxlength="160"></div>
         <div><label for="ubicacion">Ubicación</label><input id="ubicacion" maxlength="200"></div>
         <div><label for="poblacion">Población</label><input id="poblacion" maxlength="100"></div>
-        <button type="submit">OK - Guardar día trabajado</button>
+        <button type="submit">Guardar faena y añadir otra</button>
         <div id="mensaje" class="mensaje" role="status"></div>
       </form>
     </section>
@@ -158,17 +158,20 @@
       mensaje.textContent = 'Guardando...';
       mensaje.className = 'mensaje';
       const datos = { ayudante_id: Number(ayudanteId), fecha: fecha.value, tipo_destino: tipoDestino.value, cliente: document.querySelector('#cliente').value, obra: document.querySelector('#obra').value, ubicacion: document.querySelector('#ubicacion').value, poblacion: document.querySelector('#poblacion').value, num_presupuesto: tipoDestino.value === 'presupuesto' ? (presupuesto.value || null) : null };
+      const fechaGuardada = fecha.value;
       const id = formulario.dataset.id;
       const respuesta = await apiFetch(id ? `${api}/fichajes/${id}` : `${api}/fichajes`, { method: id ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) });
       if (!respuesta.ok) { const detalle = await respuesta.json(); mensaje.textContent = detalle.detail || 'No se pudo guardar.'; mensaje.className = 'mensaje error'; return; }
       const resultado = await respuesta.json();
       mensaje.textContent = resultado.estado_revision === 'Pendiente de revisar'
-        ? 'Trabajo creado y pendiente de revisión.'
+        ? 'Faena guardada. Puedes añadir otra del mismo día.'
         : 'Día guardado y vinculado correctamente.';
       mensaje.className = 'mensaje ok';
       delete formulario.dataset.id;
       formulario.reset();
-      fecha.valueAsDate = new Date();
+      fecha.value = fechaGuardada;
+      tipoDestino.value = 'faena';
+      tipoDestino.dispatchEvent(new Event('change'));
       await cargar();
     });
 
