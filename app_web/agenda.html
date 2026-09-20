@@ -112,7 +112,8 @@
       const respuesta = await apiFetch('/seguimientos'); if (!respuesta.ok) throw new Error('No se pudieron cargar las llamadas pendientes.');
       const seguimientos = await respuesta.json(); const cuerpo = document.querySelector('#lista-seguimientos'); cuerpo.textContent = '';
       if (!seguimientos.length) { cuerpo.innerHTML = '<tr><td colspan="6">No hay llamadas pendientes.</td></tr>'; return; }
-      seguimientos.forEach(seguimiento => { const fila = document.createElement('tr'); fila.innerHTML = `<td>Llamada: ${fechaTexto(seguimiento.fecha_llamada)}<br>Recordatorio diario: ${seguimiento.hora}</td><td>${seguimiento.cliente || '-'}</td><td>${seguimiento.ubicacion || '-'}${seguimiento.poblacion ? `, ${seguimiento.poblacion}` : ''}</td><td>${seguimiento.motivo}</td><td>${seguimiento.estado}</td><td class="acciones"><button type="button" class="editar-nota">Modificar</button><button type="button" class="crear-cita-seguimiento">Crear cita</button><button type="button" class="cal-seguimiento">Alarma</button><button type="button" class="realizado-seguimiento">Marcar realizada</button><button type="button" class="borrar-seguimiento borrar">Borrar</button></td>`; fila.querySelector('.editar-nota').onclick = () => editarNota(seguimiento); fila.querySelector('.crear-cita-seguimiento').onclick = () => prepararCitaDesdeSeguimiento(seguimiento); fila.querySelector('.cal-seguimiento').onclick = () => calendarioSeguimiento(seguimiento.id).catch(error => mostrarErrorSeguimiento(error.message)); fila.querySelector('.realizado-seguimiento').onclick = async () => { await apiFetch(`/seguimientos/${seguimiento.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...seguimiento, fecha_recordatorio: seguimiento.fecha_recordatorio, fecha_llamada: seguimiento.fecha_llamada }) }); await cargarSeguimientos(); }; fila.querySelector('.borrar-seguimiento').onclick = async () => { if (!confirm('¿Borrar este recordatorio?')) return; await apiFetch(`/seguimientos/${seguimiento.id}`, { method: 'DELETE' }); await cargarSeguimientos(); }; cuerpo.appendChild(fila); });
+      const seguimientosActivos = seguimientos.filter(seguimiento => seguimiento.estado !== 'Archivado');
+      seguimientosActivos.forEach(seguimiento => { const fila = document.createElement('tr'); fila.innerHTML = `<td>Llamada: ${fechaTexto(seguimiento.fecha_llamada)}<br>Recordatorio diario: ${seguimiento.hora}</td><td>${seguimiento.cliente || '-'}</td><td>${seguimiento.ubicacion || '-'}${seguimiento.poblacion ? `, ${seguimiento.poblacion}` : ''}</td><td>${seguimiento.motivo}</td><td>${seguimiento.estado}</td><td class="acciones"><button type="button" class="editar-nota">Modificar</button><button type="button" class="crear-cita-seguimiento">Crear cita</button><button type="button" class="cal-seguimiento">Alarma</button><button type="button" class="realizado-seguimiento">Marcar realizada</button><button type="button" class="borrar-seguimiento borrar">Archivar</button></td>`; fila.querySelector('.editar-nota').onclick = () => editarNota(seguimiento); fila.querySelector('.crear-cita-seguimiento').onclick = () => prepararCitaDesdeSeguimiento(seguimiento); fila.querySelector('.cal-seguimiento').onclick = () => calendarioSeguimiento(seguimiento.id).catch(error => mostrarErrorSeguimiento(error.message)); fila.querySelector('.realizado-seguimiento').onclick = async () => { await apiFetch(`/seguimientos/${seguimiento.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...seguimiento, estado: 'Realizado', fecha_recordatorio: seguimiento.fecha_recordatorio, fecha_llamada: seguimiento.fecha_llamada }) }); await cargarSeguimientos(); }; fila.querySelector('.borrar-seguimiento').onclick = async () => { if (!confirm('¿Archivar este recordatorio?')) return; const nota = await apiFetch(`/seguimientos/${seguimiento.id}`); if (nota.ok) { const notaDatos = await nota.json(); await apiFetch(`/seguimientos/${seguimiento.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...notaDatos, estado: 'Archivado' }) }); } await cargarSeguimientos(); }; cuerpo.appendChild(fila); });
     }
     function editarCita(cita) { formulario.dataset.id = cita.id; document.querySelector('#fecha').value = cita.fecha; document.querySelector('#hora').value = cita.hora; document.querySelector('#tipo').value = cita.tipo; document.querySelector('#cliente').value = cita.cliente || ''; document.querySelector('#telefono').value = cita.telefono || ''; document.querySelector('#ubicacion').value = cita.ubicacion || ''; document.querySelector('#poblacion').value = cita.poblacion || ''; document.querySelector('#observaciones').value = cita.observaciones || ''; document.querySelector('#guardar-cita').textContent = 'Actualizar cita'; document.querySelector('#cancelar-edicion-cita').hidden = false; document.querySelector('[data-seccion-agenda="citas"]').click(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
     function editarNota(nota) { formularioSeguimiento.dataset.id = nota.id; document.querySelector('#seguimiento-fecha-llamada').value = nota.fecha_llamada || ''; document.querySelector('#seguimiento-hora').value = nota.hora || '10:00'; document.querySelector('#seguimiento-cliente').value = nota.cliente || ''; document.querySelector('#seguimiento-telefono').value = nota.telefono || ''; document.querySelector('#seguimiento-ubicacion').value = nota.ubicacion || ''; document.querySelector('#seguimiento-poblacion').value = nota.poblacion || ''; document.querySelector('#seguimiento-motivo').value = nota.motivo || ''; document.querySelector('#seguimiento-observaciones').value = nota.observaciones || ''; document.querySelector('#guardar-nota').textContent = 'Actualizar nota'; document.querySelector('#cancelar-edicion-nota').hidden = false; document.querySelector('[data-seccion-agenda="notas"]').click(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
@@ -120,9 +121,59 @@
     const limpiarEdicionNota = () => { delete formularioSeguimiento.dataset.id; document.querySelector('#guardar-nota').textContent = 'Guardar nota y añadir recordatorio diario'; document.querySelector('#cancelar-edicion-nota').hidden = true; formularioSeguimiento.reset(); document.querySelector('#seguimiento-fecha-llamada').valueAsDate = new Date(); document.querySelector('#seguimiento-hora').value = '10:00'; };
     document.querySelector('#cancelar-edicion-cita').onclick = limpiarEdicionCita;
     document.querySelector('#cancelar-edicion-nota').onclick = limpiarEdicionNota;
-    function prepararCitaDesdeSeguimiento(seguimiento) { formulario.dataset.seguimientoId = seguimiento.id; document.querySelector('#cliente').value = seguimiento.cliente || ''; document.querySelector('#telefono').value = seguimiento.telefono || ''; document.querySelector('#ubicacion').value = seguimiento.ubicacion || ''; document.querySelector('#poblacion').value = seguimiento.poblacion || ''; document.querySelector('#observaciones').value = seguimiento.motivo || ''; document.querySelector('#tipo').value = 'visita'; document.querySelector('#fecha').valueAsDate = new Date(); document.querySelector('#hora').value = '09:00'; document.querySelector('#fecha').scrollIntoView({ behavior: 'smooth', block: 'center' }); mensaje.textContent = 'Datos copiados. Completa el día y la hora de la cita y guárdala.'; mensaje.className = 'mensaje exito'; }
+    function prepararCitaDesdeSeguimiento(seguimiento) {
+      formulario.dataset.seguimientoId = seguimiento.id;
+      document.querySelector('[data-seccion-agenda="citas"]').click();
+      document.querySelector('#cliente').value = seguimiento.cliente || '';
+      document.querySelector('#telefono').value = seguimiento.telefono || '';
+      document.querySelector('#ubicacion').value = seguimiento.ubicacion || '';
+      document.querySelector('#poblacion').value = seguimiento.poblacion || '';
+      document.querySelector('#observaciones').value = seguimiento.motivo || '';
+      document.querySelector('#tipo').value = 'visita';
+      const fechaBase = seguimiento.fecha_recordatorio || new Date().toISOString().slice(0, 10);
+      document.querySelector('#fecha').value = fechaBase;
+      document.querySelector('#hora').value = '09:00';
+      document.querySelector('#formulario').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      mensaje.textContent = 'Nota convertida en cita. Completa la fecha y la hora y guarda la nueva cita.';
+      mensaje.className = 'mensaje exito';
+    }
     formularioSeguimiento.onsubmit = async event => { event.preventDefault(); const datos = { fecha_llamada: valor('seguimiento-fecha-llamada'), hora: valor('seguimiento-hora'), cliente: valor('seguimiento-cliente'), telefono: valor('seguimiento-telefono'), ubicacion: valor('seguimiento-ubicacion'), poblacion: valor('seguimiento-poblacion'), motivo: valor('seguimiento-motivo'), observaciones: valor('seguimiento-observaciones'), estado: 'Pendiente' }; const idNota = formularioSeguimiento.dataset.id; const respuesta = await apiFetch(idNota ? `/seguimientos/${idNota}` : '/seguimientos', { method: idNota ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) }); const resultado = await respuesta.json(); if (!respuesta.ok) { mostrarErrorSeguimiento(resultado.detail || 'No se pudo guardar la nota.'); return; } if (!idNota) await calendarioSeguimiento(resultado.id); mensajeSeguimiento.textContent = idNota ? 'Nota actualizada.' : 'Nota guardada con recordatorio diario.'; mensajeSeguimiento.className = 'mensaje exito'; limpiarEdicionNota(); await cargarSeguimientos(); };
-    formulario.onsubmit = async event => { event.preventDefault(); const datos = { fecha: valor('fecha'), hora: valor('hora'), tipo: valor('tipo'), cliente: valor('cliente'), ubicacion: valor('ubicacion'), poblacion: valor('poblacion'), telefono: valor('telefono'), observaciones: valor('observaciones'), estado: 'Pendiente' }; const idCita = formulario.dataset.id; const respuesta = await apiFetch(idCita ? `/citas/${idCita}` : '/citas', { method: idCita ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) }); const resultado = await respuesta.json(); if (!respuesta.ok) { mostrarError(resultado.detail || 'No se pudo guardar la cita.'); return; } const citaId = idCita || resultado.id; if (!idCita) await calendario(citaId); const seguimientoId = formulario.dataset.seguimientoId; if (seguimientoId) { const nota = await apiFetch(`/seguimientos/${seguimientoId}`); if (nota.ok) { const notaDatos = await nota.json(); await apiFetch(`/seguimientos/${seguimientoId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...notaDatos, estado: 'Realizado', fecha_recordatorio: notaDatos.fecha_recordatorio, fecha_llamada: notaDatos.fecha_llamada }) }); } delete formulario.dataset.seguimientoId; await cargarSeguimientos(); } mensaje.textContent = idCita ? 'Cita actualizada.' : 'Cita guardada y añadida al calendario.'; mensaje.className = 'mensaje exito'; limpiarEdicionCita(); await cargar(); };
+    formulario.onsubmit = async event => {
+      event.preventDefault();
+      const datos = { fecha: valor('fecha'), hora: valor('hora'), tipo: valor('tipo'), cliente: valor('cliente'), ubicacion: valor('ubicacion'), poblacion: valor('poblacion'), telefono: valor('telefono'), observaciones: valor('observaciones'), estado: 'Pendiente' };
+      const idCita = formulario.dataset.id;
+      const respuesta = await apiFetch(idCita ? `/citas/${idCita}` : '/citas', { method: idCita ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) });
+      const resultado = await respuesta.json();
+      if (!respuesta.ok) { mostrarError(resultado.detail || 'No se pudo guardar la cita.'); return; }
+      const citaId = idCita || resultado.id;
+      const seguimientoId = formulario.dataset.seguimientoId;
+      if (seguimientoId) {
+        try {
+          const nota = await apiFetch(`/seguimientos/${seguimientoId}`);
+          if (nota.ok) {
+            const notaDatos = await nota.json();
+            await apiFetch(`/seguimientos/${seguimientoId}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...notaDatos, estado: 'Archivado' })
+            });
+          }
+        } catch (error) {
+          console.warn('No se pudo archivar el recordatorio de la nota:', error);
+        }
+        delete formulario.dataset.seguimientoId;
+        await cargarSeguimientos();
+      }
+      if (!idCita) await calendario(citaId);
+      mensaje.textContent = idCita
+        ? 'Cita actualizada.'
+        : seguimientoId
+          ? 'Nota convertida en cita. Recordatorio archivado y cita creada.'
+          : 'Cita guardada y añadida al calendario.';
+      mensaje.className = 'mensaje exito';
+      limpiarEdicionCita();
+      await cargar();
+    };
     cargar().catch(error => { document.querySelector('#lista').innerHTML = `<tr><td colspan="7">${error.message}</td></tr>`; mostrarError(error.message); });
     cargarSeguimientos().catch(error => { document.querySelector('#lista-seguimientos').innerHTML = `<tr><td colspan="6">${error.message}</td></tr>`; mostrarErrorSeguimiento(error.message); });
   </script>

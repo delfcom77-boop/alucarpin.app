@@ -48,7 +48,7 @@ class ConexionPostgres:
 class FichajeCreate(BaseModel):
     ayudante_id: int
     fecha: date
-    tipo_destino: Literal["faena", "presupuesto", "reparacion"] = "faena"
+    tipo_destino: Literal["pendiente", "faena", "presupuesto", "reparacion"] = "pendiente"
     cliente: str = Field(min_length=1)
     obra: str = Field(min_length=1)
     ubicacion: str = ""
@@ -58,7 +58,7 @@ class FichajeCreate(BaseModel):
 
 class FichajeUpdate(BaseModel):
     fecha: Optional[date] = None
-    tipo_destino: Optional[Literal["faena", "presupuesto", "reparacion"]] = None
+    tipo_destino: Optional[Literal["pendiente", "faena", "presupuesto", "reparacion"]] = None
     cliente: Optional[str] = Field(default=None, min_length=1)
     obra: Optional[str] = Field(default=None, min_length=1)
     ubicacion: Optional[str] = None
@@ -165,7 +165,7 @@ class PagoGastoCreate(BaseModel):
 
 
 class PagoJornadaUpdate(BaseModel):
-    importe: float = Field(default=50, ge=0)
+    importe: float = Field(default=0, ge=0)
     importe_pagado: float = Field(default=0, ge=0)
     forma_pago: str = "Efectivo"
     estado_pago: Literal["No pagado", "Parcial", "Pagado"] = "No pagado"
@@ -357,7 +357,7 @@ def inicializar_base_datos():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 ayudante_id INTEGER NOT NULL,
                 fecha TEXT NOT NULL,
-                tipo_destino TEXT NOT NULL DEFAULT 'faena',
+                tipo_destino TEXT NOT NULL DEFAULT 'pendiente',
                 cliente TEXT NOT NULL DEFAULT '',
                 obra TEXT NOT NULL,
                 ubicacion TEXT NOT NULL DEFAULT '',
@@ -463,7 +463,7 @@ def inicializar_base_datos():
         if "cliente" not in columnas:
             db.execute("ALTER TABLE fichajes_ayudantes ADD COLUMN cliente TEXT NOT NULL DEFAULT ''")
         if "tipo_destino" not in columnas:
-            db.execute("ALTER TABLE fichajes_ayudantes ADD COLUMN tipo_destino TEXT NOT NULL DEFAULT 'faena'")
+            db.execute("ALTER TABLE fichajes_ayudantes ADD COLUMN tipo_destino TEXT NOT NULL DEFAULT 'pendiente'")
         if "num_presupuesto" not in columnas:
             db.execute("ALTER TABLE fichajes_ayudantes ADD COLUMN num_presupuesto TEXT")
         if "trabajo_propio_id" not in columnas:
@@ -510,7 +510,7 @@ def inicializar_base_datos():
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         ayudante_id INTEGER NOT NULL,
                         fecha TEXT NOT NULL,
-                        tipo_destino TEXT NOT NULL DEFAULT 'faena',
+                        tipo_destino TEXT NOT NULL DEFAULT 'pendiente',
                         cliente TEXT NOT NULL DEFAULT '',
                         obra TEXT NOT NULL,
                         ubicacion TEXT NOT NULL DEFAULT '',
@@ -1079,8 +1079,8 @@ def listar_citas(usuario=Depends(administrador)):
 @app.get("/alarmas")
 def listar_alarmas(usuario=Depends(administrador)):
     with conexion() as db:
-        notas = db.execute("SELECT id, fecha_recordatorio AS fecha, hora, cliente, ubicacion, poblacion, motivo AS detalle, estado FROM seguimientos_agenda WHERE estado = 'Pendiente'").fetchall()
-        citas = db.execute("SELECT id, fecha, hora, cliente, ubicacion, poblacion, observaciones AS detalle, estado FROM citas_agenda WHERE estado = 'Pendiente'").fetchall()
+        notas = db.execute("SELECT id, fecha_recordatorio AS fecha, hora, cliente, ubicacion, poblacion, motivo AS detalle, estado FROM seguimientos_agenda WHERE estado IN ('Pendiente', 'Archivado')").fetchall()
+        citas = db.execute("SELECT id, fecha, hora, cliente, ubicacion, poblacion, observaciones AS detalle, estado FROM citas_agenda WHERE estado IN ('Pendiente', 'Archivado')").fetchall()
         trabajos = db.execute("SELECT id, fecha_inicio AS fecha, '' AS hora, cliente, ubicacion, poblacion, obra AS detalle, estado_cobro AS estado FROM trabajos_propios WHERE fecha_inicio >= CURRENT_DATE").fetchall()
     alarmas = []
     for fila in notas:
@@ -1908,7 +1908,7 @@ def crear_fichaje(fichaje: FichajeCreate, usuario=Depends(usuario_actual)):
                         ).fetchone()["id"]
                     else:
                         raise HTTPException(status_code=503, detail="La creación de presupuestos provisionales requiere la aplicación publicada")
-            else:
+            elif fichaje.tipo_destino == "reparacion":
                 if DATABASE_URL:
                     trabajo_propio_id = db.execute(
                         """
@@ -2009,7 +2009,7 @@ def vincular_fichaje(
             raise HTTPException(status_code=400, detail="La faena seleccionada no existe")
         db.execute(
             "UPDATE fichajes_ayudantes SET faena_id_vinculada = ?, "
-            "estado_procesamiento = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?",
+            "estado_revision = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?",
             (
                 vinculacion.faena_id,
                 "Vinculado" if vinculacion.faena_id is not None else "Pendiente",
@@ -2035,6 +2035,8 @@ def validar_fichaje(
         ).fetchone()
         if not fichaje:
             raise HTTPException(status_code=404, detail="Fichaje no encontrado")
+        if fichaje["tipo_destino"] == "pendiente":
+            raise HTTPException(status_code=409, detail="El fichaje está pendiente de vincular a una faena o presupuesto")
         destino = {
             "faena": ("faenas", fichaje["faena_id_vinculada"]),
             "presupuesto": ("presupuestos", fichaje["presupuesto_id"]),
