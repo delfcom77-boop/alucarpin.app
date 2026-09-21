@@ -421,6 +421,31 @@ def inicializar_base_datos():
                 actualizado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (fichaje_id) REFERENCES fichajes_ayudantes(id) ON DELETE CASCADE
             );
+            CREATE TABLE IF NOT EXISTS faenas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cliente TEXT NOT NULL,
+                obra TEXT,
+                fecha TEXT,
+                ubicacion TEXT,
+                poblacion TEXT,
+                precio REAL DEFAULT 0,
+                ayudantes TEXT,
+                estado_revision TEXT NOT NULL DEFAULT 'Validado'
+            );
+            CREATE TABLE IF NOT EXISTS presupuestos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cliente TEXT NOT NULL,
+                num_presupuesto TEXT UNIQUE,
+                fecha TEXT,
+                bruto REAL DEFAULT 0,
+                iva REAL DEFAULT 0,
+                total_iva REAL DEFAULT 0,
+                presupuesto_iva REAL DEFAULT 0,
+                efectivo REAL DEFAULT 0,
+                estado TEXT,
+                presupuesto_final REAL DEFAULT 0,
+                estado_revision TEXT NOT NULL DEFAULT 'Validado'
+            );
             CREATE TABLE IF NOT EXISTS trabajos_propios (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 tipo TEXT NOT NULL,
