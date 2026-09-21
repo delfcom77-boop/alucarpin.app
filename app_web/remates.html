@@ -46,10 +46,13 @@
     .simbolo-redondo { width: 82px; height: 82px; border: 16px solid #d45d3f; border-radius: 50%; }
     .simbolo-chapa { color: #d45d3f; font-size: 4.5rem; font-weight: 900; line-height: 1; }
     .perfil-chapa-desnivel { position: relative; width: min(360px, 90%); height: 120px; }
-    .perfil-chapa-desnivel .chapa-inclinada { position: absolute; inset: 30px 20px 24px; background: #d45d3f; clip-path: polygon(0 var(--altura-izquierda), 100% var(--altura-derecha), 100% calc(var(--altura-derecha) + 10%), 0 calc(var(--altura-izquierda) + 10%)); }
+    .perfil-chapa-desnivel .chapa-inclinada { position: absolute; inset: 30px 20px 24px; background: #d45d3f; clip-path: polygon(0 var(--nivel-izquierda), 100% var(--nivel-derecha), 100% 88%, 0 88%); }
+    .perfil-chapa-desnivel.recta-arriba .chapa-inclinada { clip-path: polygon(0 12%, 100% 12%, 100% var(--nivel-derecha), 0 var(--nivel-izquierda)); }
     .perfil-chapa-desnivel .cota-chapa { position: absolute; color: #293f4a; background: #fff; border: 1px solid #b9c4c2; border-radius: 5px; padding: 3px 5px; font-size: .8rem; font-weight: 800; }
     .perfil-chapa-desnivel .cota-izquierda { left: 0; bottom: 44px; }
     .perfil-chapa-desnivel .cota-derecha { right: 0; top: 18px; }
+    .perfil-chapa-desnivel.recta-arriba .cota-izquierda { bottom: 16px; }
+    .perfil-chapa-desnivel.recta-arriba .cota-derecha { top: 68px; }
     .perfil-chapa-desnivel .cota-largura { left: 50%; bottom: 0; transform: translateX(-50%); }
     .perfil-chapa-normal { display: grid; place-items: center; min-height: 120px; }
     .perfil-chapa-normal[hidden] { display: none; }
@@ -83,12 +86,13 @@
         <label>Lacado / color <input id="lacado-color" required placeholder="Ejemplo: RAL 7016 gris antracita"></label>
         <label>Remate <select id="tipo"><option value="u">Bandeja / U</option><option value="chapa">Chapa</option><option value="angulo">Angulo / L</option><option value="tubo">Tubo</option><option value="tubo_redondo">Tubo redondo</option></select></label>
         <label id="modo-chapa-label" hidden>Medidas de chapa <select id="modo-chapa"><option value="normal">Normal</option><option value="desnivel">Desnivel</option></select></label>
+        <label id="orientacion-chapa-label" hidden>Parte recta de la chapa <select id="orientacion-chapa"><option value="abajo">Abajo</option><option value="arriba">Arriba</option></select></label>
         <label id="posicion-medidas-label">Medidas de la bandeja <select id="posicion-medidas"><option value="interior">Interior</option><option value="exterior">Exterior</option></select></label>
         <div id="perfil-u" class="perfil-u" hidden><span class="cota cota-izquierda" id="perfil-izquierda">--</span><span class="cota cota-centro" id="perfil-centro">--</span><span class="cota cota-derecha" id="perfil-derecha">--</span><span class="cota cota-largura" id="perfil-largura">= --</span><span class="lado"></span><span class="centro"></span><span class="lado"></span></div>
         <div id="perfil-angular" class="perfil-simple" hidden aria-label="Simbolo de angular L"><span class="simbolo-angular"></span></div>
         <div id="perfil-tubo" class="perfil-simple" hidden aria-label="Simbolo de tubo rectangular"><span class="simbolo-tubo"></span></div>
         <div id="perfil-redondo" class="perfil-simple" hidden aria-label="Simbolo de tubo redondo"><span class="simbolo-redondo"></span></div>
-        <div id="perfil-chapa" class="perfil-simple" hidden aria-label="Chapa con desnivel"><div class="perfil-chapa-desnivel" style="--altura-izquierda: 65%; --altura-derecha: 35%;"><span class="chapa-inclinada"></span><span id="chapa-izquierda" class="cota-chapa cota-izquierda">Izq. -- mm</span><span id="chapa-derecha" class="cota-chapa cota-derecha">Der. -- mm</span><span id="chapa-largura" class="cota-chapa cota-largura">= -- mm</span></div></div>
+        <div id="perfil-chapa" class="perfil-simple" hidden aria-label="Chapa con desnivel"><div class="perfil-chapa-desnivel" style="--nivel-izquierda: 65%; --nivel-derecha: 35%;"><span class="chapa-inclinada"></span><span id="chapa-izquierda" class="cota-chapa cota-izquierda">Izq. -- mm</span><span id="chapa-derecha" class="cota-chapa cota-derecha">Der. -- mm</span><span id="chapa-largura" class="cota-chapa cota-largura">= -- mm</span></div></div>
         <div id="perfil-chapa-normal" class="perfil-simple" hidden aria-label="Chapa normal"><div class="perfil-chapa-normal"><span class="chapa-normal"></span><span id="chapa-normal-ancho" class="cota-chapa">Ancho -- mm</span><span id="chapa-normal-largura" class="cota-chapa">= -- mm</span></div></div>
         <p id="ayuda-medidas" class="ayuda">Bandeja / U invertida: izquierda x centro x derecha x largura. Todas las medidas estan en milimetros.</p>
         <div class="medidas">
@@ -118,6 +122,7 @@
     const origen = document.querySelector('#origen');
     const tipo = document.querySelector('#tipo');
     const modoChapa = document.querySelector('#modo-chapa');
+    const orientacionChapa = document.querySelector('#orientacion-chapa');
     const posicionMedidas = document.querySelector('#posicion-medidas');
     const lista = document.querySelector('#lista');
     const mensaje = document.querySelector('#mensaje');
@@ -160,6 +165,7 @@
       document.querySelector('#perfil-redondo').hidden = tipo.value !== 'tubo_redondo';
       document.querySelector('#perfil-chapa').hidden = tipo.value !== 'chapa' || modoChapa.value !== 'desnivel';
       document.querySelector('#modo-chapa-label').hidden = tipo.value !== 'chapa';
+      document.querySelector('#orientacion-chapa-label').hidden = tipo.value !== 'chapa' || modoChapa.value !== 'desnivel';
       document.querySelector('#perfil-chapa-normal').hidden = tipo.value !== 'chapa' || modoChapa.value !== 'normal';
       actualizarDibujo();
       document.querySelector('#ayuda-medidas').textContent = perfil.ayuda;
@@ -169,10 +175,14 @@
     function actualizarChapa() {
       const izquierda = Number(datos('medida-1')) || 0;
       const derecha = Number(datos('medida-2')) || 0;
-      const escala = valor => `${Math.max(15, 90 - Math.min(valor, 300) / 300 * 70)}%`;
+      const mayor = Math.max(izquierda, derecha, 1);
+      const escala = valor => orientacionChapa.value === 'arriba'
+        ? `${35 + Math.min(valor, mayor) / mayor * 35}%`
+        : `${70 - Math.min(valor, mayor) / mayor * 35}%`;
       const perfil = document.querySelector('.perfil-chapa-desnivel');
-      perfil.style.setProperty('--altura-izquierda', escala(izquierda));
-      perfil.style.setProperty('--altura-derecha', escala(derecha));
+      perfil.style.setProperty('--nivel-izquierda', escala(izquierda));
+      perfil.style.setProperty('--nivel-derecha', escala(derecha));
+      perfil.classList.toggle('recta-arriba', orientacionChapa.value === 'arriba');
       document.querySelector('#chapa-izquierda').textContent = `Izq. ${izquierda || '--'} mm`;
       document.querySelector('#chapa-derecha').textContent = `Der. ${derecha || '--'} mm`;
       document.querySelector('#chapa-largura').textContent = `= ${datos('largura') || '--'} mm`;
@@ -200,6 +210,7 @@
     }
     tipo.onchange = actualizarEtiquetas;
     modoChapa.onchange = actualizarEtiquetas;
+    orientacionChapa.onchange = actualizarChapa;
     posicionMedidas.onchange = actualizarPosicionMedidas;
     document.querySelector('#formulario').onsubmit = async event => { event.preventDefault(); const payload = { origen: origen.value, origen_id: 0, cliente: datos('cliente'), obra: datos('obra'), lacado_color: datos('lacado-color'), tipo: tipo.value, medida_1: Number(datos('medida-1')), medida_2: Number(datos('medida-2')), medida_3: Number(datos('medida-3')), largura: Number(datos('largura')), cantidad: Number(datos('cantidad')), observaciones: datos('observaciones') }; const respuesta = await apiFetch('/remates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); const resultado = await respuesta.json(); if (!respuesta.ok) { mostrarError(resultado.detail || 'No se pudo guardar el remate.'); return; } mensaje.textContent = 'Remate guardado sin crear ninguna faena.'; mensaje.className = 'mensaje exito'; document.querySelector('#medida-1').value = ''; document.querySelector('#medida-2').value = ''; document.querySelector('#medida-3').value = ''; document.querySelector('#largura').value = ''; document.querySelector('#obra').value = ''; document.querySelector('#lacado-color').value = ''; document.querySelector('#observaciones').value = ''; await cargarRemates(); };
     actualizarEtiquetas();
