@@ -115,7 +115,8 @@
       </form>
     </section>
     <section>
-      <h2>Remates guardados</h2>
+      <h2>Remates guardados por obra</h2>
+      <label>Seleccionar obra para ver sus remates <select id="filtro-obra"><option value="">Todas las obras</option></select></label>
       <div class="lista"><table><thead><tr><th>Cliente</th><th>Obra</th><th>Pieza</th><th>Tipo faena</th><th>Lacado / color</th><th>Remate</th><th>Medidas</th><th>Largura / cantidad</th><th></th></tr></thead><tbody id="lista"><tr><td colspan="9">Cargando...</td></tr></tbody></table></div>
     </section>
   </main>
@@ -131,6 +132,7 @@
     const posicionMedidas = document.querySelector('#posicion-medidas');
     const lista = document.querySelector('#lista');
     const mensaje = document.querySelector('#mensaje');
+    const filtroObra = document.querySelector('#filtro-obra');
     const perfiles = {
       u: { etiquetas: ['Izquierda (mm)', 'Centro (mm)', 'Derecha (mm)'], ayuda: 'Bandeja / U invertida: izquierda x centro x derecha x largura. Todas las medidas estan en milimetros.', campos: 3 },
       angulo: { etiquetas: ['Alto (mm)', 'Ancho (mm)', 'No se usa'], ayuda: 'Angular / L: alto x ancho x largura.', campos: 2 },
@@ -210,9 +212,16 @@
       const respuesta = await apiFetch('/remates');
       if (!respuesta.ok) throw new Error('No se pudieron cargar los remates.');
       const remates = await respuesta.json();
-      lista.innerHTML = remates.length ? '' : '<tr><td colspan="9">Todavia no hay remates guardados.</td></tr>';
-      remates.forEach(remate => { const medidas = remate.tipo === 'u' ? `${dinero(remate.medida_1)} x ${dinero(remate.medida_2)} x ${dinero(remate.medida_3)}` : remate.tipo === 'chapa' || remate.tipo === 'tubo_redondo' ? dinero(remate.medida_1) : `${dinero(remate.medida_1)} x ${dinero(remate.medida_2)}`; const fila = document.createElement('tr'); fila.innerHTML = `<td>${remate.cliente || '-'}</td><td>${remate.obra || '-'}</td><td>${remate.pieza || '-'}</td><td>${remate.origen === 'propia' ? 'Propia' : '3º'}</td><td>${remate.lacado_color || '-'}</td><td>${nombres[remate.tipo]}</td><td>${medidas} mm</td><td>${dinero(remate.largura)} mm / ${remate.cantidad} ud.</td><td><button type="button" class="borrar">Borrar</button></td>`; fila.querySelector('.borrar').onclick = async () => { if (!confirm('¿Borrar este remate?')) return; await apiFetch(`/remates/${remate.id}`, { method: 'DELETE' }); await cargarRemates(); }; lista.appendChild(fila); });
+      const obras = [...new Map(remates.map(remate => [`${remate.cliente || ''}||${remate.obra || ''}`, remate])).values()].sort((a, b) => `${a.cliente} ${a.obra}`.localeCompare(`${b.cliente} ${b.obra}`));
+      const filtroActual = filtroObra.value;
+      filtroObra.innerHTML = '<option value="">Todas las obras</option>';
+      obras.forEach(remate => { const opcion = document.createElement('option'); opcion.value = `${remate.cliente || ''}||${remate.obra || ''}`; opcion.textContent = `${remate.cliente || 'Sin cliente'} - ${remate.obra || 'Sin obra'}`; filtroObra.appendChild(opcion); });
+      filtroObra.value = obras.some(remate => `${remate.cliente || ''}||${remate.obra || ''}` === filtroActual) ? filtroActual : '';
+      const rematesVisibles = filtroObra.value ? remates.filter(remate => `${remate.cliente || ''}||${remate.obra || ''}` === filtroObra.value) : remates;
+      lista.innerHTML = rematesVisibles.length ? '' : '<tr><td colspan="9">No hay remates guardados para esta obra.</td></tr>';
+      rematesVisibles.forEach(remate => { const medidas = remate.tipo === 'u' ? `${dinero(remate.medida_1)} x ${dinero(remate.medida_2)} x ${dinero(remate.medida_3)}` : remate.tipo === 'chapa' || remate.tipo === 'tubo_redondo' ? dinero(remate.medida_1) : `${dinero(remate.medida_1)} x ${dinero(remate.medida_2)}`; const fila = document.createElement('tr'); fila.innerHTML = `<td>${remate.cliente || '-'}</td><td>${remate.obra || '-'}</td><td>${remate.pieza || '-'}</td><td>${remate.origen === 'propia' ? 'Propia' : '3º'}</td><td>${remate.lacado_color || '-'}</td><td>${nombres[remate.tipo]}</td><td>${medidas} mm</td><td>${dinero(remate.largura)} mm / ${remate.cantidad} ud.</td><td><button type="button" class="borrar">Borrar</button></td>`; fila.querySelector('.borrar').onclick = async () => { if (!confirm('¿Borrar este remate?')) return; await apiFetch(`/remates/${remate.id}`, { method: 'DELETE' }); await cargarRemates(); }; lista.appendChild(fila); });
     }
+    filtroObra.onchange = () => cargarRemates().catch(error => mostrarError(error.message));
     tipo.onchange = actualizarEtiquetas;
     modoChapa.onchange = actualizarEtiquetas;
     orientacionChapa.onchange = actualizarChapa;
