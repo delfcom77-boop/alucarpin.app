@@ -79,6 +79,7 @@
           <label>Cliente <select id="cliente" required><option value="">Cargando clientes...</option></select></label>
         </div>
         <label>Obra en la que estoy <input id="obra" required placeholder="Ejemplo: vivienda de Juan, nave industrial..."></label>
+        <label>Lacado / color <input id="lacado-color" required placeholder="Ejemplo: RAL 7016 gris antracita"></label>
         <label>Remate <select id="tipo"><option value="u">Bandeja / U</option><option value="chapa">Chapa</option><option value="angulo">Angulo / L</option><option value="tubo">Tubo</option><option value="tubo_redondo">Tubo redondo</option></select></label>
         <label id="modo-chapa-label" hidden>Medidas de chapa <select id="modo-chapa"><option value="normal">Normal</option><option value="desnivel">Desnivel</option></select></label>
         <label id="posicion-medidas-label">Medidas de la bandeja <select id="posicion-medidas"><option value="interior">Interior</option><option value="exterior">Exterior</option></select></label>
@@ -105,7 +106,7 @@
     </section>
     <section>
       <h2>Remates guardados</h2>
-      <div class="lista"><table><thead><tr><th>Cliente</th><th>Obra</th><th>Tipo faena</th><th>Remate</th><th>Medidas</th><th>Largura / cantidad</th><th></th></tr></thead><tbody id="lista"><tr><td colspan="7">Cargando...</td></tr></tbody></table></div>
+      <div class="lista"><table><thead><tr><th>Cliente</th><th>Obra</th><th>Tipo faena</th><th>Lacado / color</th><th>Remate</th><th>Medidas</th><th>Largura / cantidad</th><th></th></tr></thead><tbody id="lista"><tr><td colspan="8">Cargando...</td></tr></tbody></table></div>
     </section>
   </main>
   <script>
@@ -193,13 +194,13 @@
       const respuesta = await apiFetch('/remates');
       if (!respuesta.ok) throw new Error('No se pudieron cargar los remates.');
       const remates = await respuesta.json();
-      lista.innerHTML = remates.length ? '' : '<tr><td colspan="7">Todavia no hay remates guardados.</td></tr>';
-      remates.forEach(remate => { const medidas = remate.tipo === 'u' ? `${dinero(remate.medida_1)} x ${dinero(remate.medida_2)} x ${dinero(remate.medida_3)}` : remate.tipo === 'chapa' || remate.tipo === 'tubo_redondo' ? dinero(remate.medida_1) : `${dinero(remate.medida_1)} x ${dinero(remate.medida_2)}`; const fila = document.createElement('tr'); fila.innerHTML = `<td>${remate.cliente || '-'}</td><td>${remate.obra || '-'}</td><td>${remate.origen === 'propia' ? 'Propia' : '3º'}</td><td>${nombres[remate.tipo]}</td><td>${medidas} mm</td><td>${dinero(remate.largura)} mm / ${remate.cantidad} ud.</td><td><button type="button" class="borrar">Borrar</button></td>`; fila.querySelector('.borrar').onclick = async () => { if (!confirm('¿Borrar este remate?')) return; await apiFetch(`/remates/${remate.id}`, { method: 'DELETE' }); await cargarRemates(); }; lista.appendChild(fila); });
+      lista.innerHTML = remates.length ? '' : '<tr><td colspan="8">Todavia no hay remates guardados.</td></tr>';
+      remates.forEach(remate => { const medidas = remate.tipo === 'u' ? `${dinero(remate.medida_1)} x ${dinero(remate.medida_2)} x ${dinero(remate.medida_3)}` : remate.tipo === 'chapa' || remate.tipo === 'tubo_redondo' ? dinero(remate.medida_1) : `${dinero(remate.medida_1)} x ${dinero(remate.medida_2)}`; const fila = document.createElement('tr'); fila.innerHTML = `<td>${remate.cliente || '-'}</td><td>${remate.obra || '-'}</td><td>${remate.origen === 'propia' ? 'Propia' : '3º'}</td><td>${remate.lacado_color || '-'}</td><td>${nombres[remate.tipo]}</td><td>${medidas} mm</td><td>${dinero(remate.largura)} mm / ${remate.cantidad} ud.</td><td><button type="button" class="borrar">Borrar</button></td>`; fila.querySelector('.borrar').onclick = async () => { if (!confirm('¿Borrar este remate?')) return; await apiFetch(`/remates/${remate.id}`, { method: 'DELETE' }); await cargarRemates(); }; lista.appendChild(fila); });
     }
     tipo.onchange = actualizarEtiquetas;
     modoChapa.onchange = actualizarEtiquetas;
     posicionMedidas.onchange = actualizarPosicionMedidas;
-    document.querySelector('#formulario').onsubmit = async event => { event.preventDefault(); const payload = { origen: origen.value, origen_id: 0, cliente: datos('cliente'), obra: datos('obra'), tipo: tipo.value, medida_1: Number(datos('medida-1')), medida_2: Number(datos('medida-2')), medida_3: Number(datos('medida-3')), largura: Number(datos('largura')), cantidad: Number(datos('cantidad')), observaciones: datos('observaciones') }; const respuesta = await apiFetch('/remates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); const resultado = await respuesta.json(); if (!respuesta.ok) { mostrarError(resultado.detail || 'No se pudo guardar el remate.'); return; } mensaje.textContent = 'Remate guardado sin crear ninguna faena.'; mensaje.className = 'mensaje exito'; document.querySelector('#medida-1').value = ''; document.querySelector('#medida-2').value = ''; document.querySelector('#medida-3').value = ''; document.querySelector('#largura').value = ''; document.querySelector('#obra').value = ''; document.querySelector('#observaciones').value = ''; await cargarRemates(); };
+    document.querySelector('#formulario').onsubmit = async event => { event.preventDefault(); const payload = { origen: origen.value, origen_id: 0, cliente: datos('cliente'), obra: datos('obra'), lacado_color: datos('lacado-color'), tipo: tipo.value, medida_1: Number(datos('medida-1')), medida_2: Number(datos('medida-2')), medida_3: Number(datos('medida-3')), largura: Number(datos('largura')), cantidad: Number(datos('cantidad')), observaciones: datos('observaciones') }; const respuesta = await apiFetch('/remates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); const resultado = await respuesta.json(); if (!respuesta.ok) { mostrarError(resultado.detail || 'No se pudo guardar el remate.'); return; } mensaje.textContent = 'Remate guardado sin crear ninguna faena.'; mensaje.className = 'mensaje exito'; document.querySelector('#medida-1').value = ''; document.querySelector('#medida-2').value = ''; document.querySelector('#medida-3').value = ''; document.querySelector('#largura').value = ''; document.querySelector('#obra').value = ''; document.querySelector('#lacado-color').value = ''; document.querySelector('#observaciones').value = ''; await cargarRemates(); };
     actualizarEtiquetas();
     actualizarPosicionMedidas();
     cargarClientes().catch(error => mostrarError(error.message));
