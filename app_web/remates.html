@@ -25,17 +25,17 @@
     .fila { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
     .medidas { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 14px; background: #eef5f2; border-radius: 10px; }
     .perfil-u { display: flex; align-items: flex-start; justify-content: center; gap: 0; min-height: 120px; padding: 14px; background: #f7faf8; border: 1px solid #d9e0dd; border-radius: 10px; }
-    .perfil-u .lado { width: 28px; height: 74px; background: #d45d3f; display: grid; place-items: center; }
-    .perfil-u .centro { width: 180px; height: 28px; background: #d45d3f; display: grid; place-items: center; }
-    .perfil-u .valor-lado, .perfil-u .valor-centro { color: #fff; font-size: .8rem; font-weight: 800; white-space: nowrap; }
-    .perfil-u .valor-lado { writing-mode: vertical-rl; transform: rotate(180deg); }
+    .perfil-u .lado { width: 28px; height: 74px; background: #d45d3f; }
+    .perfil-u .centro { width: 180px; height: 28px; background: #d45d3f; }
+    .perfil-u .cota { position: absolute; color: #293f4a; background: #fff; padding: 3px 5px; border: 1px solid #b9c4c2; border-radius: 5px; font-size: .8rem; font-weight: 800; white-space: nowrap; }
+    .perfil-u .cota-izquierda { left: calc(50% - 110px); top: 48px; }
+    .perfil-u .cota-centro { left: 50%; top: 48px; transform: translateX(-50%); }
+    .perfil-u .cota-derecha { right: calc(50% - 110px); top: 48px; }
     .perfil-u .medida-perfil { align-self: flex-start; color: #506269; font-size: .85rem; font-weight: 700; }
     .perfil-u[hidden] { display: none; }
-    .perfil-u.exterior .valor-lado, .perfil-u.exterior .valor-centro { position: absolute; color: #293f4a; background: #fff; padding: 3px 5px; border: 1px solid #b9c4c2; border-radius: 5px; }
-    .perfil-u.exterior .valor-lado { writing-mode: horizontal-tb; transform: none; top: 48px; }
-    .perfil-u.exterior .lado-izquierda .valor-lado { left: calc(50% - 128px); }
-    .perfil-u.exterior .lado-derecha .valor-lado { right: calc(50% - 128px); }
-    .perfil-u.exterior .valor-centro { top: 6px; left: 50%; transform: translateX(-50%); }
+    .perfil-u.exterior .cota-izquierda { left: calc(50% - 178px); top: 48px; }
+    .perfil-u.exterior .cota-centro { top: 0; }
+    .perfil-u.exterior .cota-derecha { right: calc(50% - 178px); top: 48px; }
     .campo-oculto { display: none; }
     .ayuda { margin: 0; color: #506269; font-size: .95rem; }
     .lista { overflow-x: auto; }
@@ -63,7 +63,7 @@
         <label>Obra en la que estoy <input id="obra" required placeholder="Ejemplo: vivienda de Juan, nave industrial..."></label>
         <label>Remate <select id="tipo"><option value="u">Bandeja / U</option><option value="chapa">Chapa</option><option value="angulo">Angulo / L</option><option value="tubo">Tubo</option><option value="tubo_redondo">Tubo redondo</option></select></label>
         <label id="posicion-medidas-label">Medidas de la bandeja <select id="posicion-medidas"><option value="interior">Interior</option><option value="exterior">Exterior</option></select></label>
-        <div id="perfil-u" class="perfil-u" hidden><span class="medida-perfil">Izquierda</span><span class="lado lado-izquierda"><span id="perfil-izquierda" class="valor-lado">--</span></span><span class="centro"><span id="perfil-centro" class="valor-centro">--</span></span><span class="lado lado-derecha"><span id="perfil-derecha" class="valor-lado">--</span></span><span class="medida-perfil">Derecha</span></div>
+        <div id="perfil-u" class="perfil-u" hidden><span class="cota cota-izquierda" id="perfil-izquierda">--</span><span class="cota cota-centro" id="perfil-centro">--</span><span class="cota cota-derecha" id="perfil-derecha">--</span><span class="lado"></span><span class="centro"></span><span class="lado"></span></div>
         <p id="ayuda-medidas" class="ayuda">Bandeja / U invertida: izquierda x centro x derecha x largura. Todas las medidas estan en milimetros.</p>
         <div class="medidas">
           <label id="etiqueta-1">Alto 1 (mm)<input id="medida-1" type="number" min="0" step="1" required></label>
