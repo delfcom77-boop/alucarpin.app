@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS fichajes_ayudantes (
     id BIGSERIAL PRIMARY KEY,
     ayudante_id INTEGER NOT NULL REFERENCES ayudantes(id),
     fecha DATE NOT NULL,
-    tipo_destino TEXT NOT NULL DEFAULT 'faena',
+    tipo_destino TEXT NOT NULL DEFAULT 'pendiente',
     cliente TEXT NOT NULL DEFAULT '',
     obra TEXT NOT NULL,
     ubicacion TEXT NOT NULL DEFAULT '',
@@ -71,6 +71,23 @@ CREATE TABLE IF NOT EXISTS trabajos_propios (
 
 CREATE INDEX IF NOT EXISTS idx_trabajos_propios_fecha
     ON trabajos_propios (fecha_inicio);
+
+    CREATE TABLE IF NOT EXISTS remates (
+        id BIGSERIAL PRIMARY KEY,
+        origen TEXT NOT NULL,
+        origen_id BIGINT NOT NULL,
+        tipo TEXT NOT NULL,
+        medida_1 DOUBLE PRECISION NOT NULL DEFAULT 0,
+        medida_2 DOUBLE PRECISION NOT NULL DEFAULT 0,
+        medida_3 DOUBLE PRECISION NOT NULL DEFAULT 0,
+        largura DOUBLE PRECISION NOT NULL,
+        cantidad INTEGER NOT NULL DEFAULT 1,
+        observaciones TEXT NOT NULL DEFAULT '',
+        creado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_remates_origen
+        ON remates (origen, origen_id);
 
 CREATE TABLE IF NOT EXISTS citas_agenda (
     id BIGSERIAL PRIMARY KEY,
