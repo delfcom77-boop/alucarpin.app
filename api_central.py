@@ -1192,6 +1192,8 @@ def calendario_cita(cita_id: int, usuario=Depends(administrador)):
         cita = db.execute("SELECT * FROM citas_agenda WHERE id = ?", (cita_id,)).fetchone()
     if not cita:
         raise HTTPException(status_code=404, detail="Cita no encontrada")
+    if cita["estado"] == "Realizada":
+        raise HTTPException(status_code=410, detail="La cita ya está realizada y no tiene evento de calendario")
     fecha = cita["fecha"]
     if hasattr(fecha, "strftime"):
         fecha_texto = fecha.strftime("%Y%m%d")
@@ -1282,6 +1284,8 @@ def calendario_seguimiento(seguimiento_id: int, usuario=Depends(administrador)):
         seguimiento = db.execute("SELECT * FROM seguimientos_agenda WHERE id = ?", (seguimiento_id,)).fetchone()
     if not seguimiento:
         raise HTTPException(status_code=404, detail="Seguimiento no encontrado")
+    if seguimiento["estado"] == "Realizado":
+        raise HTTPException(status_code=410, detail="La nota ya está realizada y no tiene recordatorio de calendario")
     fecha = seguimiento["fecha_recordatorio"]
     fecha_texto = fecha.strftime("%Y%m%d") if hasattr(fecha, "strftime") else str(fecha).replace("-", "")
     inicio = datetime.strptime(f"{fecha_texto} {seguimiento['hora']}", "%Y%m%d %H:%M")
@@ -1309,8 +1313,8 @@ def calendario_completo(usuario=Depends(administrador)):
     eventos = []
     with conexion() as db:
         trabajos = db.execute("SELECT * FROM trabajos_propios ORDER BY fecha_inicio, id").fetchall()
-        citas = db.execute("SELECT * FROM citas_agenda ORDER BY fecha, hora, id").fetchall()
-        seguimientos = db.execute("SELECT * FROM seguimientos_agenda ORDER BY fecha_recordatorio, hora, id").fetchall()
+        citas = db.execute("SELECT * FROM citas_agenda WHERE estado = 'Pendiente' ORDER BY fecha, hora, id").fetchall()
+        seguimientos = db.execute("SELECT * FROM seguimientos_agenda WHERE estado = 'Pendiente' ORDER BY fecha_recordatorio, hora, id").fetchall()
         silencios = db.execute("SELECT fecha FROM calendario_silencios").fetchall()
     fechas_silenciadas = {fila["fecha"].isoformat() if hasattr(fila["fecha"], "isoformat") else str(fila["fecha"]) for fila in silencios}
 
