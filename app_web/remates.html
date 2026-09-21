@@ -110,7 +110,7 @@
           <label>Cantidad<input id="cantidad" type="number" min="1" step="1" value="1" required></label>
           <label>Observaciones<input id="observaciones" placeholder="Pliegues, color, entrega..." ></label>
         </div>
-        <div class="fila"><button type="submit">Añadir remate +</button><button id="nueva-pieza" type="button">Nueva pieza</button></div>
+        <div class="fila"><button type="submit">Añadir remate +</button><button id="nueva-obra" type="button">Nueva obra</button></div>
         <div id="mensaje" class="mensaje"></div>
       </form>
     </section>
@@ -218,7 +218,17 @@
     orientacionChapa.onchange = actualizarChapa;
     posicionMedidas.onchange = actualizarPosicionMedidas;
     document.querySelector('#formulario').onsubmit = async event => { event.preventDefault(); const payload = { origen: origen.value, origen_id: 0, cliente: datos('cliente'), obra: datos('obra'), pieza: datos('pieza'), lacado_color: datos('lacado-color'), tipo: tipo.value, medida_1: Number(datos('medida-1')), medida_2: Number(datos('medida-2')), medida_3: Number(datos('medida-3')), largura: Number(datos('largura')), cantidad: Number(datos('cantidad')), observaciones: datos('observaciones') }; const respuesta = await apiFetch('/remates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); const resultado = await respuesta.json(); if (!respuesta.ok) { mostrarError(resultado.detail || 'No se pudo guardar el remate.'); return; } mensaje.textContent = `Remate añadido a ${datos('pieza')}. Pulsa + para seguir o Nueva pieza para cambiar.`; mensaje.className = 'mensaje exito'; ['medida-1', 'medida-2', 'medida-3', 'largura', 'observaciones'].forEach(id => { document.querySelector(`#${id}`).value = ''; }); actualizarDibujo(); await cargarRemates(); };
-    document.querySelector('#nueva-pieza').onclick = () => { document.querySelector('#pieza').value = ''; document.querySelector('#pieza').focus(); mensaje.textContent = 'Nueva pieza: conserva el cliente y la obra.'; mensaje.className = 'mensaje exito'; };
+    document.querySelector('#nueva-obra').onclick = () => {
+      document.querySelector('#cliente').value = '';
+      document.querySelector('#obra').value = '';
+      document.querySelector('#pieza').value = '';
+      document.querySelector('#lacado-color').value = '';
+      ['medida-1', 'medida-2', 'medida-3', 'largura', 'observaciones'].forEach(id => { document.querySelector(`#${id}`).value = ''; });
+      actualizarDibujo();
+      mensaje.textContent = 'Nueva obra: selecciona el cliente y escribe la nueva obra.';
+      mensaje.className = 'mensaje exito';
+      document.querySelector('#cliente').focus();
+    };
     actualizarEtiquetas();
     actualizarPosicionMedidas();
     cargarClientes().catch(error => mostrarError(error.message));
