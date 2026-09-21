@@ -25,9 +25,12 @@
     .fila { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
     .medidas { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 14px; background: #eef5f2; border-radius: 10px; }
     .perfil-u { display: flex; align-items: flex-start; justify-content: center; gap: 0; min-height: 120px; padding: 14px; background: #f7faf8; border: 1px solid #d9e0dd; border-radius: 10px; }
-    .perfil-u .lado { width: 16px; height: 74px; background: #d45d3f; }
-    .perfil-u .centro { width: 150px; height: 16px; background: #d45d3f; }
+    .perfil-u .lado { width: 28px; height: 74px; background: #d45d3f; display: grid; place-items: center; }
+    .perfil-u .centro { width: 180px; height: 28px; background: #d45d3f; display: grid; place-items: center; }
+    .perfil-u .valor-lado, .perfil-u .valor-centro { color: #fff; font-size: .8rem; font-weight: 800; white-space: nowrap; }
+    .perfil-u .valor-lado { writing-mode: vertical-rl; transform: rotate(180deg); }
     .perfil-u .medida-perfil { align-self: flex-start; color: #506269; font-size: .85rem; font-weight: 700; }
+    .perfil-u[hidden] { display: none; }
     .campo-oculto { display: none; }
     .ayuda { margin: 0; color: #506269; font-size: .95rem; }
     .lista { overflow-x: auto; }
@@ -54,7 +57,7 @@
         </div>
         <label>Obra en la que estoy <input id="obra" required placeholder="Ejemplo: vivienda de Juan, nave industrial..."></label>
         <label>Remate <select id="tipo"><option value="u">Bandeja / U</option><option value="chapa">Chapa</option><option value="angulo">Angulo / L</option><option value="tubo">Tubo</option><option value="tubo_redondo">Tubo redondo</option></select></label>
-        <div id="perfil-u" class="perfil-u"><span class="medida-perfil">Izquierda</span><span class="lado"></span><span class="centro"></span><span class="lado"></span><span class="medida-perfil">Derecha</span></div>
+        <div id="perfil-u" class="perfil-u" hidden><span class="medida-perfil">Izquierda</span><span class="lado"><span id="perfil-izquierda" class="valor-lado">--</span></span><span class="centro"><span id="perfil-centro" class="valor-centro">--</span></span><span class="lado"><span id="perfil-derecha" class="valor-lado">--</span></span><span class="medida-perfil">Derecha</span></div>
         <p id="ayuda-medidas" class="ayuda">Bandeja / U invertida: izquierda x centro x derecha x largura. Todas las medidas estan en milimetros.</p>
         <div class="medidas">
           <label id="etiqueta-1">Alto 1 (mm)<input id="medida-1" type="number" min="0" step="1" required></label>
@@ -94,6 +97,11 @@
     const datos = id => document.querySelector(`#${id}`).value;
     const dinero = valor => Number(valor || 0).toLocaleString('es-ES', { maximumFractionDigits: 2 });
     function mostrarError(texto) { mensaje.textContent = texto; mensaje.className = 'mensaje error'; }
+    function actualizarDibujo() {
+      document.querySelector('#perfil-izquierda').textContent = datos('medida-1') || '--';
+      document.querySelector('#perfil-centro').textContent = datos('medida-2') || '--';
+      document.querySelector('#perfil-derecha').textContent = datos('medida-3') || '--';
+    }
     function actualizarEtiquetas() {
       const perfil = perfiles[tipo.value];
       ['etiqueta-1', 'etiqueta-2', 'etiqueta-3'].forEach((id, indice) => {
@@ -106,7 +114,9 @@
       });
       document.querySelector('#perfil-u').hidden = tipo.value !== 'u';
       document.querySelector('#ayuda-medidas').textContent = perfil.ayuda;
+      actualizarDibujo();
     }
+    ['medida-1', 'medida-2', 'medida-3'].forEach(id => document.querySelector(`#${id}`).addEventListener('input', actualizarDibujo));
     async function cargarClientes() {
       const [respuestaTrabajos, respuestaFaenas] = await Promise.all([apiFetch('/trabajos'), apiFetch('/faenas')]);
       if (!respuestaTrabajos.ok || !respuestaFaenas.ok) throw new Error('No se pudieron cargar los clientes.');
