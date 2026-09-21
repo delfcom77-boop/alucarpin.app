@@ -217,7 +217,7 @@ class RemateCreate(BaseModel):
     origen_id: int = Field(default=0, ge=0)
     cliente: str = Field(min_length=1)
     obra: str = Field(min_length=1)
-    tipo: Literal["chapa", "angulo", "u"]
+    tipo: Literal["chapa", "angulo", "u", "tubo", "tubo_redondo"]
     medida_1: float = Field(default=0, ge=0)
     medida_2: float = Field(default=0, ge=0)
     medida_3: float = Field(default=0, ge=0)

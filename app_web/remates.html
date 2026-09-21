@@ -24,6 +24,11 @@
     button { border: 0; padding: 10px 14px; background: #d45d3f; color: #fff; font-weight: 700; cursor: pointer; }
     .fila { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
     .medidas { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 14px; background: #eef5f2; border-radius: 10px; }
+    .perfil-u { display: flex; align-items: flex-start; justify-content: center; gap: 0; min-height: 120px; padding: 14px; background: #f7faf8; border: 1px solid #d9e0dd; border-radius: 10px; }
+    .perfil-u .lado { width: 16px; height: 74px; background: #d45d3f; }
+    .perfil-u .centro { width: 150px; height: 16px; background: #d45d3f; }
+    .perfil-u .medida-perfil { align-self: flex-start; color: #506269; font-size: .85rem; font-weight: 700; }
+    .campo-oculto { display: none; }
     .ayuda { margin: 0; color: #506269; font-size: .95rem; }
     .lista { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; min-width: 820px; }
@@ -48,8 +53,9 @@
           <label>Cliente <select id="cliente" required><option value="">Cargando clientes...</option></select></label>
         </div>
         <label>Obra en la que estoy <input id="obra" required placeholder="Ejemplo: vivienda de Juan, nave industrial..."></label>
-        <label>Remate <select id="tipo"><option value="u">Bandeja / U</option><option value="chapa">Chapa</option><option value="angulo">Angulo / L</option></select></label>
-        <p id="ayuda-medidas" class="ayuda">Para una U: alto 1 x ancho x alto 2 x largura. Todas las medidas estan en milimetros.</p>
+        <label>Remate <select id="tipo"><option value="u">Bandeja / U</option><option value="chapa">Chapa</option><option value="angulo">Angulo / L</option><option value="tubo">Tubo</option><option value="tubo_redondo">Tubo redondo</option></select></label>
+        <div id="perfil-u" class="perfil-u"><span class="medida-perfil">Izquierda</span><span class="lado"></span><span class="centro"></span><span class="lado"></span><span class="medida-perfil">Derecha</span></div>
+        <p id="ayuda-medidas" class="ayuda">Bandeja / U invertida: izquierda x centro x derecha x largura. Todas las medidas estan en milimetros.</p>
         <div class="medidas">
           <label id="etiqueta-1">Alto 1 (mm)<input id="medida-1" type="number" min="0" step="1" required></label>
           <label id="etiqueta-2">Ancho (mm)<input id="medida-2" type="number" min="0" step="1" required></label>
@@ -73,18 +79,33 @@
     const token = localStorage.getItem('alucarpin_token');
     if (!token) location.replace('/app/login.html');
     const apiFetch = (url, options = {}) => fetch(url, { ...options, headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` } });
-    const nombres = { u: 'Bandeja / U', chapa: 'Chapa', angulo: 'Angulo / L' };
+    const nombres = { u: 'Bandeja / U', chapa: 'Chapa', angulo: 'Angulo / L', tubo: 'Tubo', tubo_redondo: 'Tubo redondo' };
     const origen = document.querySelector('#origen');
     const tipo = document.querySelector('#tipo');
     const lista = document.querySelector('#lista');
     const mensaje = document.querySelector('#mensaje');
+    const perfiles = {
+      u: { etiquetas: ['Izquierda (mm)', 'Centro (mm)', 'Derecha (mm)'], ayuda: 'Bandeja / U invertida: izquierda x centro x derecha x largura. Todas las medidas estan en milimetros.', campos: 3 },
+      angulo: { etiquetas: ['Alto (mm)', 'Ancho (mm)', 'No se usa'], ayuda: 'Angular / L: alto x ancho x largura.', campos: 2 },
+      chapa: { etiquetas: ['Ancho (mm)', 'No se usa', 'No se usa'], ayuda: 'Chapa: ancho x largura.', campos: 1 },
+      tubo: { etiquetas: ['Ancho (mm)', 'Alto (mm)', 'No se usa'], ayuda: 'Tubo rectangular: ancho x alto x largura.', campos: 2 },
+      tubo_redondo: { etiquetas: ['Diametro (mm)', 'No se usa', 'No se usa'], ayuda: 'Tubo redondo: diametro x largura.', campos: 1 }
+    };
     const datos = id => document.querySelector(`#${id}`).value;
     const dinero = valor => Number(valor || 0).toLocaleString('es-ES', { maximumFractionDigits: 2 });
     function mostrarError(texto) { mensaje.textContent = texto; mensaje.className = 'mensaje error'; }
     function actualizarEtiquetas() {
-      const etiquetas = tipo.value === 'u' ? ['Alto 1 (mm)', 'Ancho (mm)', 'Alto 2 (mm)'] : tipo.value === 'angulo' ? ['Ala 1 (mm)', 'Ala 2 (mm)', 'Espesor (mm)'] : ['Ancho (mm)', 'Espesor (mm)', 'Desarrollo (mm)'];
-      ['etiqueta-1', 'etiqueta-2', 'etiqueta-3'].forEach((id, indice) => { document.querySelector(`#${id}`).firstChild.textContent = etiquetas[indice]; });
-      document.querySelector('#ayuda-medidas').textContent = tipo.value === 'u' ? 'Para una U: alto 1 x ancho x alto 2 x largura. Todas las medidas estan en milimetros.' : tipo.value === 'angulo' ? 'Para una L: ala 1 x ala 2 x espesor x largura.' : 'Para una chapa: ancho x espesor x desarrollo x largura.';
+      const perfil = perfiles[tipo.value];
+      ['etiqueta-1', 'etiqueta-2', 'etiqueta-3'].forEach((id, indice) => {
+        const etiqueta = document.querySelector(`#${id}`);
+        const entrada = etiqueta.querySelector('input');
+        etiqueta.firstChild.textContent = perfil.etiquetas[indice];
+        etiqueta.classList.toggle('campo-oculto', indice >= perfil.campos);
+        entrada.required = indice < perfil.campos;
+        if (indice >= perfil.campos) entrada.value = '';
+      });
+      document.querySelector('#perfil-u').hidden = tipo.value !== 'u';
+      document.querySelector('#ayuda-medidas').textContent = perfil.ayuda;
     }
     async function cargarClientes() {
       const [respuestaTrabajos, respuestaFaenas] = await Promise.all([apiFetch('/trabajos'), apiFetch('/faenas')]);
@@ -102,7 +123,7 @@
       if (!respuesta.ok) throw new Error('No se pudieron cargar los remates.');
       const remates = await respuesta.json();
       lista.innerHTML = remates.length ? '' : '<tr><td colspan="7">Todavia no hay remates guardados.</td></tr>';
-      remates.forEach(remate => { const fila = document.createElement('tr'); fila.innerHTML = `<td>${remate.cliente || '-'}</td><td>${remate.obra || '-'}</td><td>${remate.origen === 'propia' ? 'Propia' : '3º'}</td><td>${nombres[remate.tipo]}</td><td>${dinero(remate.medida_1)} x ${dinero(remate.medida_2)} x ${dinero(remate.medida_3)} mm</td><td>${dinero(remate.largura)} mm / ${remate.cantidad} ud.</td><td><button type="button" class="borrar">Borrar</button></td>`; fila.querySelector('.borrar').onclick = async () => { if (!confirm('¿Borrar este remate?')) return; await apiFetch(`/remates/${remate.id}`, { method: 'DELETE' }); await cargarRemates(); }; lista.appendChild(fila); });
+      remates.forEach(remate => { const medidas = remate.tipo === 'u' ? `${dinero(remate.medida_1)} x ${dinero(remate.medida_2)} x ${dinero(remate.medida_3)}` : remate.tipo === 'chapa' || remate.tipo === 'tubo_redondo' ? dinero(remate.medida_1) : `${dinero(remate.medida_1)} x ${dinero(remate.medida_2)}`; const fila = document.createElement('tr'); fila.innerHTML = `<td>${remate.cliente || '-'}</td><td>${remate.obra || '-'}</td><td>${remate.origen === 'propia' ? 'Propia' : '3º'}</td><td>${nombres[remate.tipo]}</td><td>${medidas} mm</td><td>${dinero(remate.largura)} mm / ${remate.cantidad} ud.</td><td><button type="button" class="borrar">Borrar</button></td>`; fila.querySelector('.borrar').onclick = async () => { if (!confirm('¿Borrar este remate?')) return; await apiFetch(`/remates/${remate.id}`, { method: 'DELETE' }); await cargarRemates(); }; lista.appendChild(fila); });
     }
     tipo.onchange = actualizarEtiquetas;
     document.querySelector('#formulario').onsubmit = async event => { event.preventDefault(); const payload = { origen: origen.value, origen_id: 0, cliente: datos('cliente'), obra: datos('obra'), tipo: tipo.value, medida_1: Number(datos('medida-1')), medida_2: Number(datos('medida-2')), medida_3: Number(datos('medida-3')), largura: Number(datos('largura')), cantidad: Number(datos('cantidad')), observaciones: datos('observaciones') }; const respuesta = await apiFetch('/remates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); const resultado = await respuesta.json(); if (!respuesta.ok) { mostrarError(resultado.detail || 'No se pudo guardar el remate.'); return; } mensaje.textContent = 'Remate guardado sin crear ninguna faena.'; mensaje.className = 'mensaje exito'; document.querySelector('#medida-1').value = ''; document.querySelector('#medida-2').value = ''; document.querySelector('#medida-3').value = ''; document.querySelector('#largura').value = ''; document.querySelector('#obra').value = ''; document.querySelector('#observaciones').value = ''; await cargarRemates(); };
