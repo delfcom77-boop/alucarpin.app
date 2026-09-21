@@ -8,31 +8,78 @@
   <link rel="icon" href="/app/icon.svg" type="image/svg+xml">
   <title>AlucarpinSamitier | Ayudante</title>
   <style>
-    :root { color-scheme: light; font-family: Segoe UI, sans-serif; }
+    :root {
+      --bg: #edf3f2;
+      --surface: #ffffff;
+      --text: #1d2d34;
+      --muted: #52686d;
+      --brand: #114e55;
+      --brand-strong: #0d3d42;
+      --accent: #f28b42;
+      --accent-deep: #d7602e;
+      --soft: #edf8f7;
+      --success: #1f6c4d;
+      --error: #9c2c2c;
+      --border: rgba(17, 78, 85, 0.14);
+      --shadow: rgba(17, 78, 85, 0.12);
+      color-scheme: light;
+      font-family: Segoe UI, sans-serif;
+    }
     * { box-sizing: border-box; }
-    body { margin: 0; background: #eef3f2; color: #17333a; }
-    main { width: min(760px, 100%); margin: auto; padding: 24px 16px 40px; }
-    header { background: #176b70; color: white; padding: 22px; border-radius: 14px; margin-bottom: 16px; }
-    h1 { margin: 0 0 6px; font-size: clamp(24px, 6vw, 34px); }
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, #f3f6f5 0%, #edf4f2 100%);
+      color: var(--text);
+    }
+    main { width: min(760px, calc(100% - 20px)); margin: auto; padding: 24px 12px 40px; }
+    header {
+      background: linear-gradient(135deg, #18393e 0%, #1d5e62 100%);
+      color: white;
+      padding: 26px 22px;
+      border-radius: 18px;
+      margin-bottom: 18px;
+      box-shadow: 0 16px 22px rgba(17, 78, 85, 0.18);
+    }
+    h1 { margin: 0 0 8px; font-size: clamp(24px, 6vw, 34px); }
     p { margin: 0; }
-    section { background: white; border: 1px solid #d6e1df; border-radius: 12px; padding: 18px; margin-top: 16px; }
+    section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 18px;
+      margin-top: 16px;
+      box-shadow: 0 10px 24px var(--shadow);
+    }
     h2 { margin: 0 0 14px; font-size: 20px; }
-    label { display: block; font-weight: 600; margin: 12px 0 6px; }
-    input, select, button { width: 100%; min-height: 48px; border-radius: 8px; font: inherit; }
-    input, select { border: 1px solid #aebfbd; padding: 10px 12px; }
-    button { border: 0; background: #d45d3f; color: white; font-weight: 700; padding: 10px 14px; cursor: pointer; margin-top: 16px; }
-    button:hover { background: #b94b31; }
-    .mensaje { min-height: 24px; margin-top: 12px; font-weight: 600; }
-    .error { color: #a52e2e; }
-    .ok { color: #176b70; }
+    label { display: block; font-weight: 700; margin: 12px 0 6px; }
+    input, select, button { width: 100%; min-height: 48px; border-radius: 12px; font: inherit; }
+    input, select {
+      border: 1px solid rgba(17, 78, 85, 0.18);
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.96);
+    }
+    button {
+      border: 0;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
+      color: white;
+      font-weight: 800;
+      padding: 10px 14px;
+      cursor: pointer;
+      margin-top: 16px;
+      box-shadow: 0 12px 18px rgba(242, 139, 66, 0.18);
+    }
+    button:hover { filter: brightness(1.02); }
+    .mensaje { min-height: 24px; margin-top: 12px; font-weight: 700; }
+    .error { color: var(--error); }
+    .ok { color: var(--success); }
     .lista { overflow-x: auto; }
     table { width: 100%; min-width: 650px; border-collapse: collapse; }
-    th, td { padding: 11px 8px; border-bottom: 1px solid #d6e1df; text-align: left; }
-    th { background: #eef7f5; }
+    th, td { padding: 11px 8px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { background: #edf8f8; }
     tbody tr { cursor: pointer; }
-    tbody tr.pagado { background: #e3f3e5; color: #185c2b; }
-    tbody tr.pendiente { background: #fce4e4; color: #7a2020; }
-    tbody tr:hover, tbody tr.seleccionado { background: #eef7f5; }
+    tbody tr.pagado { background: #e7f4ec; color: #185c2b; }
+    tbody tr.pendiente { background: #fdf0f0; color: #7a2020; }
+    tbody tr:hover, tbody tr.seleccionado { background: #eef8f7; }
     @media (min-width: 640px) { form { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; } form button, form .mensaje { grid-column: 1 / -1; } }
   </style>
 </head>
@@ -46,13 +93,13 @@
       <h2>Registrar día</h2>
       <form id="formulario">
         <div><label for="fecha">Día</label><input id="fecha" type="date" required></div>
-        <div><label for="tipo-destino">¿Qué trabajo se ha realizado?</label><select id="tipo-destino" required><option value="faena">Faena a 3º</option><option value="presupuesto">Presupuesto Alucarpin</option><option value="reparacion">Reparación</option></select></div>
-        <div id="presupuesto-bloque" hidden><label for="presupuesto">Presupuesto existente (opcional)</label><select id="presupuesto"><option value="">Crear presupuesto provisional</option></select></div>
+        <div><label for="tipo-destino">Destino del día trabajado</label><select id="tipo-destino" required><option value="pendiente">Pendiente de vincular</option><option value="faena">Faena a 3º</option><option value="presupuesto">Presupuesto Alucarpin</option><option value="reparacion">Reparación</option></select></div>
+        <div id="presupuesto-bloque" hidden><label for="presupuesto">Presupuesto existente</label><select id="presupuesto"><option value="">Selecciona un presupuesto</option></select></div>
         <div><label for="cliente">Cliente</label><input id="cliente" required maxlength="160"></div>
         <div><label for="obra">Obra</label><input id="obra" required maxlength="160"></div>
         <div><label for="ubicacion">Ubicación</label><input id="ubicacion" maxlength="200"></div>
         <div><label for="poblacion">Población</label><input id="poblacion" maxlength="100"></div>
-        <button type="submit">Guardar faena y añadir otra</button>
+        <button type="submit">Guardar día y añadir otro</button>
         <div id="mensaje" class="mensaje" role="status"></div>
       </form>
     </section>
@@ -120,12 +167,12 @@
 
     function pintar() {
       historial.textContent = '';
-      contador.textContent = `${fichajes.length} faena${fichajes.length === 1 ? '' : 's'} registrada${fichajes.length === 1 ? '' : 's'}`;
+      contador.textContent = `${fichajes.length} día${fichajes.length === 1 ? '' : 's'} registrado${fichajes.length === 1 ? '' : 's'}`;
       if (!fichajes.length) { historial.innerHTML = '<tr><td colspan="6">Todavía no hay días registrados.</td></tr>'; return; }
       fichajes.forEach(fichaje => {
         const item = document.createElement('tr');
         item.className = `registro ${fichaje.pagado ? 'pagado' : 'pendiente'}`;
-        const tipo = fichaje.tipo_destino === 'presupuesto' ? 'Presupuesto Alucarpin' : fichaje.tipo_destino === 'reparacion' ? 'Reparación' : 'Faena a 3º';
+        const tipo = fichaje.tipo_destino === 'presupuesto' ? 'Presupuesto Alucarpin' : fichaje.tipo_destino === 'reparacion' ? 'Reparación' : fichaje.tipo_destino === 'faena' ? 'Faena a 3º' : 'Pendiente de vincular';
         item.innerHTML = `<td>${mostrarFecha(fichaje.fecha)}</td><td>${tipo}</td><td>${fichaje.cliente || ''}</td><td>${fichaje.obra}</td><td>${fichaje.ubicacion || ''}</td><td>${fichaje.poblacion || ''}</td>`;
         item.onclick = () => cargarEnFormulario(fichaje, item);
         historial.appendChild(item);
@@ -136,7 +183,7 @@
       document.querySelectorAll('#historial .registro').forEach(item => item.classList.remove('seleccionado'));
       elemento.classList.add('seleccionado');
       fecha.value = fichaje.fecha;
-      tipoDestino.value = fichaje.tipo_destino || 'faena';
+      tipoDestino.value = fichaje.tipo_destino || 'pendiente';
       presupuesto.value = fichaje.num_presupuesto || '';
       tipoDestino.dispatchEvent(new Event('change'));
       document.querySelector('#cliente').value = fichaje.cliente || '';
@@ -164,13 +211,13 @@
       if (!respuesta.ok) { const detalle = await respuesta.json(); mensaje.textContent = detalle.detail || 'No se pudo guardar.'; mensaje.className = 'mensaje error'; return; }
       const resultado = await respuesta.json();
       mensaje.textContent = resultado.estado_revision === 'Pendiente de revisar'
-        ? 'Faena guardada. Puedes añadir otra del mismo día.'
+        ? 'Día guardado pendiente de vincular. Puedes añadir otro del mismo día.'
         : 'Día guardado y vinculado correctamente.';
       mensaje.className = 'mensaje ok';
       delete formulario.dataset.id;
       formulario.reset();
       fecha.value = fechaGuardada;
-      tipoDestino.value = 'faena';
+      tipoDestino.value = 'pendiente';
       tipoDestino.dispatchEvent(new Event('change'));
       await cargar();
     });

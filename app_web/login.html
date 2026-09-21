@@ -8,22 +8,133 @@
   <link rel="icon" href="/app/icon.svg" type="image/svg+xml">
   <title>Acceso | AlucarpinSamitier</title>
   <style>
-    :root { font-family: Segoe UI, sans-serif; color: #223238; }
+    :root {
+      --bg-dark: #0f1f23;
+      --bg-mid: #153d42;
+      --brand: #1e8a8d;
+      --brand-strong: #0f6a6e;
+      --accent: #f28b42;
+      --accent-dark: #d86d25;
+      --surface: #ffffff;
+      --text: #1a2c31;
+      --muted: #4d676d;
+      --border: rgba(19, 67, 74, 0.18);
+      --shadow: rgba(10, 27, 30, 0.22);
+      font-family: Segoe UI, sans-serif;
+      color: var(--text);
+    }
     * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #eef3f2; }
-    main { width: min(420px, calc(100% - 32px)); background: #fff; border: 1px solid #d6e1df; border-radius: 12px; padding: 24px; }
-    h1 { margin-top: 0; color: #176b70; }
-    label { display: grid; gap: 6px; margin-top: 14px; font-weight: 700; }
-    .recordar { display: flex; grid-template-columns: auto 1fr; align-items: center; gap: 8px; font-weight: 400; }
-    .recordar input { width: auto; min-height: auto; }
-    input, button { width: 100%; min-height: 46px; border-radius: 8px; font: inherit; }
-    input { border: 1px solid #aebfbd; padding: 10px; }
-    button { margin-top: 20px; border: 0; background: #d45d3f; color: #fff; font-weight: 700; cursor: pointer; }
-    #mensaje { min-height: 24px; margin-top: 12px; font-weight: 700; color: #a52e2e; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: radial-gradient(circle at top, #2d5b60 0%, var(--bg-dark) 44%, #081b1d 100%);
+      padding: 24px;
+    }
+    main {
+      width: min(420px, 100%);
+      background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(247,249,249,0.98));
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 26px 24px 22px;
+      box-shadow: 0 18px 42px var(--shadow);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px 18px;
+      margin-bottom: 10px;
+      border-bottom: 1px solid rgba(19, 67, 74, 0.12);
+    }
+    .brand-badge {
+      width: 54px;
+      height: 54px;
+      display: grid;
+      place-items: center;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--brand) 0%, var(--brand-strong) 100%);
+      box-shadow: 0 10px 18px rgba(20, 110, 115, 0.35);
+    }
+    .brand-badge img { width: 30px; height: 30px; }
+    .brand-text {
+      line-height: 1.05;
+      color: var(--brand-strong);
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .brand-text small {
+      display: block;
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      text-transform: none;
+      margin-top: 3px;
+      font-weight: 700;
+    }
+    h1 {
+      margin: 10px 0 18px;
+      color: var(--brand-strong);
+      font-size: clamp(1.7rem, 4vw, 2.25rem);
+      line-height: 1.2;
+    }
+    label {
+      display: grid;
+      gap: 8px;
+      margin-top: 16px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .recordar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 18px;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .recordar input { width: auto; min-height: auto; accent-color: var(--brand); }
+    input, button { width: 100%; min-height: 50px; border-radius: 12px; font: inherit; }
+    input {
+      border: 1px solid rgba(19, 67, 74, 0.24);
+      background: rgba(255,255,255,0.9);
+      padding: 12px 14px;
+      color: var(--text);
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    input:focus {
+      outline: none;
+      border-color: var(--brand);
+      box-shadow: 0 0 0 4px rgba(30,138,141,0.12);
+    }
+    button {
+      margin-top: 20px;
+      border: 0;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+      color: #fff;
+      font-weight: 800;
+      font-size: 1.05rem;
+      cursor: pointer;
+      box-shadow: 0 12px 18px rgba(242, 139, 66, 0.28);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    button:hover { transform: translateY(-1px); }
+    #mensaje {
+      min-height: 26px;
+      margin-top: 12px;
+      font-weight: 700;
+      color: #9d2d2d;
+    }
   </style>
 </head>
 <body>
   <main>
+    <div class="brand" aria-label="Logo de AlucarpinSamitier">
+      <div class="brand-badge"><img src="/app/icon.svg" alt="Logo de AlucarpinSamitier"></div>
+      <div class="brand-text">Alucarpin<small>Samitier</small></div>
+    </div>
     <h1>Acceso a la aplicación</h1>
     <form id="login">
       <label>Usuario <input id="usuario" autocomplete="username" required></label>

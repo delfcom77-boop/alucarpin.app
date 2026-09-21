@@ -5,27 +5,109 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AlucarpinSamitier | Menú principal</title>
   <style>
-    :root { font-family: Segoe UI, sans-serif; color: #223238; }
+    :root {
+      --bg: #eef3f1;
+      --panel: #ffffff;
+      --text: #1d2d34;
+      --muted: #4a5d64;
+      --brand: #114e55;
+      --brand-light: #1d8a8d;
+      --accent: #f28b42;
+      --shadow: rgba(14, 41, 45, 0.18);
+      font-family: Segoe UI, sans-serif;
+      color: var(--text);
+    }
     * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; background: #f3f1eb; }
-    main { width: min(900px, 100%); margin: auto; padding: 28px 16px 40px; }
-    header { background: #293f4a; color: #fff; border-radius: 14px; padding: 24px; }
-    h1 { margin: 0 0 8px; }
-    .menu { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 18px; }
-    .opcion { min-height: 170px; display: flex; flex-direction: column; justify-content: space-between; padding: 20px; border-radius: 12px; color: #fff; text-decoration: none; font-weight: 700; box-shadow: 0 4px 12px #22323822; }
-    .opcion strong { font-size: 22px; }
-    .opcion span { font-weight: 400; line-height: 1.4; }
-    .control { background: #176b70; }
-    .agenda { background: #d45d3f; }
-    .ayudantes { background: #806b3e; }
-    .alarmas { background: #7b4f74; }
-    .salir { display: inline-block; margin-top: 18px; color: #7b2020; font-weight: 700; cursor: pointer; }
-    @media (max-width: 620px) { .menu { grid-template-columns: 1fr; } .opcion { min-height: 125px; } }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: linear-gradient(180deg, #f5f7f4 0%, #edf2f1 100%);
+    }
+    main {
+      width: min(980px, calc(100% - 24px));
+      margin: auto;
+      padding: 28px 12px 40px;
+    }
+    header {
+      background: linear-gradient(135deg, #142d31 0%, #1d5e62 100%);
+      color: #fff;
+      border-radius: 18px;
+      padding: 26px 22px;
+      box-shadow: 0 16px 24px rgba(17, 78, 85, 0.22);
+    }
+    header .eyebrow {
+      display: inline-block;
+      margin-bottom: 10px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.12);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-size: 0.7rem;
+      font-weight: 700;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(2rem, 4vw, 3rem);
+      line-height: 1.1;
+    }
+    header p { margin: 0; font-size: 1.05rem; opacity: 0.9; }
+    .menu {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(240px, 1fr));
+      gap: 18px;
+      margin-top: 24px;
+    }
+    .opcion {
+      min-height: 180px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 22px 20px;
+      border-radius: 18px;
+      color: #fff;
+      text-decoration: none;
+      font-weight: 700;
+      box-shadow: 0 12px 22px var(--shadow);
+      border: 2px solid rgba(255,255,255,0.22);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .opcion:hover { transform: translateY(-2px); }
+    .opcion strong {
+      font-size: clamp(1.35rem, 2vw, 2.1rem);
+      line-height: 1.1;
+    }
+    .opcion span {
+      font-weight: 600;
+      line-height: 1.5;
+      font-size: 0.98rem;
+      opacity: 0.98;
+    }
+    .control { background: linear-gradient(135deg, #1d8a8d 0%, #0f5f63 100%); }
+    .agenda { background: linear-gradient(135deg, #f28b42 0%, #d75f32 100%); }
+    .ayudantes { background: linear-gradient(135deg, #9b7f42 0%, #6a4c2a 100%); }
+    .alarmas { background: linear-gradient(135deg, #864c7e 0%, #5a3158 100%); }
+    .salir {
+      display: inline-block;
+      margin-top: 24px;
+      color: #a13333;
+      font-weight: 800;
+      text-decoration: none;
+      font-size: 1rem;
+    }
+    @media (max-width: 620px) {
+      .menu { grid-template-columns: 1fr; }
+      .opcion { min-height: 140px; }
+    }
   </style>
 </head>
 <body>
   <main>
-    <header><h1>AlucarpinSamitier</h1><p>¿Qué quieres hacer?</p></header>
+    <header>
+      <span class="eyebrow">Panel principal</span>
+      <h1>AlucarpinSamitier</h1>
+      <p>¿Qué quieres hacer?</p>
+    </header>
     <section class="menu">
       <a class="opcion agenda" href="/app/agenda.html"><strong>Agenda y citas</strong><span>Visitas, reuniones, llamadas y recordatorios.</span></a>
       <a class="opcion control" href="/app/mi_control.html"><strong>Mi control</strong><span>Trabajos propios, reparaciones, presupuestos e ingresos.</span></a>

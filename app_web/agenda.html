@@ -5,35 +5,114 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AlucarpinSamitier | Agenda</title>
   <style>
-    :root { font-family: Segoe UI, sans-serif; color: #223238; }
+    :root {
+      --bg: #eef3f1;
+      --surface: #ffffff;
+      --surface-strong: #f8faf9;
+      --text: #1e2d32;
+      --muted: #50656c;
+      --brand: #114e55;
+      --brand-strong: #0d3d42;
+      --accent: #f28b42;
+      --accent-deep: #d7602e;
+      --soft: #e9f7f7;
+      --success: #1d7a57;
+      --error: #a12d2d;
+      --border: rgba(17, 78, 85, 0.12);
+      --shadow: rgba(15, 36, 40, 0.16);
+      font-family: Segoe UI, sans-serif;
+      color: var(--text);
+    }
     * { box-sizing: border-box; }
-    body { margin: 0; background: #f3f1eb; }
-    main { width: min(1000px, 100%); margin: auto; padding: 24px 16px 40px; }
-    header { background: #293f4a; color: #fff; border-radius: 14px; padding: 22px; }
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, #f2f5f4 0%, #edf4f3 100%);
+      color: var(--text);
+    }
+    main { width: min(1000px, calc(100% - 20px)); margin: auto; padding: 24px 12px 40px; }
+    header {
+      background: linear-gradient(135deg, #142d31 0%, #1d5e62 100%);
+      color: #fff;
+      border-radius: 18px;
+      padding: 26px 22px;
+      box-shadow: 0 16px 22px rgba(17, 78, 85, 0.18);
+    }
     h1, h2 { margin: 0 0 10px; }
-    nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
-    nav a { background: #d45d3f; color: #fff; border-radius: 8px; padding: 12px 16px; text-decoration: none; font-weight: 700; }
-    section { background: #fff; border: 1px solid #ddd8cc; border-radius: 12px; padding: 18px; margin-top: 16px; }
+    h1 { font-size: clamp(2rem, 4vw, 2.8rem); }
+    header p { margin: 0; font-size: 1.05rem; opacity: 0.9; }
+    nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0; }
+    nav a {
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
+      color: #fff;
+      border-radius: 12px;
+      padding: 12px 18px;
+      text-decoration: none;
+      font-weight: 800;
+      box-shadow: 0 10px 16px rgba(242, 139, 66, 0.2);
+    }
+    section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 18px;
+      margin-top: 16px;
+      box-shadow: 0 10px 22px var(--shadow);
+    }
     form { display: grid; gap: 12px; }
     label { font-weight: 700; display: grid; gap: 6px; }
-    input, select, button { min-height: 46px; border-radius: 8px; font: inherit; }
-    input, select { border: 1px solid #b9c4c2; padding: 10px; }
-    button { background: #d45d3f; color: #fff; border: 0; font-weight: 700; cursor: pointer; padding: 10px 14px; }
+    input, select, button { min-height: 48px; border-radius: 12px; font: inherit; }
+    input, select {
+      border: 1px solid rgba(17, 78, 85, 0.18);
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.96);
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--brand);
+      box-shadow: 0 0 0 4px rgba(17, 78, 85, 0.12);
+    }
+    button {
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
+      color: #fff;
+      border: 0;
+      font-weight: 800;
+      cursor: pointer;
+      padding: 10px 14px;
+      box-shadow: 0 12px 18px rgba(242, 139, 66, 0.2);
+    }
     .fila { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
     .mensaje { min-height: 24px; font-weight: 700; }
-    .error { color: #a52e2e; }
-    .exito { color: #1c6b42; }
+    .error { color: var(--error); }
+    .exito { color: var(--success); }
     .lista { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; min-width: 900px; }
-    th, td { border-bottom: 1px solid #ddd8cc; padding: 10px 8px; text-align: left; }
-    th { background: #eef3f1; }
+    th, td { border-bottom: 1px solid rgba(17, 78, 85, 0.12); padding: 12px 8px; text-align: left; }
+    th { background: #edf7f7; }
     .acciones { display: flex; flex-wrap: wrap; gap: 8px; }
     .acciones button { min-height: 38px; padding: 7px 12px; }
-    .borrar { background: #f4cccc; color: #7b2020; }
-    .seguimiento { background: #fff8e5; border-color: #e6c968; }
-      .agenda-menu { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
-      .agenda-menu button { background: #d45d3f; color: #fff; border: 0; padding: 16px 24px; min-width: 180px; cursor: pointer; font-size: 17px; font-weight: 700; }
-      .agenda-menu button.seleccionado { background: #293f4a; }
+    .borrar { background: #f4d5d5; color: #7b2020; box-shadow: none; }
+    #lista tr.realizada { background: #eaf8ee; }
+    #lista tr.pendiente { background: #fff3eb; }
+    #lista tr.realizada td { border-bottom-color: rgba(29, 122, 87, 0.22); }
+    #lista tr.pendiente td { border-bottom-color: rgba(242, 139, 66, 0.2); }
+    .seguimiento { background: linear-gradient(180deg, #fffdf2 0%, #fff9e8 100%); border-color: rgba(209, 155, 38, 0.4); }
+    .agenda-menu { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+    .agenda-menu button {
+      background: #dfeae9;
+      color: var(--brand);
+      border: 1px solid rgba(17, 78, 85, 0.18);
+      padding: 16px 24px;
+      min-width: 180px;
+      cursor: pointer;
+      font-size: 17px;
+      font-weight: 800;
+      box-shadow: none;
+    }
+    .agenda-menu button.seleccionado {
+      background: linear-gradient(135deg, #193b40 0%, #1d5e62 100%);
+      color: #fff;
+      box-shadow: 0 10px 18px rgba(17, 78, 85, 0.18);
+    }
     @media (max-width: 560px) { .fila { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -103,7 +182,7 @@
       const respuesta = await apiFetch('/citas'); if (!respuesta.ok) throw new Error('No se pudieron cargar las citas.');
       const citas = await respuesta.json(); const cuerpo = document.querySelector('#lista'); cuerpo.textContent = '';
       if (!citas.length) { cuerpo.innerHTML = '<tr><td colspan="7">No hay citas agendadas.</td></tr>'; return; }
-      citas.forEach(cita => { const fila = document.createElement('tr'); fila.innerHTML = `<td>${fechaTexto(cita.fecha)}</td><td>${cita.hora}</td><td>${tipos[cita.tipo] || cita.tipo}</td><td>${cita.cliente || '-'}</td><td>${[cita.ubicacion, cita.poblacion].filter(Boolean).join(', ') || '-'}</td><td>${cita.estado}</td><td class="acciones"><button type="button" class="editar-cita">Modificar</button><button type="button" class="cal">Calendario</button><button type="button" class="realizada" ${cita.estado === 'Realizada' ? 'disabled' : ''}>${cita.estado === 'Realizada' ? 'Realizada' : 'Marcar realizada'}</button><button type="button" class="borrar">Borrar</button></td>`; fila.querySelector('.editar-cita').onclick = () => editarCita(cita); fila.querySelector('.cal').onclick = () => calendario(cita.id).catch(error => mostrarError(error.message)); fila.querySelector('.realizada').onclick = async () => { const respuesta = await apiFetch(`/citas/${cita.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fecha: cita.fecha, hora: cita.hora, tipo: cita.tipo, cliente: cita.cliente || '', ubicacion: cita.ubicacion || '', poblacion: cita.poblacion || '', telefono: cita.telefono || '', observaciones: cita.observaciones || '', estado: 'Realizada' }) }); if (!respuesta.ok) { const resultado = await respuesta.json().catch(() => ({})); mostrarError(resultado.detail || 'No se pudo marcar la cita como realizada.'); return; } mensaje.textContent = 'Cita marcada como realizada.'; mensaje.className = 'mensaje exito'; await cargar(); }; fila.querySelector('.borrar').onclick = async () => { if (!confirm('¿Borrar esta cita?')) return; await apiFetch(`/citas/${cita.id}`, { method: 'DELETE' }); await cargar(); }; cuerpo.appendChild(fila); });
+      citas.forEach(cita => { const fila = document.createElement('tr'); fila.className = cita.estado === 'Realizada' ? 'realizada' : 'pendiente'; fila.innerHTML = `<td>${fechaTexto(cita.fecha)}</td><td>${cita.hora}</td><td>${tipos[cita.tipo] || cita.tipo}</td><td>${cita.cliente || '-'}</td><td>${[cita.ubicacion, cita.poblacion].filter(Boolean).join(', ') || '-'}</td><td>${cita.estado}</td><td class="acciones"><button type="button" class="editar-cita">Modificar</button><button type="button" class="cal">Calendario</button><button type="button" class="realizada" ${cita.estado === 'Realizada' ? 'disabled' : ''}>${cita.estado === 'Realizada' ? 'Realizada' : 'Marcar realizada'}</button><button type="button" class="borrar">Borrar</button></td>`; fila.querySelector('.editar-cita').onclick = () => editarCita(cita); fila.querySelector('.cal').onclick = () => calendario(cita.id).catch(error => mostrarError(error.message)); fila.querySelector('.realizada').onclick = async () => { const respuesta = await apiFetch(`/citas/${cita.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fecha: cita.fecha, hora: cita.hora, tipo: cita.tipo, cliente: cita.cliente || '', ubicacion: cita.ubicacion || '', poblacion: cita.poblacion || '', telefono: cita.telefono || '', observaciones: cita.observaciones || '', estado: 'Realizada' }) }); if (!respuesta.ok) { const resultado = await respuesta.json().catch(() => ({})); mostrarError(resultado.detail || 'No se pudo marcar la cita como realizada.'); return; } mensaje.textContent = 'Cita marcada como realizada.'; mensaje.className = 'mensaje exito'; await cargar(); }; fila.querySelector('.borrar').onclick = async () => { if (!confirm('¿Borrar esta cita?')) return; await apiFetch(`/citas/${cita.id}`, { method: 'DELETE' }); await cargar(); }; cuerpo.appendChild(fila); });
     }
     const mostrarError = texto => { mensaje.textContent = texto; mensaje.className = 'mensaje error'; };
     const mostrarErrorSeguimiento = texto => { mensajeSeguimiento.textContent = texto; mensajeSeguimiento.className = 'mensaje error'; };
