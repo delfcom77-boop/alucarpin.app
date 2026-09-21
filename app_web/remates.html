@@ -45,8 +45,9 @@
       <form id="formulario">
         <div class="fila">
           <label>Tipo de faena <select id="origen"><option value="propia">Faena propia</option><option value="tercero">Faena de 3º</option></select></label>
-          <label>Faena <select id="origen-id" required><option value="">Cargando faenas...</option></select></label>
+          <label>Cliente <select id="cliente" required><option value="">Cargando clientes...</option></select></label>
         </div>
+        <label>Obra en la que estoy <input id="obra" required placeholder="Ejemplo: vivienda de Juan, nave industrial..."></label>
         <label>Remate <select id="tipo"><option value="u">Bandeja / U</option><option value="chapa">Chapa</option><option value="angulo">Angulo / L</option></select></label>
         <p id="ayuda-medidas" class="ayuda">Para una U: alto 1 x ancho x alto 2 x largura. Todas las medidas estan en milimetros.</p>
         <div class="medidas">
@@ -65,7 +66,7 @@
     </section>
     <section>
       <h2>Remates guardados</h2>
-      <div class="lista"><table><thead><tr><th>Faena</th><th>Tipo</th><th>Medidas</th><th>Largura</th><th>Cantidad</th><th>Observaciones</th><th></th></tr></thead><tbody id="lista"><tr><td colspan="7">Selecciona una faena.</td></tr></tbody></table></div>
+      <div class="lista"><table><thead><tr><th>Cliente</th><th>Obra</th><th>Tipo faena</th><th>Remate</th><th>Medidas</th><th>Largura / cantidad</th><th></th></tr></thead><tbody id="lista"><tr><td colspan="7">Cargando...</td></tr></tbody></table></div>
     </section>
   </main>
   <script>
@@ -74,12 +75,9 @@
     const apiFetch = (url, options = {}) => fetch(url, { ...options, headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` } });
     const nombres = { u: 'Bandeja / U', chapa: 'Chapa', angulo: 'Angulo / L' };
     const origen = document.querySelector('#origen');
-    const origenId = document.querySelector('#origen-id');
     const tipo = document.querySelector('#tipo');
     const lista = document.querySelector('#lista');
     const mensaje = document.querySelector('#mensaje');
-    let faenas = [];
-    let propias = [];
     const datos = id => document.querySelector(`#${id}`).value;
     const dinero = valor => Number(valor || 0).toLocaleString('es-ES', { maximumFractionDigits: 2 });
     function mostrarError(texto) { mensaje.textContent = texto; mensaje.className = 'mensaje error'; }
@@ -88,33 +86,28 @@
       ['etiqueta-1', 'etiqueta-2', 'etiqueta-3'].forEach((id, indice) => { document.querySelector(`#${id}`).firstChild.textContent = etiquetas[indice]; });
       document.querySelector('#ayuda-medidas').textContent = tipo.value === 'u' ? 'Para una U: alto 1 x ancho x alto 2 x largura. Todas las medidas estan en milimetros.' : tipo.value === 'angulo' ? 'Para una L: ala 1 x ala 2 x espesor x largura.' : 'Para una chapa: ancho x espesor x desarrollo x largura.';
     }
-    async function cargarFaenas() {
-      const [respuestaPropias, respuestaTerceros] = await Promise.all([apiFetch('/trabajos'), apiFetch('/faenas')]);
-      if (!respuestaPropias.ok || !respuestaTerceros.ok) throw new Error('No se pudieron cargar las faenas.');
-      propias = (await respuestaPropias.json()).filter(item => item.origen === 'propio');
-      faenas = await respuestaTerceros.json();
-      pintarOpciones();
-    }
-    function pintarOpciones() {
-      const listaOrigen = origen.value === 'propia' ? propias : faenas;
-      origenId.innerHTML = '<option value="">Selecciona una faena</option>';
-      listaOrigen.forEach(item => { const opcion = document.createElement('option'); opcion.value = item.id; opcion.textContent = `${item.cliente || 'Sin cliente'} - ${item.obra || 'Sin obra'}`; origenId.appendChild(opcion); });
-      lista.innerHTML = '<tr><td colspan="7">Selecciona una faena.</td></tr>';
+    async function cargarClientes() {
+      const [respuestaTrabajos, respuestaFaenas] = await Promise.all([apiFetch('/trabajos'), apiFetch('/faenas')]);
+      if (!respuestaTrabajos.ok || !respuestaFaenas.ok) throw new Error('No se pudieron cargar los clientes.');
+      const trabajos = await respuestaTrabajos.json();
+      const faenas = await respuestaFaenas.json();
+      const clientes = [...new Set([...trabajos, ...faenas].map(item => item.cliente).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+      const cliente = document.querySelector('#cliente');
+      cliente.innerHTML = '<option value="">Selecciona un cliente</option>';
+      clientes.forEach(nombre => { const opcion = document.createElement('option'); opcion.value = nombre; opcion.textContent = nombre; cliente.appendChild(opcion); });
+      await cargarRemates();
     }
     async function cargarRemates() {
-      if (!origenId.value) { lista.innerHTML = '<tr><td colspan="7">Selecciona una faena.</td></tr>'; return; }
-      const respuesta = await apiFetch(`/remates?origen=${origen.value}&origen_id=${origenId.value}`);
+      const respuesta = await apiFetch('/remates');
       if (!respuesta.ok) throw new Error('No se pudieron cargar los remates.');
       const remates = await respuesta.json();
-      lista.innerHTML = remates.length ? '' : '<tr><td colspan="7">Todavia no hay remates para esta faena.</td></tr>';
-      remates.forEach(remate => { const fila = document.createElement('tr'); fila.innerHTML = `<td>${origen.value === 'propia' ? 'Propia' : '3º'} #${remate.origen_id}</td><td>${nombres[remate.tipo]}</td><td>${dinero(remate.medida_1)} x ${dinero(remate.medida_2)} x ${dinero(remate.medida_3)} mm</td><td>${dinero(remate.largura)} mm</td><td>${remate.cantidad}</td><td>${remate.observaciones || '-'}</td><td><button type="button" class="borrar">Borrar</button></td>`; fila.querySelector('.borrar').onclick = async () => { if (!confirm('¿Borrar este remate?')) return; await apiFetch(`/remates/${remate.id}`, { method: 'DELETE' }); await cargarRemates(); }; lista.appendChild(fila); });
+      lista.innerHTML = remates.length ? '' : '<tr><td colspan="7">Todavia no hay remates guardados.</td></tr>';
+      remates.forEach(remate => { const fila = document.createElement('tr'); fila.innerHTML = `<td>${remate.cliente || '-'}</td><td>${remate.obra || '-'}</td><td>${remate.origen === 'propia' ? 'Propia' : '3º'}</td><td>${nombres[remate.tipo]}</td><td>${dinero(remate.medida_1)} x ${dinero(remate.medida_2)} x ${dinero(remate.medida_3)} mm</td><td>${dinero(remate.largura)} mm / ${remate.cantidad} ud.</td><td><button type="button" class="borrar">Borrar</button></td>`; fila.querySelector('.borrar').onclick = async () => { if (!confirm('¿Borrar este remate?')) return; await apiFetch(`/remates/${remate.id}`, { method: 'DELETE' }); await cargarRemates(); }; lista.appendChild(fila); });
     }
-    origen.onchange = () => { pintarOpciones(); cargarRemates().catch(error => mostrarError(error.message)); };
-    origenId.onchange = () => cargarRemates().catch(error => mostrarError(error.message));
     tipo.onchange = actualizarEtiquetas;
-    document.querySelector('#formulario').onsubmit = async event => { event.preventDefault(); if (!origenId.value) { mostrarError('Selecciona una faena.'); return; } const payload = { origen: origen.value, origen_id: Number(origenId.value), tipo: tipo.value, medida_1: Number(datos('medida-1')), medida_2: Number(datos('medida-2')), medida_3: Number(datos('medida-3')), largura: Number(datos('largura')), cantidad: Number(datos('cantidad')), observaciones: datos('observaciones') }; const respuesta = await apiFetch('/remates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); const resultado = await respuesta.json(); if (!respuesta.ok) { mostrarError(resultado.detail || 'No se pudo guardar el remate.'); return; } mensaje.textContent = 'Remate guardado.'; mensaje.className = 'mensaje exito'; document.querySelector('#medida-1').value = ''; document.querySelector('#medida-2').value = ''; document.querySelector('#medida-3').value = ''; document.querySelector('#largura').value = ''; document.querySelector('#observaciones').value = ''; await cargarRemates(); };
+    document.querySelector('#formulario').onsubmit = async event => { event.preventDefault(); const payload = { origen: origen.value, origen_id: 0, cliente: datos('cliente'), obra: datos('obra'), tipo: tipo.value, medida_1: Number(datos('medida-1')), medida_2: Number(datos('medida-2')), medida_3: Number(datos('medida-3')), largura: Number(datos('largura')), cantidad: Number(datos('cantidad')), observaciones: datos('observaciones') }; const respuesta = await apiFetch('/remates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); const resultado = await respuesta.json(); if (!respuesta.ok) { mostrarError(resultado.detail || 'No se pudo guardar el remate.'); return; } mensaje.textContent = 'Remate guardado sin crear ninguna faena.'; mensaje.className = 'mensaje exito'; document.querySelector('#medida-1').value = ''; document.querySelector('#medida-2').value = ''; document.querySelector('#medida-3').value = ''; document.querySelector('#largura').value = ''; document.querySelector('#obra').value = ''; document.querySelector('#observaciones').value = ''; await cargarRemates(); };
     actualizarEtiquetas();
-    cargarFaenas().catch(error => mostrarError(error.message));
+    cargarClientes().catch(error => mostrarError(error.message));
   </script>
 </body>
 </html>

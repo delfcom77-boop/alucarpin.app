@@ -214,7 +214,9 @@ class FaenaUpdate(BaseModel):
 
 class RemateCreate(BaseModel):
     origen: Literal["propia", "tercero"]
-    origen_id: int = Field(gt=0)
+    origen_id: int = Field(default=0, ge=0)
+    cliente: str = Field(min_length=1)
+    obra: str = Field(min_length=1)
     tipo: Literal["chapa", "angulo", "u"]
     medida_1: float = Field(default=0, ge=0)
     medida_2: float = Field(default=0, ge=0)
@@ -357,6 +359,8 @@ def inicializar_base_datos():
                     id BIGSERIAL PRIMARY KEY,
                     origen TEXT NOT NULL,
                     origen_id BIGINT NOT NULL,
+                        cliente TEXT NOT NULL DEFAULT '',
+                        obra TEXT NOT NULL DEFAULT '',
                     tipo TEXT NOT NULL,
                     medida_1 DOUBLE PRECISION NOT NULL DEFAULT 0,
                     medida_2 DOUBLE PRECISION NOT NULL DEFAULT 0,
@@ -368,6 +372,8 @@ def inicializar_base_datos():
                 )
             """)
             db.execute("CREATE TABLE IF NOT EXISTS calendario_silencios (fecha DATE PRIMARY KEY, motivo TEXT NOT NULL DEFAULT 'Sin sonido')")
+            db.execute("ALTER TABLE remates ADD COLUMN IF NOT EXISTS cliente TEXT NOT NULL DEFAULT ''")
+            db.execute("ALTER TABLE remates ADD COLUMN IF NOT EXISTS obra TEXT NOT NULL DEFAULT ''")
             db.execute("ALTER TABLE seguimientos_agenda ADD COLUMN IF NOT EXISTS fecha_llamada DATE")
             db.execute("ALTER TABLE seguimientos_agenda ADD COLUMN IF NOT EXISTS ubicacion TEXT NOT NULL DEFAULT ''")
             db.execute("ALTER TABLE seguimientos_agenda ADD COLUMN IF NOT EXISTS poblacion TEXT NOT NULL DEFAULT ''")
@@ -468,6 +474,8 @@ def inicializar_base_datos():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 origen TEXT NOT NULL,
                 origen_id INTEGER NOT NULL,
+                cliente TEXT NOT NULL DEFAULT '',
+                obra TEXT NOT NULL DEFAULT '',
                 tipo TEXT NOT NULL,
                 medida_1 REAL NOT NULL DEFAULT 0,
                 medida_2 REAL NOT NULL DEFAULT 0,
@@ -515,6 +523,11 @@ def inicializar_base_datos():
         columnas_seguimientos = {
             fila[1] for fila in db.execute("PRAGMA table_info(seguimientos_agenda)")
         }
+        columnas_remates = {fila[1] for fila in db.execute("PRAGMA table_info(remates)")}
+        if "cliente" not in columnas_remates:
+            db.execute("ALTER TABLE remates ADD COLUMN cliente TEXT NOT NULL DEFAULT ''")
+        if "obra" not in columnas_remates:
+            db.execute("ALTER TABLE remates ADD COLUMN obra TEXT NOT NULL DEFAULT ''")
         if "fecha_llamada" not in columnas_seguimientos:
             db.execute("ALTER TABLE seguimientos_agenda ADD COLUMN fecha_llamada TEXT")
             db.execute("UPDATE seguimientos_agenda SET fecha_llamada = fecha_recordatorio WHERE fecha_llamada IS NULL")
@@ -1608,16 +1621,19 @@ def borrar_faena(faena_id: int, usuario=Depends(administrador)):
 
 
 @app.get("/remates")
-def listar_remates(origen: Optional[str] = Query(default=None), origen_id: Optional[int] = Query(default=None), usuario=Depends(administrador)):
+def listar_remates(origen: Optional[str] = Query(default=None), cliente: Optional[str] = Query(default=None), obra: Optional[str] = Query(default=None), usuario=Depends(administrador)):
     consulta = "SELECT * FROM remates"
     filtros = []
     parametros = []
     if origen in {"propia", "tercero"}:
         filtros.append("origen = ?")
         parametros.append(origen)
-    if origen_id:
-        filtros.append("origen_id = ?")
-        parametros.append(origen_id)
+    if cliente:
+        filtros.append("cliente = ?")
+        parametros.append(cliente)
+    if obra:
+        filtros.append("obra = ?")
+        parametros.append(obra)
     if filtros:
         consulta += " WHERE " + " AND ".join(filtros)
     consulta += " ORDER BY id DESC"
@@ -1628,11 +1644,7 @@ def listar_remates(origen: Optional[str] = Query(default=None), origen_id: Optio
 
 @app.post("/remates", status_code=201)
 def crear_remate(datos: RemateCreate, usuario=Depends(administrador)):
-    tabla = "trabajos_propios" if datos.origen == "propia" else "faenas"
     with conexion() as db:
-        existe = db.execute(f"SELECT 1 FROM {tabla} WHERE id = ?", (datos.origen_id,)).fetchone()
-        if not existe:
-            raise HTTPException(status_code=404, detail="La faena seleccionada no existe")
         valores = datos.model_dump()
         columnas = ", ".join(valores)
         marcadores = ", ".join("?" for _ in valores)

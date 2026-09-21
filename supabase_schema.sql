@@ -76,6 +76,8 @@ CREATE INDEX IF NOT EXISTS idx_trabajos_propios_fecha
         id BIGSERIAL PRIMARY KEY,
         origen TEXT NOT NULL,
         origen_id BIGINT NOT NULL,
+        cliente TEXT NOT NULL DEFAULT '',
+        obra TEXT NOT NULL DEFAULT '',
         tipo TEXT NOT NULL,
         medida_1 DOUBLE PRECISION NOT NULL DEFAULT 0,
         medida_2 DOUBLE PRECISION NOT NULL DEFAULT 0,
