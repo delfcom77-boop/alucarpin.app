@@ -44,6 +44,12 @@
     .simbolo-tubo { width: 130px; height: 72px; border: 16px solid #d45d3f; }
     .simbolo-redondo { width: 82px; height: 82px; border: 16px solid #d45d3f; border-radius: 50%; }
     .simbolo-chapa { color: #d45d3f; font-size: 4.5rem; font-weight: 900; line-height: 1; }
+    .perfil-chapa-desnivel { position: relative; width: min(360px, 90%); height: 120px; }
+    .perfil-chapa-desnivel .chapa-inclinada { position: absolute; inset: 30px 20px 24px; background: #d45d3f; clip-path: polygon(0 var(--altura-izquierda), 100% var(--altura-derecha), 100% calc(var(--altura-derecha) + 10%), 0 calc(var(--altura-izquierda) + 10%)); }
+    .perfil-chapa-desnivel .cota-chapa { position: absolute; color: #293f4a; background: #fff; border: 1px solid #b9c4c2; border-radius: 5px; padding: 3px 5px; font-size: .8rem; font-weight: 800; }
+    .perfil-chapa-desnivel .cota-izquierda { left: 0; bottom: 44px; }
+    .perfil-chapa-desnivel .cota-derecha { right: 0; top: 18px; }
+    .perfil-chapa-desnivel .cota-largura { left: 50%; bottom: 0; transform: translateX(-50%); }
     .campo-oculto { display: none; }
     .ayuda { margin: 0; color: #506269; font-size: .95rem; }
     .lista { overflow-x: auto; }
@@ -75,7 +81,7 @@
         <div id="perfil-angular" class="perfil-simple" hidden aria-label="Simbolo de angular L"><span class="simbolo-angular"></span></div>
         <div id="perfil-tubo" class="perfil-simple" hidden aria-label="Simbolo de tubo rectangular"><span class="simbolo-tubo"></span></div>
         <div id="perfil-redondo" class="perfil-simple" hidden aria-label="Simbolo de tubo redondo"><span class="simbolo-redondo"></span></div>
-        <div id="perfil-chapa" class="perfil-simple" hidden aria-label="Simbolo de chapa"><span class="simbolo-chapa">#</span></div>
+        <div id="perfil-chapa" class="perfil-simple" hidden aria-label="Chapa con desnivel"><div class="perfil-chapa-desnivel" style="--altura-izquierda: 65%; --altura-derecha: 35%;"><span class="chapa-inclinada"></span><span id="chapa-izquierda" class="cota-chapa cota-izquierda">Izq. -- mm</span><span id="chapa-derecha" class="cota-chapa cota-derecha">Der. -- mm</span><span id="chapa-largura" class="cota-chapa cota-largura">= -- mm</span></div></div>
         <p id="ayuda-medidas" class="ayuda">Bandeja / U invertida: izquierda x centro x derecha x largura. Todas las medidas estan en milimetros.</p>
         <div class="medidas">
           <label id="etiqueta-1">Alto 1 (mm)<input id="medida-1" type="number" min="0" step="1" required></label>
@@ -109,7 +115,7 @@
     const perfiles = {
       u: { etiquetas: ['Izquierda (mm)', 'Centro (mm)', 'Derecha (mm)'], ayuda: 'Bandeja / U invertida: izquierda x centro x derecha x largura. Todas las medidas estan en milimetros.', campos: 3 },
       angulo: { etiquetas: ['Alto (mm)', 'Ancho (mm)', 'No se usa'], ayuda: 'Angular / L: alto x ancho x largura.', campos: 2 },
-      chapa: { etiquetas: ['Ancho (mm)', 'No se usa', 'No se usa'], ayuda: 'Chapa: ancho x largura.', campos: 1 },
+      chapa: { etiquetas: ['Altura izquierda (mm)', 'Altura derecha (mm)', 'No se usa'], ayuda: 'Chapa con desnivel: altura izquierda x altura derecha x largura.', campos: 2 },
       tubo: { etiquetas: ['Ancho (mm)', 'Alto (mm)', 'No se usa'], ayuda: 'Tubo rectangular: ancho x alto x largura.', campos: 2 },
       tubo_redondo: { etiquetas: ['Diametro (mm)', 'No se usa', 'No se usa'], ayuda: 'Tubo redondo: diametro x largura.', campos: 1 }
     };
@@ -121,6 +127,7 @@
       document.querySelector('#perfil-centro').textContent = datos('medida-2') || '--';
       document.querySelector('#perfil-derecha').textContent = datos('medida-3') || '--';
       document.querySelector('#perfil-largura').textContent = `= ${datos('largura') || '--'} mm`;
+      actualizarChapa();
     }
     function actualizarEtiquetas() {
       const perfil = perfiles[tipo.value];
@@ -138,10 +145,22 @@
       document.querySelector('#perfil-tubo').hidden = tipo.value !== 'tubo';
       document.querySelector('#perfil-redondo').hidden = tipo.value !== 'tubo_redondo';
       document.querySelector('#perfil-chapa').hidden = tipo.value !== 'chapa';
+      actualizarDibujo();
       document.querySelector('#ayuda-medidas').textContent = perfil.ayuda;
       actualizarDibujo();
     }
     function actualizarPosicionMedidas() { document.querySelector('#perfil-u').classList.toggle('exterior', posicionMedidas.value === 'exterior'); }
+    function actualizarChapa() {
+      const izquierda = Number(datos('medida-1')) || 0;
+      const derecha = Number(datos('medida-2')) || 0;
+      const escala = valor => `${Math.max(15, 90 - Math.min(valor, 300) / 300 * 70)}%`;
+      const perfil = document.querySelector('.perfil-chapa-desnivel');
+      perfil.style.setProperty('--altura-izquierda', escala(izquierda));
+      perfil.style.setProperty('--altura-derecha', escala(derecha));
+      document.querySelector('#chapa-izquierda').textContent = `Izq. ${izquierda || '--'} mm`;
+      document.querySelector('#chapa-derecha').textContent = `Der. ${derecha || '--'} mm`;
+      document.querySelector('#chapa-largura').textContent = `= ${datos('largura') || '--'} mm`;
+    }
     ['medida-1', 'medida-2', 'medida-3', 'largura'].forEach(id => document.querySelector(`#${id}`).addEventListener('input', actualizarDibujo));
     async function cargarClientes() {
       const [respuestaTrabajos, respuestaFaenas] = await Promise.all([apiFetch('/trabajos'), apiFetch('/faenas')]);
