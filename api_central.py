@@ -220,6 +220,9 @@ class RemateCreate(BaseModel):
     pieza: str = Field(min_length=1)
     lacado_color: str = Field(min_length=1)
     tipo: Literal["chapa", "angulo", "u", "tubo", "tubo_redondo"]
+    modo_chapa: Literal["normal", "desnivel"] = "normal"
+    orientacion_chapa: Literal["arriba", "abajo"] = "abajo"
+    posicion_medidas: Literal["interior", "exterior"] = "interior"
     medida_1: float = Field(default=0, ge=0)
     medida_2: float = Field(default=0, ge=0)
     medida_3: float = Field(default=0, ge=0)
@@ -366,6 +369,9 @@ def inicializar_base_datos():
                         lacado_color TEXT NOT NULL DEFAULT '',
                             pieza TEXT NOT NULL DEFAULT '',
                     tipo TEXT NOT NULL,
+                    modo_chapa TEXT NOT NULL DEFAULT 'normal',
+                    orientacion_chapa TEXT NOT NULL DEFAULT 'abajo',
+                    posicion_medidas TEXT NOT NULL DEFAULT 'interior',
                     medida_1 DOUBLE PRECISION NOT NULL DEFAULT 0,
                     medida_2 DOUBLE PRECISION NOT NULL DEFAULT 0,
                     medida_3 DOUBLE PRECISION NOT NULL DEFAULT 0,
@@ -380,6 +386,9 @@ def inicializar_base_datos():
             db.execute("ALTER TABLE remates ADD COLUMN IF NOT EXISTS obra TEXT NOT NULL DEFAULT ''")
             db.execute("ALTER TABLE remates ADD COLUMN IF NOT EXISTS lacado_color TEXT NOT NULL DEFAULT ''")
             db.execute("ALTER TABLE remates ADD COLUMN IF NOT EXISTS pieza TEXT NOT NULL DEFAULT ''")
+            db.execute("ALTER TABLE remates ADD COLUMN IF NOT EXISTS modo_chapa TEXT NOT NULL DEFAULT 'normal'")
+            db.execute("ALTER TABLE remates ADD COLUMN IF NOT EXISTS orientacion_chapa TEXT NOT NULL DEFAULT 'abajo'")
+            db.execute("ALTER TABLE remates ADD COLUMN IF NOT EXISTS posicion_medidas TEXT NOT NULL DEFAULT 'interior'")
             db.execute("ALTER TABLE seguimientos_agenda ADD COLUMN IF NOT EXISTS fecha_llamada DATE")
             db.execute("ALTER TABLE seguimientos_agenda ADD COLUMN IF NOT EXISTS ubicacion TEXT NOT NULL DEFAULT ''")
             db.execute("ALTER TABLE seguimientos_agenda ADD COLUMN IF NOT EXISTS poblacion TEXT NOT NULL DEFAULT ''")
@@ -485,6 +494,9 @@ def inicializar_base_datos():
                 lacado_color TEXT NOT NULL DEFAULT '',
                     pieza TEXT NOT NULL DEFAULT '',
                 tipo TEXT NOT NULL,
+                    modo_chapa TEXT NOT NULL DEFAULT 'normal',
+                    orientacion_chapa TEXT NOT NULL DEFAULT 'abajo',
+                    posicion_medidas TEXT NOT NULL DEFAULT 'interior',
                 medida_1 REAL NOT NULL DEFAULT 0,
                 medida_2 REAL NOT NULL DEFAULT 0,
                 medida_3 REAL NOT NULL DEFAULT 0,
@@ -540,6 +552,12 @@ def inicializar_base_datos():
             db.execute("ALTER TABLE remates ADD COLUMN lacado_color TEXT NOT NULL DEFAULT ''")
         if "pieza" not in columnas_remates:
             db.execute("ALTER TABLE remates ADD COLUMN pieza TEXT NOT NULL DEFAULT ''")
+        if "modo_chapa" not in columnas_remates:
+            db.execute("ALTER TABLE remates ADD COLUMN modo_chapa TEXT NOT NULL DEFAULT 'normal'")
+        if "orientacion_chapa" not in columnas_remates:
+            db.execute("ALTER TABLE remates ADD COLUMN orientacion_chapa TEXT NOT NULL DEFAULT 'abajo'")
+        if "posicion_medidas" not in columnas_remates:
+            db.execute("ALTER TABLE remates ADD COLUMN posicion_medidas TEXT NOT NULL DEFAULT 'interior'")
         if "fecha_llamada" not in columnas_seguimientos:
             db.execute("ALTER TABLE seguimientos_agenda ADD COLUMN fecha_llamada TEXT")
             db.execute("UPDATE seguimientos_agenda SET fecha_llamada = fecha_recordatorio WHERE fecha_llamada IS NULL")
