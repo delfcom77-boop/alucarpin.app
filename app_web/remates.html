@@ -38,6 +38,12 @@
     .perfil-u.exterior .cota-centro { top: -2px; }
     .perfil-u.exterior .cota-derecha { right: calc(50% - 178px); top: 48px; }
     .perfil-u.exterior .cota-largura { left: calc(50% + 145px); top: 48px; }
+    .perfil-simple { display: grid; place-items: center; min-height: 120px; padding: 14px; background: #f7faf8; border: 1px solid #d9e0dd; border-radius: 10px; }
+    .perfil-simple[hidden] { display: none; }
+    .simbolo-angular { width: 74px; height: 74px; border-left: 16px solid #d45d3f; border-bottom: 16px solid #d45d3f; }
+    .simbolo-tubo { width: 130px; height: 72px; border: 16px solid #d45d3f; }
+    .simbolo-redondo { width: 82px; height: 82px; border: 16px solid #d45d3f; border-radius: 50%; }
+    .simbolo-chapa { color: #d45d3f; font-size: 4.5rem; font-weight: 900; line-height: 1; }
     .campo-oculto { display: none; }
     .ayuda { margin: 0; color: #506269; font-size: .95rem; }
     .lista { overflow-x: auto; }
@@ -66,6 +72,10 @@
         <label>Remate <select id="tipo"><option value="u">Bandeja / U</option><option value="chapa">Chapa</option><option value="angulo">Angulo / L</option><option value="tubo">Tubo</option><option value="tubo_redondo">Tubo redondo</option></select></label>
         <label id="posicion-medidas-label">Medidas de la bandeja <select id="posicion-medidas"><option value="interior">Interior</option><option value="exterior">Exterior</option></select></label>
         <div id="perfil-u" class="perfil-u" hidden><span class="cota cota-izquierda" id="perfil-izquierda">--</span><span class="cota cota-centro" id="perfil-centro">--</span><span class="cota cota-derecha" id="perfil-derecha">--</span><span class="cota cota-largura" id="perfil-largura">= --</span><span class="lado"></span><span class="centro"></span><span class="lado"></span></div>
+        <div id="perfil-angular" class="perfil-simple" hidden aria-label="Simbolo de angular L"><span class="simbolo-angular"></span></div>
+        <div id="perfil-tubo" class="perfil-simple" hidden aria-label="Simbolo de tubo rectangular"><span class="simbolo-tubo"></span></div>
+        <div id="perfil-redondo" class="perfil-simple" hidden aria-label="Simbolo de tubo redondo"><span class="simbolo-redondo"></span></div>
+        <div id="perfil-chapa" class="perfil-simple" hidden aria-label="Simbolo de chapa"><span class="simbolo-chapa">#</span></div>
         <p id="ayuda-medidas" class="ayuda">Bandeja / U invertida: izquierda x centro x derecha x largura. Todas las medidas estan en milimetros.</p>
         <div class="medidas">
           <label id="etiqueta-1">Alto 1 (mm)<input id="medida-1" type="number" min="0" step="1" required></label>
@@ -124,6 +134,10 @@
       });
       document.querySelector('#perfil-u').hidden = tipo.value !== 'u';
       document.querySelector('#posicion-medidas-label').hidden = tipo.value !== 'u';
+      document.querySelector('#perfil-angular').hidden = tipo.value !== 'angulo';
+      document.querySelector('#perfil-tubo').hidden = tipo.value !== 'tubo';
+      document.querySelector('#perfil-redondo').hidden = tipo.value !== 'tubo_redondo';
+      document.querySelector('#perfil-chapa').hidden = tipo.value !== 'chapa';
       document.querySelector('#ayuda-medidas').textContent = perfil.ayuda;
       actualizarDibujo();
     }
