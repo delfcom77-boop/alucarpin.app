@@ -217,6 +217,7 @@ class RemateCreate(BaseModel):
     origen_id: int = Field(default=0, ge=0)
     cliente: str = Field(min_length=1)
     obra: str = Field(min_length=1)
+    pieza: str = Field(min_length=1)
     lacado_color: str = Field(min_length=1)
     tipo: Literal["chapa", "angulo", "u", "tubo", "tubo_redondo"]
     medida_1: float = Field(default=0, ge=0)
@@ -363,6 +364,7 @@ def inicializar_base_datos():
                         cliente TEXT NOT NULL DEFAULT '',
                         obra TEXT NOT NULL DEFAULT '',
                         lacado_color TEXT NOT NULL DEFAULT '',
+                            pieza TEXT NOT NULL DEFAULT '',
                     tipo TEXT NOT NULL,
                     medida_1 DOUBLE PRECISION NOT NULL DEFAULT 0,
                     medida_2 DOUBLE PRECISION NOT NULL DEFAULT 0,
@@ -377,6 +379,7 @@ def inicializar_base_datos():
             db.execute("ALTER TABLE remates ADD COLUMN IF NOT EXISTS cliente TEXT NOT NULL DEFAULT ''")
             db.execute("ALTER TABLE remates ADD COLUMN IF NOT EXISTS obra TEXT NOT NULL DEFAULT ''")
             db.execute("ALTER TABLE remates ADD COLUMN IF NOT EXISTS lacado_color TEXT NOT NULL DEFAULT ''")
+            db.execute("ALTER TABLE remates ADD COLUMN IF NOT EXISTS pieza TEXT NOT NULL DEFAULT ''")
             db.execute("ALTER TABLE seguimientos_agenda ADD COLUMN IF NOT EXISTS fecha_llamada DATE")
             db.execute("ALTER TABLE seguimientos_agenda ADD COLUMN IF NOT EXISTS ubicacion TEXT NOT NULL DEFAULT ''")
             db.execute("ALTER TABLE seguimientos_agenda ADD COLUMN IF NOT EXISTS poblacion TEXT NOT NULL DEFAULT ''")
@@ -480,6 +483,7 @@ def inicializar_base_datos():
                 cliente TEXT NOT NULL DEFAULT '',
                 obra TEXT NOT NULL DEFAULT '',
                 lacado_color TEXT NOT NULL DEFAULT '',
+                    pieza TEXT NOT NULL DEFAULT '',
                 tipo TEXT NOT NULL,
                 medida_1 REAL NOT NULL DEFAULT 0,
                 medida_2 REAL NOT NULL DEFAULT 0,
@@ -534,6 +538,8 @@ def inicializar_base_datos():
             db.execute("ALTER TABLE remates ADD COLUMN obra TEXT NOT NULL DEFAULT ''")
         if "lacado_color" not in columnas_remates:
             db.execute("ALTER TABLE remates ADD COLUMN lacado_color TEXT NOT NULL DEFAULT ''")
+        if "pieza" not in columnas_remates:
+            db.execute("ALTER TABLE remates ADD COLUMN pieza TEXT NOT NULL DEFAULT ''")
         if "fecha_llamada" not in columnas_seguimientos:
             db.execute("ALTER TABLE seguimientos_agenda ADD COLUMN fecha_llamada TEXT")
             db.execute("UPDATE seguimientos_agenda SET fecha_llamada = fecha_recordatorio WHERE fecha_llamada IS NULL")
