@@ -50,6 +50,10 @@
     .perfil-chapa-desnivel .cota-izquierda { left: 0; bottom: 44px; }
     .perfil-chapa-desnivel .cota-derecha { right: 0; top: 18px; }
     .perfil-chapa-desnivel .cota-largura { left: 50%; bottom: 0; transform: translateX(-50%); }
+    .perfil-chapa-normal { display: grid; place-items: center; min-height: 120px; }
+    .perfil-chapa-normal[hidden] { display: none; }
+    .perfil-chapa-normal .chapa-normal { width: 230px; height: 28px; background: #d45d3f; }
+    .perfil-chapa-normal .cota-chapa { color: #293f4a; background: #fff; border: 1px solid #b9c4c2; border-radius: 5px; padding: 3px 5px; font-size: .8rem; font-weight: 800; }
     .campo-oculto { display: none; }
     .ayuda { margin: 0; color: #506269; font-size: .95rem; }
     .lista { overflow-x: auto; }
@@ -76,12 +80,14 @@
         </div>
         <label>Obra en la que estoy <input id="obra" required placeholder="Ejemplo: vivienda de Juan, nave industrial..."></label>
         <label>Remate <select id="tipo"><option value="u">Bandeja / U</option><option value="chapa">Chapa</option><option value="angulo">Angulo / L</option><option value="tubo">Tubo</option><option value="tubo_redondo">Tubo redondo</option></select></label>
+        <label id="modo-chapa-label" hidden>Medidas de chapa <select id="modo-chapa"><option value="normal">Normal</option><option value="desnivel">Desnivel</option></select></label>
         <label id="posicion-medidas-label">Medidas de la bandeja <select id="posicion-medidas"><option value="interior">Interior</option><option value="exterior">Exterior</option></select></label>
         <div id="perfil-u" class="perfil-u" hidden><span class="cota cota-izquierda" id="perfil-izquierda">--</span><span class="cota cota-centro" id="perfil-centro">--</span><span class="cota cota-derecha" id="perfil-derecha">--</span><span class="cota cota-largura" id="perfil-largura">= --</span><span class="lado"></span><span class="centro"></span><span class="lado"></span></div>
         <div id="perfil-angular" class="perfil-simple" hidden aria-label="Simbolo de angular L"><span class="simbolo-angular"></span></div>
         <div id="perfil-tubo" class="perfil-simple" hidden aria-label="Simbolo de tubo rectangular"><span class="simbolo-tubo"></span></div>
         <div id="perfil-redondo" class="perfil-simple" hidden aria-label="Simbolo de tubo redondo"><span class="simbolo-redondo"></span></div>
         <div id="perfil-chapa" class="perfil-simple" hidden aria-label="Chapa con desnivel"><div class="perfil-chapa-desnivel" style="--altura-izquierda: 65%; --altura-derecha: 35%;"><span class="chapa-inclinada"></span><span id="chapa-izquierda" class="cota-chapa cota-izquierda">Izq. -- mm</span><span id="chapa-derecha" class="cota-chapa cota-derecha">Der. -- mm</span><span id="chapa-largura" class="cota-chapa cota-largura">= -- mm</span></div></div>
+        <div id="perfil-chapa-normal" class="perfil-simple" hidden aria-label="Chapa normal"><div class="perfil-chapa-normal"><span class="chapa-normal"></span><span id="chapa-normal-ancho" class="cota-chapa">Ancho -- mm</span><span id="chapa-normal-largura" class="cota-chapa">= -- mm</span></div></div>
         <p id="ayuda-medidas" class="ayuda">Bandeja / U invertida: izquierda x centro x derecha x largura. Todas las medidas estan en milimetros.</p>
         <div class="medidas">
           <label id="etiqueta-1">Alto 1 (mm)<input id="medida-1" type="number" min="0" step="1" required></label>
@@ -109,6 +115,7 @@
     const nombres = { u: 'Bandeja / U', chapa: 'Chapa', angulo: 'Angulo / L', tubo: 'Tubo', tubo_redondo: 'Tubo redondo' };
     const origen = document.querySelector('#origen');
     const tipo = document.querySelector('#tipo');
+    const modoChapa = document.querySelector('#modo-chapa');
     const posicionMedidas = document.querySelector('#posicion-medidas');
     const lista = document.querySelector('#lista');
     const mensaje = document.querySelector('#mensaje');
@@ -130,7 +137,12 @@
       actualizarChapa();
     }
     function actualizarEtiquetas() {
-      const perfil = perfiles[tipo.value];
+      const perfil = { ...perfiles[tipo.value] };
+      if (tipo.value === 'chapa' && modoChapa.value === 'normal') {
+        perfil.etiquetas = ['Ancho (mm)', 'No se usa', 'No se usa'];
+        perfil.ayuda = 'Chapa normal: ancho x largura.';
+        perfil.campos = 1;
+      }
       ['etiqueta-1', 'etiqueta-2', 'etiqueta-3'].forEach((id, indice) => {
         const etiqueta = document.querySelector(`#${id}`);
         const entrada = etiqueta.querySelector('input');
@@ -144,7 +156,9 @@
       document.querySelector('#perfil-angular').hidden = tipo.value !== 'angulo';
       document.querySelector('#perfil-tubo').hidden = tipo.value !== 'tubo';
       document.querySelector('#perfil-redondo').hidden = tipo.value !== 'tubo_redondo';
-      document.querySelector('#perfil-chapa').hidden = tipo.value !== 'chapa';
+      document.querySelector('#perfil-chapa').hidden = tipo.value !== 'chapa' || modoChapa.value !== 'desnivel';
+      document.querySelector('#modo-chapa-label').hidden = tipo.value !== 'chapa';
+      document.querySelector('#perfil-chapa-normal').hidden = tipo.value !== 'chapa' || modoChapa.value !== 'normal';
       actualizarDibujo();
       document.querySelector('#ayuda-medidas').textContent = perfil.ayuda;
       actualizarDibujo();
@@ -160,6 +174,8 @@
       document.querySelector('#chapa-izquierda').textContent = `Izq. ${izquierda || '--'} mm`;
       document.querySelector('#chapa-derecha').textContent = `Der. ${derecha || '--'} mm`;
       document.querySelector('#chapa-largura').textContent = `= ${datos('largura') || '--'} mm`;
+      document.querySelector('#chapa-normal-ancho').textContent = `Ancho ${izquierda || '--'} mm`;
+      document.querySelector('#chapa-normal-largura').textContent = `= ${datos('largura') || '--'} mm`;
     }
     ['medida-1', 'medida-2', 'medida-3', 'largura'].forEach(id => document.querySelector(`#${id}`).addEventListener('input', actualizarDibujo));
     async function cargarClientes() {
@@ -181,6 +197,7 @@
       remates.forEach(remate => { const medidas = remate.tipo === 'u' ? `${dinero(remate.medida_1)} x ${dinero(remate.medida_2)} x ${dinero(remate.medida_3)}` : remate.tipo === 'chapa' || remate.tipo === 'tubo_redondo' ? dinero(remate.medida_1) : `${dinero(remate.medida_1)} x ${dinero(remate.medida_2)}`; const fila = document.createElement('tr'); fila.innerHTML = `<td>${remate.cliente || '-'}</td><td>${remate.obra || '-'}</td><td>${remate.origen === 'propia' ? 'Propia' : '3º'}</td><td>${nombres[remate.tipo]}</td><td>${medidas} mm</td><td>${dinero(remate.largura)} mm / ${remate.cantidad} ud.</td><td><button type="button" class="borrar">Borrar</button></td>`; fila.querySelector('.borrar').onclick = async () => { if (!confirm('¿Borrar este remate?')) return; await apiFetch(`/remates/${remate.id}`, { method: 'DELETE' }); await cargarRemates(); }; lista.appendChild(fila); });
     }
     tipo.onchange = actualizarEtiquetas;
+    modoChapa.onchange = actualizarEtiquetas;
     posicionMedidas.onchange = actualizarPosicionMedidas;
     document.querySelector('#formulario').onsubmit = async event => { event.preventDefault(); const payload = { origen: origen.value, origen_id: 0, cliente: datos('cliente'), obra: datos('obra'), tipo: tipo.value, medida_1: Number(datos('medida-1')), medida_2: Number(datos('medida-2')), medida_3: Number(datos('medida-3')), largura: Number(datos('largura')), cantidad: Number(datos('cantidad')), observaciones: datos('observaciones') }; const respuesta = await apiFetch('/remates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); const resultado = await respuesta.json(); if (!respuesta.ok) { mostrarError(resultado.detail || 'No se pudo guardar el remate.'); return; } mensaje.textContent = 'Remate guardado sin crear ninguna faena.'; mensaje.className = 'mensaje exito'; document.querySelector('#medida-1').value = ''; document.querySelector('#medida-2').value = ''; document.querySelector('#medida-3').value = ''; document.querySelector('#largura').value = ''; document.querySelector('#obra').value = ''; document.querySelector('#observaciones').value = ''; await cargarRemates(); };
     actualizarEtiquetas();
