@@ -177,8 +177,8 @@
       const derecha = Number(datos('medida-2')) || 0;
       const mayor = Math.max(izquierda, derecha, 1);
       const escala = valor => orientacionChapa.value === 'arriba'
-        ? `${35 + Math.min(valor, mayor) / mayor * 35}%`
-        : `${70 - Math.min(valor, mayor) / mayor * 35}%`;
+        ? `${12 + Math.min(valor, mayor) / mayor * 76}%`
+        : `${88 - Math.min(valor, mayor) / mayor * 53}%`;
       const perfil = document.querySelector('.perfil-chapa-desnivel');
       perfil.style.setProperty('--nivel-izquierda', escala(izquierda));
       perfil.style.setProperty('--nivel-derecha', escala(derecha));
