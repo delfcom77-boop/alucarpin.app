@@ -25,20 +25,20 @@
     button { border: 0; padding: 10px 14px; background: #d45d3f; color: #fff; font-weight: 700; cursor: pointer; }
     .fila { display: grid; min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
     .medidas { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 14px; background: #eef5f2; border-radius: 10px; }
-    .perfil-u { position: relative; display: flex; align-items: flex-start; justify-content: center; gap: 0; width: 100%; min-height: 170px; margin: 12px 0 20px; padding: 48px 120px 36px; background: #f7faf8; border: 1px solid #d9e0dd; border-radius: 10px; overflow: hidden; }
-    .perfil-u .lado { width: 28px; height: 74px; background: #d45d3f; }
-    .perfil-u .centro { width: 180px; height: 28px; background: #d45d3f; }
+    .perfil-u { position: relative; display: flex; align-items: flex-end; justify-content: center; gap: 0; width: 100%; min-height: 260px; margin: 12px 0 20px; padding: 110px 150px 30px; background: #f7faf8; border: 1px solid #d9e0dd; border-radius: 10px; overflow: hidden; }
+    .perfil-u .lado { width: 28px; height: 100px; background: #d45d3f; }
+    .perfil-u .centro { width: 220px; height: 28px; background: #d45d3f; }
     .perfil-u .cota { position: absolute; color: #293f4a; background: #fff; padding: 3px 5px; border: 1px solid #b9c4c2; border-radius: 5px; font-size: .8rem; font-weight: 800; white-space: nowrap; }
-    .perfil-u .cota-izquierda { left: calc(50% - 80px); top: 50px; }
-    .perfil-u .cota-centro { left: 50%; top: 48px; transform: translateX(-50%); }
-    .perfil-u .cota-derecha { right: calc(50% - 80px); top: 50px; }
-    .perfil-u .cota-largura { left: calc(50% + 145px); right: auto; top: 50px; }
+    .perfil-u .cota-izquierda { left: calc(50% - 88px); top: 142px; }
+    .perfil-u .cota-centro { left: 50%; top: 142px; transform: translateX(-50%); }
+    .perfil-u .cota-derecha { right: calc(50% - 88px); top: 142px; }
+    .perfil-u .cota-largura { left: 50%; right: auto; top: 178px; transform: translateX(-50%); }
     .perfil-u .medida-perfil { align-self: flex-start; color: #506269; font-size: .85rem; font-weight: 700; }
     .perfil-u[hidden] { display: none; }
-    .perfil-u.exterior .cota-izquierda { left: calc(50% - 178px); top: 48px; }
-    .perfil-u.exterior .cota-centro { top: -2px; }
-    .perfil-u.exterior .cota-derecha { right: calc(50% - 178px); top: 48px; }
-    .perfil-u.exterior .cota-largura { left: calc(50% + 145px); right: auto; top: 48px; }
+    .perfil-u.exterior .cota-izquierda { left: 12px; top: 112px; }
+    .perfil-u.exterior .cota-centro { top: 16px; }
+    .perfil-u.exterior .cota-derecha { right: 12px; top: 112px; }
+    .perfil-u.exterior .cota-largura { left: auto; right: 12px; top: 16px; }
     .perfil-simple { display: grid; place-items: center; width: 100%; min-height: 150px; margin: 12px 0 20px; padding: 18px; background: #f7faf8; border: 1px solid #d9e0dd; border-radius: 10px; overflow: hidden; }
     .perfil-simple[hidden] { display: none; }
     .simbolo-angular { width: 74px; height: 74px; border-left: 16px solid #d45d3f; border-bottom: 16px solid #d45d3f; }
@@ -70,7 +70,7 @@
     .exito { color: #1c6b42; }
     @media (max-width: 650px) {
       .fila, .medidas { grid-template-columns: 1fr; }
-      .perfil-u { padding-left: 70px; padding-right: 70px; }
+      .perfil-u { padding-left: 76px; padding-right: 76px; }
       .perfil-u .cota { font-size: .72rem; }
     }
   </style>
