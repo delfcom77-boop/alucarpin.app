@@ -146,7 +146,8 @@
       color: #fff;
       box-shadow: 0 10px 18px rgba(17, 78, 85, 0.18);
     }
-    .filtro-notas-wrapper {
+    .filtro-notas-wrapper,
+    .filtro-citas-wrapper {
       display: flex;
       align-items: center;
       justify-content: flex-end;
@@ -154,7 +155,8 @@
       margin-bottom: 12px;
       flex-wrap: wrap;
     }
-    .filtro-notas-wrapper label {
+    .filtro-notas-wrapper label,
+    .filtro-citas-wrapper label {
       font-size: 14px;
       font-weight: 800;
       color: var(--muted);
@@ -162,7 +164,8 @@
       align-items: center;
       gap: 8px;
     }
-    .filtro-notas-wrapper select {
+    .filtro-notas-wrapper select,
+    .filtro-citas-wrapper select {
       min-width: 180px;
     }
     @media (max-width: 560px) { .fila { grid-template-columns: 1fr; } }
@@ -214,7 +217,20 @@
       <input id="buscar-notas" placeholder="Buscar notas por cliente, teléfono, dirección o texto">
       <div class="lista"><table><thead><tr><th>Recordatorio</th><th>Cliente</th><th>Teléfono</th><th>Dirección / población</th><th>Qué me ha pedido</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista-seguimientos"><tr><td colspan="7">Cargando...</td></tr></tbody></table></div>
     </section>
-    <section data-seccion-contenido="citas"><h2>Próximas citas</h2><input id="buscar-citas" placeholder="Buscar citas por cliente, teléfono, dirección o población"><div class="lista"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Tipo</th><th>Cliente</th><th>Teléfono</th><th>Dirección</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista"><tr><td colspan="8">Cargando...</td></tr></tbody></table></div></section>
+    <section data-seccion-contenido="citas">
+      <h2>Próximas citas</h2>
+      <div class="filtro-citas-wrapper">
+        <label for="filtro-citas">Filtrar por estado
+          <select id="filtro-citas">
+            <option value="pendientes">Pendientes</option>
+            <option value="realizadas">Realizadas</option>
+            <option value="todas">Todas</option>
+          </select>
+        </label>
+      </div>
+      <input id="buscar-citas" placeholder="Buscar citas por cliente, teléfono, dirección o población">
+      <div class="lista"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Tipo</th><th>Cliente</th><th>Teléfono</th><th>Dirección</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista"><tr><td colspan="8">Cargando...</td></tr></tbody></table></div>
+    </section>
   </main>
   <script>
     const token = localStorage.getItem('alucarpin_token');
@@ -227,6 +243,7 @@
     const aplicarBusqueda = (selector, tablaSelector) => document.querySelector(selector).addEventListener('input', event => { const texto = event.target.value.trim().toLowerCase(); document.querySelectorAll(`${tablaSelector} tr`).forEach(fila => { fila.hidden = Boolean(texto) && !fila.textContent.toLowerCase().includes(texto); }); });
     aplicarBusqueda('#buscar-citas', '#lista');
     aplicarBusqueda('#buscar-notas', '#lista-seguimientos');
+    document.querySelector('#filtro-citas')?.addEventListener('change', cargar);
     document.querySelector('#filtro-notas')?.addEventListener('change', cargarSeguimientos);
     document.querySelectorAll('[data-seccion-agenda]').forEach(boton => boton.onclick = () => {
       const seccion = boton.dataset.seccionAgenda;
@@ -244,10 +261,25 @@
     document.querySelector('#seguimiento-fecha-llamada').valueAsDate = new Date();
     document.querySelector('#seguimiento-hora').value = '10:00';
     async function calendario(id) { const respuesta = await apiFetch(`/citas/${id}/calendario`); if (!respuesta.ok) throw new Error('No se pudo generar el calendario.'); const enlace = document.createElement('a'); enlace.href = URL.createObjectURL(await respuesta.blob()); enlace.download = `alucarpin-cita-${id}.ics`; enlace.click(); URL.revokeObjectURL(enlace.href); }
+    function obtenerCitasFiltradas(citas) {
+      const filtro = document.querySelector('#filtro-citas')?.value || 'pendientes';
+      if (filtro === 'realizadas') return citas.filter(cita => cita.estado === 'Realizada');
+      if (filtro === 'todas') return citas;
+      return citas.filter(cita => cita.estado !== 'Realizada');
+    }
+
     async function cargar() {
       const respuesta = await apiFetch('/citas'); if (!respuesta.ok) throw new Error('No se pudieron cargar las citas.');
-      const citas = await respuesta.json(); const cuerpo = document.querySelector('#lista'); cuerpo.textContent = '';
-      if (!citas.length) { cuerpo.innerHTML = '<tr><td colspan="8">No hay citas agendadas.</td></tr>'; return; }
+      const citas = obtenerCitasFiltradas(await respuesta.json()); const cuerpo = document.querySelector('#lista'); cuerpo.textContent = '';
+      if (!citas.length) {
+        const mensajeVacio = document.querySelector('#filtro-citas')?.value === 'realizadas'
+          ? 'No hay citas realizadas.'
+          : document.querySelector('#filtro-citas')?.value === 'todas'
+            ? 'No hay citas registradas.'
+            : 'No hay citas pendientes.';
+        cuerpo.innerHTML = `<tr><td colspan="8">${mensajeVacio}</td></tr>`;
+        return;
+      }
       citas.forEach(cita => {
         const fila = document.createElement('tr');
         fila.className = cita.estado === 'Realizada' ? 'realizada' : 'pendiente';
