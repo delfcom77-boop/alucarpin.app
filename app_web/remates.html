@@ -238,16 +238,92 @@
       const medida2 = escapar(dinero(remate.medida_2));
       const medida3 = escapar(dinero(remate.medida_3));
       const largura = escapar(dinero(remate.largura));
-      if (remate.tipo === 'u') return `<div class="dibujo u ${remate.posicion_medidas === 'exterior' ? 'exterior' : ''}"><span class="u-cota izq">${medida1}</span><span class="u-cota centro">${medida2}</span><span class="u-cota der">${medida3}</span><span class="u-cota largo">= ${largura} mm</span><i></i><b></b><i></i></div>`;
-      if (remate.tipo === 'chapa' && remate.modo_chapa === 'desnivel') return `<div class="dibujo chapa desnivel ${remate.orientacion_chapa === 'arriba' ? 'arriba' : ''}"><span class="chapa-forma"></span><span class="cota izq">Izq. ${medida1} mm</span><span class="cota der">Der. ${medida2} mm</span><span class="cota largo">= ${largura} mm</span></div>`;
-      if (remate.tipo === 'chapa') return `<div class="dibujo chapa-normal"><b>#</b><span>Ancho ${medida1} mm = ${largura} mm</span></div>`;
-      if (remate.tipo === 'angulo') return `<div class="dibujo angular"><b></b><span>${medida1} x ${medida2} = ${largura} mm</span></div>`;
-      if (remate.tipo === 'tubo') return `<div class="dibujo tubo"><b></b><span>${medida1} x ${medida2} = ${largura} mm</span></div>`;
-      return `<div class="dibujo redondo"><b></b><span>Diametro ${medida1} = ${largura} mm</span></div>`;
+
+      if (remate.tipo === 'u') {
+        const exterior = remate.posicion_medidas === 'exterior';
+        const textoPosicion = exterior ? 'Medidas exteriores' : 'Medidas interiores';
+        const cotasY = exterior ? 154 : 120;
+        return `
+          <svg class="perfil-svg perfil-u-pdf" viewBox="0 0 220 170" aria-label="Bandeja U">
+            <path d="M 38 34 L 38 112 L 68 112 L 68 64 L 152 64 L 152 112 L 182 112 L 182 34 L 152 34 L 152 46 L 68 46 L 68 34 Z" fill="#d45d3f" stroke="#c85235" stroke-width="2" stroke-linejoin="round"/>
+            <text x="110" y="17" font-size="11" text-anchor="middle" fill="#293f4a" font-weight="700">${textoPosicion}</text>
+            <line x1="38" y1="${cotasY - 14}" x2="68" y2="${cotasY - 14}" stroke="#293f4a" stroke-width="1"/>
+            <line x1="68" y1="${cotasY - 14}" x2="152" y2="${cotasY - 14}" stroke="#293f4a" stroke-width="1"/>
+            <line x1="152" y1="${cotasY - 14}" x2="182" y2="${cotasY - 14}" stroke="#293f4a" stroke-width="1"/>
+            <text x="53" y="${cotasY}" font-size="12" text-anchor="middle" fill="#293f4a" font-weight="700">${medida1}</text>
+            <text x="110" y="${cotasY}" font-size="12" text-anchor="middle" fill="#293f4a" font-weight="700">${medida2}</text>
+            <text x="167" y="${cotasY}" font-size="12" text-anchor="middle" fill="#293f4a" font-weight="700">${medida3}</text>
+            <text x="196" y="32" font-size="12" text-anchor="end" fill="#293f4a" font-weight="700">= ${largura} mm</text>
+          </svg>
+        `;
+      }
+
+      if (remate.tipo === 'chapa' && remate.modo_chapa === 'desnivel') {
+        const orientacion = remate.orientacion_chapa === 'arriba';
+        const alturaIzquierda = Number(remate.medida_1 || 0);
+        const alturaDerecha = Number(remate.medida_2 || 0);
+        const mayor = Math.max(alturaIzquierda, alturaDerecha, 1);
+        const espesor = valor => 18 + Math.min(valor, mayor) / mayor * 50;
+        const grosorIzquierda = espesor(alturaIzquierda);
+        const grosorDerecha = espesor(alturaDerecha);
+        const baseSuperior = 26;
+        const baseInferior = 96;
+        const puntos = orientacion
+          ? `18,${baseSuperior} 200,${baseSuperior} 200,${baseSuperior + grosorDerecha} 18,${baseSuperior + grosorIzquierda}`
+          : `18,${baseInferior - grosorIzquierda} 200,${baseInferior - grosorDerecha} 200,${baseInferior} 18,${baseInferior}`;
+        return `
+          <svg class="perfil-svg" viewBox="0 0 220 120" aria-label="Chapa a desnivel">
+            <polygon points="${puntos}" fill="#d45d3f" stroke="#c85235" stroke-width="2" stroke-linejoin="round"/>
+            <line x1="18" y1="96" x2="200" y2="96" stroke="#b7c9c4" stroke-width="1"/>
+            <text x="24" y="20" font-size="11" fill="#293f4a" font-weight="700">Izq. ${medida1} mm</text>
+            <text x="196" y="18" font-size="11" text-anchor="end" fill="#293f4a" font-weight="700">Der. ${medida2} mm</text>
+            <text x="110" y="109" font-size="12" text-anchor="middle" fill="#293f4a" font-weight="700">= ${largura} mm</text>
+          </svg>
+        `;
+      }
+
+      if (remate.tipo === 'chapa') return `
+        <svg class="perfil-svg" viewBox="0 0 220 110" aria-label="Chapa normal">
+          <rect x="30" y="42" width="160" height="26" fill="#d45d3f"/>
+          <text x="110" y="30" font-size="12" text-anchor="middle" fill="#293f4a" font-weight="700">Ancho ${medida1} mm</text>
+          <text x="110" y="95" font-size="12" text-anchor="middle" fill="#293f4a" font-weight="700">= ${largura} mm</text>
+        </svg>
+      `;
+
+      if (remate.tipo === 'angulo') return `
+        <svg class="perfil-svg" viewBox="0 0 220 110" aria-label="Angulo L">
+          <rect x="36" y="38" width="110" height="18" fill="#d45d3f"/>
+          <rect x="36" y="38" width="18" height="52" fill="#d45d3f"/>
+          <text x="110" y="98" font-size="12" text-anchor="middle" fill="#293f4a" font-weight="700">${medida1} x ${medida2} = ${largura} mm</text>
+        </svg>
+      `;
+
+      if (remate.tipo === 'tubo') return `
+        <svg class="perfil-svg" viewBox="0 0 220 110" aria-label="Tubo rectangular">
+          <rect x="28" y="30" width="164" height="52" fill="none" stroke="#d45d3f" stroke-width="18" rx="2"/>
+          <text x="110" y="98" font-size="12" text-anchor="middle" fill="#293f4a" font-weight="700">${medida1} x ${medida2} = ${largura} mm</text>
+        </svg>
+      `;
+
+      return `
+        <svg class="perfil-svg" viewBox="0 0 220 110" aria-label="Tubo redondo">
+          <circle cx="110" cy="52" r="38" fill="none" stroke="#d45d3f" stroke-width="18"/>
+          <text x="110" y="98" font-size="12" text-anchor="middle" fill="#293f4a" font-weight="700">Diametro ${medida1} = ${largura} mm</text>
+        </svg>
+      `;
     };
     const medidasInforme = remate => {
       const tipoRemate = nombres[remate.tipo];
-      const medidas = remate.tipo === 'u' ? `${dinero(remate.medida_1)} x ${dinero(remate.medida_2)} x ${dinero(remate.medida_3)} = ${dinero(remate.largura)} mm` : remate.tipo === 'chapa' && remate.modo_chapa === 'desnivel' ? `Izq. ${dinero(remate.medida_1)} x Der. ${dinero(remate.medida_2)} = ${dinero(remate.largura)} mm` : remate.tipo === 'chapa' ? `Ancho ${dinero(remate.medida_1)} = ${dinero(remate.largura)} mm` : remate.tipo === 'tubo_redondo' ? `Diametro ${dinero(remate.medida_1)} = ${dinero(remate.largura)} mm` : `${dinero(remate.medida_1)} x ${dinero(remate.medida_2)} = ${dinero(remate.largura)} mm`;
+      const posicionBandeja = remate.posicion_medidas === 'exterior' ? 'Medidas exteriores' : 'Medidas interiores';
+      const medidas = remate.tipo === 'u'
+        ? `${posicionBandeja}: ${dinero(remate.medida_1)} x ${dinero(remate.medida_2)} x ${dinero(remate.medida_3)} = ${dinero(remate.largura)} mm`
+        : remate.tipo === 'chapa' && remate.modo_chapa === 'desnivel'
+          ? `Izq. ${dinero(remate.medida_1)} x Der. ${dinero(remate.medida_2)} = ${dinero(remate.largura)} mm`
+          : remate.tipo === 'chapa'
+            ? `Ancho ${dinero(remate.medida_1)} = ${dinero(remate.largura)} mm`
+            : remate.tipo === 'tubo_redondo'
+              ? `Diametro ${dinero(remate.medida_1)} = ${dinero(remate.largura)} mm`
+              : `${dinero(remate.medida_1)} x ${dinero(remate.medida_2)} = ${dinero(remate.largura)} mm`;
       return `${tipoRemate}: ${medidas}`;
     };
     async function abrirInformePdf() {
@@ -265,10 +341,43 @@
           </div>
         </article>
       `).join('');
+
       const ventana = window.open('', '_blank');
-      ventana.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Remates - ${escapar(primero.obra)}</title><style>@page{size:A4;margin:16mm}body{font-family:Arial,sans-serif;color:#222}h1{font-size:24px;margin:0 0 4px}.cabecera{border-bottom:2px solid #d45d3f;padding-bottom:10px;margin-bottom:18px}.ventana{display:flex;align-items:flex-start;gap:18px;break-inside:avoid;border-bottom:1px solid #bbb;padding:14px 0}.dibujo-box{flex:0 0 230px;display:flex;justify-content:center;align-items:flex-start}.texto-ventana{flex:1;min-width:0}.texto-ventana p{margin:6px 0}.pieza{font-size:18px;font-weight:700;color:#293f4a;margin:0 0 8px}.medidas{font-size:17px;font-weight:700;margin:0 0 8px}.detalle{font-size:14px;margin:0}.dibujo{height:125px;position:relative;display:flex;align-items:flex-start;justify-content:center}.dibujo.u{height:170px;padding-top:34px}.dibujo.u i{width:18px;height:92px;background:#d45d3f}.dibujo.u b{width:190px;height:18px;background:#d45d3f}.u-cota,.cota{position:absolute;background:#fff;border:1px solid #777;padding:3px 5px;font-size:12px}.u-cota.izq{left:30%;top:72px}.u-cota.centro{left:50%;top:72px;transform:translateX(-50%)}.u-cota.der{right:30%;top:72px}.u-cota.largo{right:3%;top:72px}.dibujo.u.exterior .u-cota.izq{left:4%;top:45px}.dibujo.u.exterior .u-cota.centro{top:5px}.dibujo.u.exterior .u-cota.der{right:4%;top:45px}.dibujo.u.exterior .u-cota.largo{right:3%;top:95px}.chapa-normal b{font-size:70px;color:#d45d3f}.chapa-normal span,.angular span,.tubo span,.redondo span{position:absolute;bottom:0;font-weight:700}.angular b{width:70px;height:70px;border-left:14px solid #d45d3f;border-bottom:14px solid #d45d3f}.tubo b{width:150px;height:75px;border:14px solid #d45d3f}.redondo b{width:80px;height:80px;border:14px solid #d45d3f;border-radius:50%}.desnivel .chapa-forma{position:absolute;left:25%;right:25%;top:25px;height:55px;background:#d45d3f;clip-path:polygon(0 70%,100% 25%,100% 42%,0 87%)}.desnivel.arriba .chapa-forma{clip-path:polygon(0 20%,100% 20%,100% 75%,0 55%)}.desnivel .izq{left:8%;top:48px}.desnivel .der{right:8%;top:20px}.desnivel .largo{bottom:0;left:50%;transform:translateX(-50%)}</style></head><body><div class="cabecera"><h1>Remates</h1><div>${escapar(primero.cliente)} · ${escapar(primero.obra)}</div></div>${tarjetas}</body></html>`);
+      const htmlPdf = `<!doctype html>
+        <html lang="es">
+          <head>
+            <meta charset="utf-8">
+            <title>Remates - ${escapar(primero.obra)}</title>
+            <style>
+              @page { size: A4; margin: 16mm; }
+              body { font-family: Arial, sans-serif; color: #222; margin: 0; }
+              h1 { font-size: 24px; margin: 0 0 4px; }
+              .cabecera { border-bottom: 2px solid #d45d3f; padding-bottom: 10px; margin-bottom: 18px; }
+              .cabecera p { margin: 0; font-size: 13px; }
+              .ventana { display: flex; align-items: flex-start; gap: 18px; break-inside: avoid; border-bottom: 1px solid #bbb; padding: 14px 0; }
+              .dibujo-box { flex: 0 0 230px; display: flex; justify-content: center; align-items: flex-start; }
+              .texto-ventana { flex: 1; min-width: 0; }
+              .pieza { font-size: 18px; font-weight: 700; color: #293f4a; margin: 0 0 8px; }
+              .medidas { font-size: 17px; font-weight: 700; margin: 0 0 8px; }
+              .detalle { font-size: 14px; margin: 0 0 4px; }
+              .perfil-svg { width: 205px; height: 125px; display: block; }
+              .perfil-svg text { font-family: Arial, sans-serif; }
+              @media print { body { margin: 0; } .ventana { page-break-inside: avoid; } }
+            </style>
+          </head>
+          <body>
+            <div class="cabecera">
+              <h1>Remates - ${escapar(primero.obra)}</h1>
+              <p>Cliente: ${escapar(primero.cliente || '-')}</p>
+            </div>
+            ${tarjetas}
+          </body>
+        </html>
+      `;
+      ventana.document.open();
+      ventana.document.write(htmlPdf);
       ventana.document.close();
-      ventana.onload = () => ventana.print();
+      setTimeout(() => ventana.print(), 250);
     }
     async function enviarResumenWhatsApp() {
       const remates = await rematesSeleccionados();
