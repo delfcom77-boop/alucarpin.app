@@ -258,8 +258,12 @@ class PresupuestoUpdate(BaseModel):
 
 
 def conexion():
-    if DATABASE_URL:
-        return ConexionPostgres(DATABASE_URL)
+    url = os.getenv("DATABASE_URL")
+    if url:
+        try:
+            return ConexionPostgres(url)
+        except Exception:
+            pass
     db = sqlite3.connect(str(DATABASE_PATH), timeout=30)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA foreign_keys = ON")
@@ -267,384 +271,47 @@ def conexion():
 
 
 def inicializar_base_datos():
-    if DATABASE_URL:
-        with conexion() as db:
-            db.execute("SELECT pg_advisory_xact_lock(72938421)")
-            inicializar_usuarios(db)
-            db.execute("""
-                SELECT setval(
-                    pg_get_serial_sequence('faenas', 'id'),
-                    COALESCE((SELECT MAX(id) FROM faenas), 0) + 1,
-                    false
-                )
-            """)
-            db.execute("""
-                SELECT setval(
-                    pg_get_serial_sequence('presupuestos', 'id'),
-                    COALESCE((SELECT MAX(id) FROM presupuestos), 0) + 1,
-                    false
-                )
-            """)
-            db.execute("ALTER TABLE fichajes_ayudantes ADD COLUMN IF NOT EXISTS num_presupuesto TEXT")
-            db.execute("ALTER TABLE fichajes_ayudantes ADD COLUMN IF NOT EXISTS trabajo_propio_id BIGINT")
-            db.execute("ALTER TABLE fichajes_ayudantes ADD COLUMN IF NOT EXISTS presupuesto_id BIGINT")
-            db.execute("ALTER TABLE fichajes_ayudantes ADD COLUMN IF NOT EXISTS estado_revision TEXT NOT NULL DEFAULT 'Pendiente de revisar'")
-            db.execute("ALTER TABLE faenas ADD COLUMN IF NOT EXISTS estado_revision TEXT NOT NULL DEFAULT 'Validado'")
-            db.execute("ALTER TABLE presupuestos ADD COLUMN IF NOT EXISTS estado_revision TEXT NOT NULL DEFAULT 'Validado'")
-            db.execute("ALTER TABLE trabajos_propios ADD COLUMN IF NOT EXISTS estado_revision TEXT NOT NULL DEFAULT 'Validado'")
-            db.execute("""
-                CREATE TABLE IF NOT EXISTS pagos_jornadas (
-                    id BIGSERIAL PRIMARY KEY,
-                    fichaje_id INTEGER NOT NULL UNIQUE REFERENCES fichajes_ayudantes(id) ON DELETE CASCADE,
-                    importe DOUBLE PRECISION NOT NULL DEFAULT 0,
-                    importe_pagado DOUBLE PRECISION NOT NULL DEFAULT 0,
-                    forma_pago TEXT NOT NULL DEFAULT 'Efectivo',
-                    estado_pago TEXT NOT NULL DEFAULT 'No pagado',
-                    fecha_pago DATE,
-                    creado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    actualizado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            db.execute("""
-                CREATE TABLE IF NOT EXISTS trabajos_propios (
-                    id BIGSERIAL PRIMARY KEY,
-                    tipo TEXT NOT NULL,
-                    fecha_inicio DATE NOT NULL,
-                    fecha_fin DATE,
-                    cliente TEXT NOT NULL,
-                    obra TEXT NOT NULL,
-                    ubicacion TEXT NOT NULL DEFAULT '',
-                    poblacion TEXT NOT NULL DEFAULT '',
-                    observaciones TEXT NOT NULL DEFAULT '',
-                    num_presupuesto TEXT,
-                    importe DOUBLE PRECISION NOT NULL DEFAULT 0,
-                    estado_cobro TEXT NOT NULL DEFAULT 'No cobrado',
-                    forma_pago TEXT NOT NULL DEFAULT '',
-                    fecha_cobro DATE,
-                    creado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    actualizado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            db.execute("""
-                CREATE TABLE IF NOT EXISTS citas_agenda (
-                    id BIGSERIAL PRIMARY KEY,
-                    fecha DATE NOT NULL,
-                    hora TEXT NOT NULL,
-                    duracion_minutos INTEGER NOT NULL DEFAULT 60,
-                    tipo TEXT NOT NULL DEFAULT 'visita',
-                    cliente TEXT NOT NULL DEFAULT '',
-                    ubicacion TEXT NOT NULL DEFAULT '',
-                    poblacion TEXT NOT NULL DEFAULT '',
-                    telefono TEXT NOT NULL DEFAULT '',
-                    observaciones TEXT NOT NULL DEFAULT '',
-                    estado TEXT NOT NULL DEFAULT 'Pendiente',
-                    creado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    actualizado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            db.execute("""
-                CREATE TABLE IF NOT EXISTS seguimientos_agenda (
-                    id BIGSERIAL PRIMARY KEY,
-                    fecha_llamada DATE NOT NULL DEFAULT CURRENT_DATE,
-                    fecha_recordatorio DATE NOT NULL,
-                    hora TEXT NOT NULL,
-                    cliente TEXT NOT NULL DEFAULT '',
-                    telefono TEXT NOT NULL DEFAULT '',
-                    ubicacion TEXT NOT NULL DEFAULT '',
-                    poblacion TEXT NOT NULL DEFAULT '',
-                    motivo TEXT NOT NULL,
-                    observaciones TEXT NOT NULL DEFAULT '',
-                    estado TEXT NOT NULL DEFAULT 'Pendiente',
-                    creado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    actualizado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            db.execute("""
-                CREATE TABLE IF NOT EXISTS remates (
-                    id BIGSERIAL PRIMARY KEY,
-                    origen TEXT NOT NULL,
-                    origen_id BIGINT NOT NULL,
-                        cliente TEXT NOT NULL DEFAULT '',
-                        obra TEXT NOT NULL DEFAULT '',
-                        lacado_color TEXT NOT NULL DEFAULT '',
-                            pieza TEXT NOT NULL DEFAULT '',
-                    tipo TEXT NOT NULL,
-                    modo_chapa TEXT NOT NULL DEFAULT 'normal',
-                    orientacion_chapa TEXT NOT NULL DEFAULT 'abajo',
-                    posicion_medidas TEXT NOT NULL DEFAULT 'interior',
-                    medida_1 DOUBLE PRECISION NOT NULL DEFAULT 0,
-                    medida_2 DOUBLE PRECISION NOT NULL DEFAULT 0,
-                    medida_3 DOUBLE PRECISION NOT NULL DEFAULT 0,
-                    largura DOUBLE PRECISION NOT NULL,
-                    cantidad INTEGER NOT NULL DEFAULT 1,
-                    observaciones TEXT NOT NULL DEFAULT '',
-                    creado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            db.execute("CREATE TABLE IF NOT EXISTS calendario_silencios (fecha DATE PRIMARY KEY, motivo TEXT NOT NULL DEFAULT 'Sin sonido')")
-            db.execute("ALTER TABLE remates ADD COLUMN IF NOT EXISTS cliente TEXT NOT NULL DEFAULT ''")
-            db.execute("ALTER TABLE remates ADD COLUMN IF NOT EXISTS obra TEXT NOT NULL DEFAULT ''")
-            db.execute("ALTER TABLE remates ADD COLUMN IF NOT EXISTS lacado_color TEXT NOT NULL DEFAULT ''")
-            db.execute("ALTER TABLE remates ADD COLUMN IF NOT EXISTS pieza TEXT NOT NULL DEFAULT ''")
-            db.execute("ALTER TABLE remates ADD COLUMN IF NOT EXISTS modo_chapa TEXT NOT NULL DEFAULT 'normal'")
-            db.execute("ALTER TABLE remates ADD COLUMN IF NOT EXISTS orientacion_chapa TEXT NOT NULL DEFAULT 'abajo'")
-            db.execute("ALTER TABLE remates ADD COLUMN IF NOT EXISTS posicion_medidas TEXT NOT NULL DEFAULT 'interior'")
-            db.execute("ALTER TABLE seguimientos_agenda ADD COLUMN IF NOT EXISTS fecha_llamada DATE")
-            db.execute("ALTER TABLE seguimientos_agenda ADD COLUMN IF NOT EXISTS ubicacion TEXT NOT NULL DEFAULT ''")
-            db.execute("ALTER TABLE seguimientos_agenda ADD COLUMN IF NOT EXISTS poblacion TEXT NOT NULL DEFAULT ''")
-            db.execute("UPDATE seguimientos_agenda SET fecha_llamada = fecha_recordatorio WHERE fecha_llamada IS NULL")
-        return
-    with conexion() as db:
-        db.executescript("""
-            CREATE TABLE IF NOT EXISTS ayudantes (
-                id INTEGER PRIMARY KEY,
-                nombre TEXT NOT NULL,
-                activo INTEGER NOT NULL DEFAULT 1
-            );
-            CREATE TABLE IF NOT EXISTS fichajes_ayudantes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                ayudante_id INTEGER NOT NULL,
-                fecha TEXT NOT NULL,
-                tipo_destino TEXT NOT NULL DEFAULT 'pendiente',
-                cliente TEXT NOT NULL DEFAULT '',
-                obra TEXT NOT NULL,
-                ubicacion TEXT NOT NULL DEFAULT '',
-                poblacion TEXT NOT NULL DEFAULT '',
-                    num_presupuesto TEXT,
-                confirmado_ayudante INTEGER NOT NULL DEFAULT 1,
-                sincronizado INTEGER NOT NULL DEFAULT 0,
-                creado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                actualizado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (ayudante_id) REFERENCES ayudantes(id),
-                UNIQUE (ayudante_id, fecha, cliente, obra, ubicacion, poblacion)
-            );
-            CREATE TABLE IF NOT EXISTS liquidaciones (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                ayudante_id INTEGER NOT NULL,
-                desde TEXT NOT NULL,
-                hasta TEXT NOT NULL,
-                precio_dia REAL NOT NULL,
-                importe_pagado REAL NOT NULL DEFAULT 0,
-                fecha_pago TEXT,
-                creado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                actualizado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (ayudante_id) REFERENCES ayudantes(id)
-            );
-            CREATE TABLE IF NOT EXISTS pagos_jornadas (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                fichaje_id INTEGER NOT NULL UNIQUE,
-                importe REAL NOT NULL DEFAULT 0,
-                importe_pagado REAL NOT NULL DEFAULT 0,
-                forma_pago TEXT NOT NULL DEFAULT 'Efectivo',
-                estado_pago TEXT NOT NULL DEFAULT 'No pagado',
-                fecha_pago TEXT,
-                creado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                actualizado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (fichaje_id) REFERENCES fichajes_ayudantes(id) ON DELETE CASCADE
-            );
-            CREATE TABLE IF NOT EXISTS faenas (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                cliente TEXT NOT NULL,
-                obra TEXT,
-                fecha TEXT,
-                ubicacion TEXT,
-                poblacion TEXT,
-                precio REAL DEFAULT 0,
-                ayudantes TEXT,
-                estado_revision TEXT NOT NULL DEFAULT 'Validado'
-            );
-            CREATE TABLE IF NOT EXISTS presupuestos (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                cliente TEXT NOT NULL,
-                num_presupuesto TEXT UNIQUE,
-                fecha TEXT,
-                bruto REAL DEFAULT 0,
-                iva REAL DEFAULT 0,
-                total_iva REAL DEFAULT 0,
-                presupuesto_iva REAL DEFAULT 0,
-                efectivo REAL DEFAULT 0,
-                estado TEXT,
-                presupuesto_final REAL DEFAULT 0,
-                estado_revision TEXT NOT NULL DEFAULT 'Validado'
-            );
-            CREATE TABLE IF NOT EXISTS trabajos_propios (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                tipo TEXT NOT NULL,
-                fecha_inicio TEXT NOT NULL,
-                fecha_fin TEXT,
-                cliente TEXT NOT NULL,
-                obra TEXT NOT NULL,
-                ubicacion TEXT NOT NULL DEFAULT '',
-                poblacion TEXT NOT NULL DEFAULT '',
-                observaciones TEXT NOT NULL DEFAULT '',
-                num_presupuesto TEXT,
-                importe REAL NOT NULL DEFAULT 0,
-                estado_cobro TEXT NOT NULL DEFAULT 'No cobrado',
-                forma_pago TEXT NOT NULL DEFAULT '',
-                fecha_cobro TEXT,
-                creado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                actualizado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS remates (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                origen TEXT NOT NULL,
-                origen_id INTEGER NOT NULL,
-                cliente TEXT NOT NULL DEFAULT '',
-                obra TEXT NOT NULL DEFAULT '',
-                lacado_color TEXT NOT NULL DEFAULT '',
-                    pieza TEXT NOT NULL DEFAULT '',
-                tipo TEXT NOT NULL,
-                    modo_chapa TEXT NOT NULL DEFAULT 'normal',
-                    orientacion_chapa TEXT NOT NULL DEFAULT 'abajo',
-                    posicion_medidas TEXT NOT NULL DEFAULT 'interior',
-                medida_1 REAL NOT NULL DEFAULT 0,
-                medida_2 REAL NOT NULL DEFAULT 0,
-                medida_3 REAL NOT NULL DEFAULT 0,
-                largura REAL NOT NULL,
-                cantidad INTEGER NOT NULL DEFAULT 1,
-                observaciones TEXT NOT NULL DEFAULT '',
-                creado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS citas_agenda (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                fecha TEXT NOT NULL,
-                hora TEXT NOT NULL,
-                duracion_minutos INTEGER NOT NULL DEFAULT 60,
-                tipo TEXT NOT NULL DEFAULT 'visita',
-                cliente TEXT NOT NULL DEFAULT '',
-                ubicacion TEXT NOT NULL DEFAULT '',
-                poblacion TEXT NOT NULL DEFAULT '',
-                telefono TEXT NOT NULL DEFAULT '',
-                observaciones TEXT NOT NULL DEFAULT '',
-                estado TEXT NOT NULL DEFAULT 'Pendiente',
-                creado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                actualizado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS seguimientos_agenda (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    fecha_llamada TEXT NOT NULL DEFAULT CURRENT_DATE,
-                fecha_recordatorio TEXT NOT NULL,
-                hora TEXT NOT NULL,
-                cliente TEXT NOT NULL DEFAULT '',
-                telefono TEXT NOT NULL DEFAULT '',
-                ubicacion TEXT NOT NULL DEFAULT '',
-                poblacion TEXT NOT NULL DEFAULT '',
-                motivo TEXT NOT NULL,
-                observaciones TEXT NOT NULL DEFAULT '',
-                estado TEXT NOT NULL DEFAULT 'Pendiente',
-                creado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                actualizado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS calendario_silencios (
-                fecha TEXT PRIMARY KEY,
-                motivo TEXT NOT NULL DEFAULT 'Sin sonido'
-            );
-        """)
-        columnas_seguimientos = {
-            fila[1] for fila in db.execute("PRAGMA table_info(seguimientos_agenda)")
-        }
-        columnas_remates = {fila[1] for fila in db.execute("PRAGMA table_info(remates)")}
-        if "cliente" not in columnas_remates:
-            db.execute("ALTER TABLE remates ADD COLUMN cliente TEXT NOT NULL DEFAULT ''")
-        if "obra" not in columnas_remates:
-            db.execute("ALTER TABLE remates ADD COLUMN obra TEXT NOT NULL DEFAULT ''")
-        if "lacado_color" not in columnas_remates:
-            db.execute("ALTER TABLE remates ADD COLUMN lacado_color TEXT NOT NULL DEFAULT ''")
-        if "pieza" not in columnas_remates:
-            db.execute("ALTER TABLE remates ADD COLUMN pieza TEXT NOT NULL DEFAULT ''")
-        if "modo_chapa" not in columnas_remates:
-            db.execute("ALTER TABLE remates ADD COLUMN modo_chapa TEXT NOT NULL DEFAULT 'normal'")
-        if "orientacion_chapa" not in columnas_remates:
-            db.execute("ALTER TABLE remates ADD COLUMN orientacion_chapa TEXT NOT NULL DEFAULT 'abajo'")
-        if "posicion_medidas" not in columnas_remates:
-            db.execute("ALTER TABLE remates ADD COLUMN posicion_medidas TEXT NOT NULL DEFAULT 'interior'")
-        if "fecha_llamada" not in columnas_seguimientos:
-            db.execute("ALTER TABLE seguimientos_agenda ADD COLUMN fecha_llamada TEXT")
-            db.execute("UPDATE seguimientos_agenda SET fecha_llamada = fecha_recordatorio WHERE fecha_llamada IS NULL")
-        if "ubicacion" not in columnas_seguimientos:
-            db.execute("ALTER TABLE seguimientos_agenda ADD COLUMN ubicacion TEXT NOT NULL DEFAULT ''")
-        if "poblacion" not in columnas_seguimientos:
-            db.execute("ALTER TABLE seguimientos_agenda ADD COLUMN poblacion TEXT NOT NULL DEFAULT ''")
-        columnas = {
-            fila[1] for fila in db.execute("PRAGMA table_info(fichajes_ayudantes)")
-        }
-        if "cliente" not in columnas:
-            db.execute("ALTER TABLE fichajes_ayudantes ADD COLUMN cliente TEXT NOT NULL DEFAULT ''")
-        if "tipo_destino" not in columnas:
-            db.execute("ALTER TABLE fichajes_ayudantes ADD COLUMN tipo_destino TEXT NOT NULL DEFAULT 'pendiente'")
-        if "num_presupuesto" not in columnas:
-            db.execute("ALTER TABLE fichajes_ayudantes ADD COLUMN num_presupuesto TEXT")
-        if "trabajo_propio_id" not in columnas:
-            db.execute("ALTER TABLE fichajes_ayudantes ADD COLUMN trabajo_propio_id INTEGER")
-        if "presupuesto_id" not in columnas:
-            db.execute("ALTER TABLE fichajes_ayudantes ADD COLUMN presupuesto_id INTEGER")
-        if "estado_revision" not in columnas:
-            db.execute("ALTER TABLE fichajes_ayudantes ADD COLUMN estado_revision TEXT NOT NULL DEFAULT 'Pendiente de revisar'")
-        for tabla in ("faenas", "presupuestos", "trabajos_propios"):
-            columnas_tabla = {fila[1] for fila in db.execute(f"PRAGMA table_info({tabla})")}
-            if "estado_revision" not in columnas_tabla:
-                db.execute(f"ALTER TABLE {tabla} ADD COLUMN estado_revision TEXT NOT NULL DEFAULT 'Validado'")
+    url = os.getenv("DATABASE_URL")
+    if url:
+        try:
+            with ConexionPostgres(url) as db:
+                db.execute("SELECT 1")
+                inicializar_usuarios(db)
+                return
+        except Exception:
+            pass
 
-        tablas = {
-            fila[0]
-            for fila in db.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'table'"
+    db = sqlite3.connect(str(DATABASE_PATH), timeout=30)
+    db.row_factory = sqlite3.Row
+    db.execute("PRAGMA foreign_keys = ON")
+    db.execute("CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, usuario TEXT UNIQUE NOT NULL, password_salt TEXT NOT NULL, password_hash TEXT NOT NULL, rol TEXT NOT NULL DEFAULT 'administrador', ayudante_id INTEGER, activo INTEGER NOT NULL DEFAULT 1, creado_en TEXT DEFAULT CURRENT_TIMESTAMP, actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP)")
+    db.execute("CREATE TABLE IF NOT EXISTS ayudantes (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT NOT NULL, activo INTEGER NOT NULL DEFAULT 1)")
+    db.execute("CREATE TABLE IF NOT EXISTS faenas (id INTEGER PRIMARY KEY AUTOINCREMENT, cliente TEXT NOT NULL, obra TEXT, fecha TEXT, ubicacion TEXT, poblacion TEXT, precio REAL NOT NULL DEFAULT 0, ayudantes TEXT, estado_revision TEXT NOT NULL DEFAULT 'Validado', creado_en TEXT DEFAULT CURRENT_TIMESTAMP, actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP)")
+    db.execute("CREATE TABLE IF NOT EXISTS presupuestos (id INTEGER PRIMARY KEY AUTOINCREMENT, cliente TEXT NOT NULL, num_presupuesto TEXT, fecha TEXT, bruto REAL NOT NULL DEFAULT 0, iva REAL NOT NULL DEFAULT 0, total_iva REAL NOT NULL DEFAULT 0, presupuesto_iva REAL NOT NULL DEFAULT 0, efectivo REAL NOT NULL DEFAULT 0, estado TEXT, presupuesto_final REAL NOT NULL DEFAULT 0, estado_revision TEXT NOT NULL DEFAULT 'Validado', creado_en TEXT DEFAULT CURRENT_TIMESTAMP, actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP)")
+    db.execute("CREATE TABLE IF NOT EXISTS fichajes_ayudantes (id INTEGER PRIMARY KEY AUTOINCREMENT, ayudante_id INTEGER NOT NULL, fecha TEXT NOT NULL, tipo_destino TEXT NOT NULL DEFAULT 'pendiente', cliente TEXT NOT NULL, obra TEXT NOT NULL, ubicacion TEXT NOT NULL DEFAULT '', poblacion TEXT NOT NULL DEFAULT '', num_presupuesto TEXT, trabajo_propio_id INTEGER, presupuesto_id INTEGER, estado_revision TEXT NOT NULL DEFAULT 'Pendiente de revisar', confirmado_ayudante INTEGER NOT NULL DEFAULT 0, sincronizado INTEGER NOT NULL DEFAULT 0, creado_en TEXT DEFAULT CURRENT_TIMESTAMP, actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP)")
+    db.execute("CREATE TABLE IF NOT EXISTS trabajos_propios (id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT NOT NULL, fecha_inicio TEXT NOT NULL, fecha_fin TEXT, cliente TEXT NOT NULL, obra TEXT NOT NULL, ubicacion TEXT NOT NULL DEFAULT '', poblacion TEXT NOT NULL DEFAULT '', observaciones TEXT NOT NULL DEFAULT '', num_presupuesto TEXT, importe REAL NOT NULL DEFAULT 0, estado_cobro TEXT NOT NULL DEFAULT 'No cobrado', forma_pago TEXT NOT NULL DEFAULT '', fecha_cobro TEXT, estado_revision TEXT NOT NULL DEFAULT 'Validado', creado_en TEXT DEFAULT CURRENT_TIMESTAMP, actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP)")
+    db.execute("CREATE TABLE IF NOT EXISTS citas_agenda (id INTEGER PRIMARY KEY AUTOINCREMENT, fecha TEXT NOT NULL, hora TEXT NOT NULL, duracion_minutos INTEGER NOT NULL DEFAULT 60, tipo TEXT NOT NULL DEFAULT 'visita', cliente TEXT NOT NULL DEFAULT '', ubicacion TEXT NOT NULL DEFAULT '', poblacion TEXT NOT NULL DEFAULT '', telefono TEXT NOT NULL DEFAULT '', observaciones TEXT NOT NULL DEFAULT '', estado TEXT NOT NULL DEFAULT 'Pendiente', creado_en TEXT DEFAULT CURRENT_TIMESTAMP, actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP)")
+    db.execute("CREATE TABLE IF NOT EXISTS seguimientos_agenda (id INTEGER PRIMARY KEY AUTOINCREMENT, fecha_llamada TEXT, fecha_recordatorio TEXT, hora TEXT NOT NULL, cliente TEXT NOT NULL DEFAULT '', telefono TEXT NOT NULL DEFAULT '', ubicacion TEXT NOT NULL DEFAULT '', poblacion TEXT NOT NULL DEFAULT '', motivo TEXT NOT NULL, observaciones TEXT NOT NULL DEFAULT '', estado TEXT NOT NULL DEFAULT 'Pendiente', creado_en TEXT DEFAULT CURRENT_TIMESTAMP, actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP)")
+    db.execute("CREATE TABLE IF NOT EXISTS pagos_jornadas (id INTEGER PRIMARY KEY AUTOINCREMENT, fichaje_id INTEGER NOT NULL UNIQUE, importe REAL NOT NULL DEFAULT 0, importe_pagado REAL NOT NULL DEFAULT 0, forma_pago TEXT NOT NULL DEFAULT 'Efectivo', estado_pago TEXT NOT NULL DEFAULT 'No pagado', fecha_pago TEXT, creado_en TEXT DEFAULT CURRENT_TIMESTAMP, actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP)")
+    db.execute("CREATE TABLE IF NOT EXISTS notas_usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, usuario_id INTEGER NOT NULL, titulo TEXT NOT NULL, contenido TEXT NOT NULL, fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP, fecha_actualizacion TEXT DEFAULT CURRENT_TIMESTAMP, completada INTEGER NOT NULL DEFAULT 0)")
+    db.execute("CREATE TABLE IF NOT EXISTS alarmas (id INTEGER PRIMARY KEY AUTOINCREMENT, cantidad INTEGER NOT NULL DEFAULT 0, descripcion TEXT NOT NULL, activo INTEGER NOT NULL DEFAULT 1, fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP, fecha_actualizacion TEXT DEFAULT CURRENT_TIMESTAMP)")
+    db.execute("CREATE TABLE IF NOT EXISTS remates (id INTEGER PRIMARY KEY AUTOINCREMENT, origen TEXT NOT NULL DEFAULT 'propia', origen_id INTEGER NOT NULL DEFAULT 0, cliente TEXT NOT NULL, obra TEXT NOT NULL, pieza TEXT NOT NULL, lacado_color TEXT NOT NULL, tipo TEXT NOT NULL, modo_chapa TEXT NOT NULL DEFAULT 'normal', orientacion_chapa TEXT NOT NULL DEFAULT 'abajo', posicion_medidas TEXT NOT NULL DEFAULT 'interior', medida_1 REAL NOT NULL DEFAULT 0, medida_2 REAL NOT NULL DEFAULT 0, medida_3 REAL NOT NULL DEFAULT 0, largura REAL NOT NULL DEFAULT 0, cantidad INTEGER NOT NULL DEFAULT 1, observaciones TEXT NOT NULL DEFAULT '', creado_en TEXT DEFAULT CURRENT_TIMESTAMP, actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP)")
+    inicializar_usuarios(db)
+    db.commit()
+    db.close()
+
+
+def inicializar_usuarios(db):
+    try:
+        if db.execute("SELECT COUNT(*) FROM usuarios").fetchone()[0] == 0:
+            from autenticacion import hash_password
+            salt, hash_ = hash_password("AluCarpin2024")
+            db.execute(
+                "INSERT INTO usuarios (usuario, password_salt, password_hash, rol, activo) VALUES (?, ?, ?, ?, ?)",
+                ("administrador", salt, hash_, "administrador", 1),
             )
-        }
-        if "fichajes" in tablas:
-            db.execute("""
-                INSERT OR IGNORE INTO fichajes_ayudantes
-                (id, ayudante_id, fecha, tipo_destino, cliente, obra,
-                 ubicacion, poblacion, confirmado_ayudante, sincronizado,
-                 creado_en, actualizado_en)
-                SELECT id, ayudante_id, fecha, 'faena', '', obra,
-                       ubicacion, poblacion, confirmado_ayudante, 0,
-                       creado_en, actualizado_en
-                FROM fichajes
-            """)
-
-        inicializar_usuarios(db)
-
-        indices = db.execute("PRAGMA index_list(fichajes_ayudantes)").fetchall()
-        for indice in indices:
-            nombre_indice = indice[1]
-            columnas_indice = [
-                fila[2]
-                for fila in db.execute(f"PRAGMA index_info('{nombre_indice}')")
-            ]
-            if columnas_indice == ["ayudante_id", "fecha", "obra"]:
-                db.execute("""
-                    CREATE TABLE fichajes_ayudantes_nuevo (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        ayudante_id INTEGER NOT NULL,
-                        fecha TEXT NOT NULL,
-                        tipo_destino TEXT NOT NULL DEFAULT 'pendiente',
-                        cliente TEXT NOT NULL DEFAULT '',
-                        obra TEXT NOT NULL,
-                        ubicacion TEXT NOT NULL DEFAULT '',
-                        poblacion TEXT NOT NULL DEFAULT '',
-                        num_presupuesto TEXT,
-                        confirmado_ayudante INTEGER NOT NULL DEFAULT 1,
-                        sincronizado INTEGER NOT NULL DEFAULT 0,
-                        creado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                        actualizado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (ayudante_id) REFERENCES ayudantes(id),
-                        UNIQUE (ayudante_id, fecha, cliente, obra, ubicacion, poblacion)
-                    )
-                """)
-                db.execute("""
-                    INSERT INTO fichajes_ayudantes_nuevo
-                    (id, ayudante_id, fecha, tipo_destino, cliente, obra, ubicacion, poblacion,
-                        num_presupuesto, confirmado_ayudante, sincronizado, creado_en, actualizado_en)
-                    SELECT id, ayudante_id, fecha, tipo_destino, cliente, obra, ubicacion, poblacion,
-                              num_presupuesto, confirmado_ayudante, sincronizado, creado_en, actualizado_en
-                    FROM fichajes_ayudantes
-                """)
-                db.execute("DROP TABLE fichajes_ayudantes")
-                db.execute(
-                    "ALTER TABLE fichajes_ayudantes_nuevo RENAME TO fichajes_ayudantes"
-                )
-                break
+    except Exception:
+        return
 
 
 @app.on_event("startup")
