@@ -229,6 +229,7 @@
         </label>
       </div>
       <input id="buscar-citas" placeholder="Buscar citas por cliente, teléfono, dirección o población">
+      <div id="mensaje-citas" class="mensaje" aria-live="polite"></div>
       <div class="lista"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Tipo</th><th>Cliente</th><th>Teléfono</th><th>Dirección</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista"><tr><td colspan="8">Cargando...</td></tr></tbody></table></div>
     </section>
   </main>
@@ -238,6 +239,7 @@
     const apiFetch = (url, options = {}) => fetch(url, { ...options, headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` } });
     const formulario = document.querySelector('#formulario');
     const mensaje = document.querySelector('#mensaje');
+    const mensajeCitas = document.querySelector('#mensaje-citas');
     const formularioSeguimiento = document.querySelector('#formulario-seguimiento');
     const mensajeSeguimiento = document.querySelector('#mensaje-seguimiento');
     const aplicarBusqueda = (selector, tablaSelector) => document.querySelector(selector).addEventListener('input', event => { const texto = event.target.value.trim().toLowerCase(); document.querySelectorAll(`${tablaSelector} tr`).forEach(fila => { fila.hidden = Boolean(texto) && !fila.textContent.toLowerCase().includes(texto); }); });
@@ -289,7 +291,49 @@
         fila.innerHTML = `<td>${fechaTexto(cita.fecha)}</td><td>${cita.hora}</td><td>${tipos[cita.tipo] || cita.tipo}</td><td>${cita.cliente || '-'}</td><td>${telefonoCita}</td><td>${[cita.ubicacion, cita.poblacion].filter(Boolean).join(', ') || '-'}</td><td><span class="estado-badge ${estadoClase}">${estadoLabel}</span></td><td class="acciones"><button type="button" class="editar-cita">Modificar</button>${cita.estado === 'Realizada' ? '' : '<button type="button" class="cal">Calendario</button>'}<button type="button" class="realizada" ${cita.estado === 'Realizada' ? 'disabled' : ''}>${cita.estado === 'Realizada' ? 'Realizada' : 'Marcar realizada'}</button><button type="button" class="borrar">Borrar</button></td>`;
         fila.querySelector('.editar-cita').onclick = () => editarCita(cita);
         fila.querySelector('.cal')?.addEventListener('click', () => calendario(cita.id).catch(error => mostrarError(error.message)));
-        fila.querySelector('.realizada').onclick = async () => { const respuesta = await apiFetch(`/citas/${cita.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fecha: cita.fecha, hora: cita.hora, tipo: cita.tipo, cliente: cita.cliente || '', ubicacion: cita.ubicacion || '', poblacion: cita.poblacion || '', telefono: cita.telefono || '', observaciones: cita.observaciones || '', estado: 'Realizada' }) }); if (!respuesta.ok) { const resultado = await respuesta.json().catch(() => ({})); mostrarError(resultado.detail || 'No se pudo marcar la cita como realizada.'); return; } mensaje.textContent = 'Cita marcada como realizada.'; mensaje.className = 'mensaje exito'; await cargar(); };
+        fila.querySelector('.realizada').onclick = async () => {
+          const boton = fila.querySelector('.realizada');
+          boton.disabled = true;
+          mensajeCitas.textContent = '';
+          mensajeCitas.className = 'mensaje';
+          try {
+            const respuesta = await apiFetch(`/citas/${cita.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                fecha: cita.fecha,
+                hora: cita.hora,
+                tipo: cita.tipo,
+                cliente: cita.cliente || '',
+                ubicacion: cita.ubicacion || '',
+                poblacion: cita.poblacion || '',
+                telefono: cita.telefono || '',
+                observaciones: cita.observaciones || '',
+                estado: 'Realizada'
+              })
+            });
+            if (!respuesta.ok) {
+              const resultado = await respuesta.json().catch(() => ({}));
+              const detalle = typeof resultado.detail === 'string' ? resultado.detail : `Error del servidor (${respuesta.status}).`;
+              mensajeCitas.textContent = `No se pudo marcar la cita como realizada: ${detalle}`;
+              mensajeCitas.className = 'mensaje error';
+              boton.disabled = false;
+              return;
+            }
+            mensajeCitas.textContent = 'Cita marcada como realizada. Si estás viendo Pendientes, se quitará de esta lista; puedes verla en Realizadas o Todas.';
+            mensajeCitas.className = 'mensaje exito';
+            try {
+              await cargar();
+            } catch (error) {
+              mensajeCitas.textContent = `Cita marcada como realizada, pero no se pudo actualizar la lista: ${error.message}`;
+              mensajeCitas.className = 'mensaje error';
+            }
+          } catch (error) {
+            mensajeCitas.textContent = `No se pudo marcar la cita como realizada: ${error.message}`;
+            mensajeCitas.className = 'mensaje error';
+            boton.disabled = false;
+          }
+        };
         fila.querySelector('.borrar').onclick = async () => { if (!confirm('¿Borrar esta cita?')) return; await apiFetch(`/citas/${cita.id}`, { method: 'DELETE' }); await cargar(); };
         cuerpo.appendChild(fila);
       });
