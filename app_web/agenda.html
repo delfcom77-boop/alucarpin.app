@@ -322,20 +322,10 @@
           mensajeCitas.textContent = '';
           mensajeCitas.className = 'mensaje';
           try {
-            const respuesta = await apiFetch(`/citas/${cita.id}`, {
+            const respuesta = await apiFetch(`/citas/${cita.id}/estado`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                fecha: cita.fecha,
-                hora: cita.hora,
-                tipo: cita.tipo,
-                cliente: cita.cliente || '',
-                ubicacion: cita.ubicacion || '',
-                poblacion: cita.poblacion || '',
-                telefono: cita.telefono || '',
-                observaciones: cita.observaciones || '',
-                estado: 'Realizada'
-              })
+              body: JSON.stringify({ estado: 'Realizada' })
             });
             if (!respuesta.ok) {
               const resultado = await respuesta.json().catch(() => ({}));

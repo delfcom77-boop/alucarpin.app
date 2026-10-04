@@ -110,6 +110,10 @@ class CitaUpdate(CitaCreate):
     pass
 
 
+class CitaEstadoUpdate(BaseModel):
+    estado: Literal["Pendiente", "Realizada", "Cancelada"]
+
+
 class SeguimientoCreate(BaseModel):
     fecha_llamada: Optional[date] = None
     fecha_recordatorio: Optional[date] = None
@@ -907,6 +911,19 @@ def modificar_cita(cita_id: int, datos: CitaUpdate, usuario=Depends(administrado
         cursor = db.execute(
             f"UPDATE citas_agenda SET {asignaciones}, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?",
             [*valores.values(), cita_id],
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Cita no encontrada")
+        fila = db.execute("SELECT * FROM citas_agenda WHERE id = ?", (cita_id,)).fetchone()
+    return dict(fila)
+
+
+@app.patch("/citas/{cita_id}/estado")
+def modificar_estado_cita(cita_id: int, datos: CitaEstadoUpdate, usuario=Depends(administrador)):
+    with conexion() as db:
+        cursor = db.execute(
+            "UPDATE citas_agenda SET estado = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?",
+            (datos.estado, cita_id),
         )
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Cita no encontrada")
