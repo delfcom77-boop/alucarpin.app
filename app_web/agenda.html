@@ -270,6 +270,31 @@
       return citas.filter(cita => cita.estado !== 'Realizada');
     }
 
+    function textoDetalleError(detalle) {
+      if (typeof detalle === 'string') return detalle;
+      if (Array.isArray(detalle)) {
+        return detalle.map(item => {
+          if (typeof item === 'string') return item;
+          if (item && typeof item === 'object') {
+            const ubicacion = Array.isArray(item.loc) ? item.loc.join('.') : '';
+            const mensaje = typeof item.msg === 'string' ? item.msg : '';
+            if (ubicacion && mensaje) return `${ubicacion}: ${mensaje}`;
+            if (mensaje) return mensaje;
+          }
+          return JSON.stringify(item);
+        }).join('; ');
+      }
+      if (detalle && typeof detalle === 'object') {
+        if (typeof detalle.msg === 'string') return detalle.msg;
+        try {
+          return JSON.stringify(detalle);
+        } catch {
+          return '';
+        }
+      }
+      return '';
+    }
+
     async function cargar() {
       const respuesta = await apiFetch('/citas'); if (!respuesta.ok) throw new Error('No se pudieron cargar las citas.');
       const citas = obtenerCitasFiltradas(await respuesta.json()); const cuerpo = document.querySelector('#lista'); cuerpo.textContent = '';
@@ -314,7 +339,7 @@
             });
             if (!respuesta.ok) {
               const resultado = await respuesta.json().catch(() => ({}));
-              const detalle = typeof resultado.detail === 'string' ? resultado.detail : `Error del servidor (${respuesta.status}).`;
+              const detalle = textoDetalleError(resultado.detail) || `Error del servidor (${respuesta.status}).`;
               mensajeCitas.textContent = `No se pudo marcar la cita como realizada: ${detalle}`;
               mensajeCitas.className = 'mensaje error';
               boton.disabled = false;
