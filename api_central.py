@@ -90,6 +90,10 @@ class TrabajoUpdate(TrabajoCreate):
     pass
 
 
+class JornadaFaenaCreate(BaseModel):
+    fecha: date
+
+
 class ValidacionTrabajo(BaseModel):
     estado: Literal["Pendiente de revisar", "Validado", "Rechazado"]
 
@@ -291,6 +295,8 @@ def inicializar_base_datos():
     db.execute("CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, usuario TEXT UNIQUE NOT NULL, password_salt TEXT NOT NULL, password_hash TEXT NOT NULL, rol TEXT NOT NULL DEFAULT 'administrador', ayudante_id INTEGER, activo INTEGER NOT NULL DEFAULT 1, creado_en TEXT DEFAULT CURRENT_TIMESTAMP, actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP)")
     db.execute("CREATE TABLE IF NOT EXISTS ayudantes (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT NOT NULL, activo INTEGER NOT NULL DEFAULT 1)")
     db.execute("CREATE TABLE IF NOT EXISTS faenas (id INTEGER PRIMARY KEY AUTOINCREMENT, cliente TEXT NOT NULL, obra TEXT, fecha TEXT, ubicacion TEXT, poblacion TEXT, precio REAL NOT NULL DEFAULT 0, ayudantes TEXT, estado_revision TEXT NOT NULL DEFAULT 'Validado', creado_en TEXT DEFAULT CURRENT_TIMESTAMP, actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP)")
+    db.execute("CREATE TABLE IF NOT EXISTS jornadas_faenas (id INTEGER PRIMARY KEY AUTOINCREMENT, faena_id INTEGER NOT NULL REFERENCES faenas(id) ON DELETE RESTRICT, fecha TEXT NOT NULL, importe REAL NOT NULL DEFAULT 400, estado_cobro TEXT NOT NULL DEFAULT 'Pendiente' CHECK (estado_cobro IN ('Pendiente', 'Cobrado')), fecha_cobro TEXT, forma_pago TEXT NOT NULL DEFAULT 'Efectivo', pago_faena_id INTEGER, creado_en TEXT DEFAULT CURRENT_TIMESTAMP, actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP, UNIQUE (faena_id, fecha))")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_jornadas_faenas_faena_fecha ON jornadas_faenas (faena_id, fecha)")
     db.execute("CREATE TABLE IF NOT EXISTS presupuestos (id INTEGER PRIMARY KEY AUTOINCREMENT, cliente TEXT NOT NULL, num_presupuesto TEXT, fecha TEXT, bruto REAL NOT NULL DEFAULT 0, iva REAL NOT NULL DEFAULT 0, total_iva REAL NOT NULL DEFAULT 0, presupuesto_iva REAL NOT NULL DEFAULT 0, efectivo REAL NOT NULL DEFAULT 0, estado TEXT, presupuesto_final REAL NOT NULL DEFAULT 0, estado_revision TEXT NOT NULL DEFAULT 'Validado', creado_en TEXT DEFAULT CURRENT_TIMESTAMP, actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP)")
     db.execute("CREATE TABLE IF NOT EXISTS fichajes_ayudantes (id INTEGER PRIMARY KEY AUTOINCREMENT, ayudante_id INTEGER NOT NULL, fecha TEXT NOT NULL, tipo_destino TEXT NOT NULL DEFAULT 'pendiente', cliente TEXT NOT NULL, obra TEXT NOT NULL, ubicacion TEXT NOT NULL DEFAULT '', poblacion TEXT NOT NULL DEFAULT '', num_presupuesto TEXT, trabajo_propio_id INTEGER, presupuesto_id INTEGER, estado_revision TEXT NOT NULL DEFAULT 'Pendiente de revisar', confirmado_ayudante INTEGER NOT NULL DEFAULT 0, sincronizado INTEGER NOT NULL DEFAULT 0, creado_en TEXT DEFAULT CURRENT_TIMESTAMP, actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP)")
     db.execute("CREATE TABLE IF NOT EXISTS trabajos_propios (id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT NOT NULL, fecha_inicio TEXT NOT NULL, fecha_fin TEXT, cliente TEXT NOT NULL, obra TEXT NOT NULL, ubicacion TEXT NOT NULL DEFAULT '', poblacion TEXT NOT NULL DEFAULT '', observaciones TEXT NOT NULL DEFAULT '', num_presupuesto TEXT, importe REAL NOT NULL DEFAULT 0, estado_cobro TEXT NOT NULL DEFAULT 'No cobrado', forma_pago TEXT NOT NULL DEFAULT '', fecha_cobro TEXT, estado_revision TEXT NOT NULL DEFAULT 'Validado', creado_en TEXT DEFAULT CURRENT_TIMESTAMP, actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP)")
@@ -1267,6 +1273,74 @@ def listar_faenas(usuario=Depends(administrador)):
     return [dict(fila) for fila in filas]
 
 
+@app.get("/jornadas-faenas")
+def listar_jornadas_faenas(
+    faena_id: Optional[int] = Query(default=None),
+    usuario=Depends(administrador),
+):
+    consulta = (
+        "SELECT j.id, j.faena_id, j.fecha, f.cliente, f.obra "
+        "FROM jornadas_faenas AS j "
+        "JOIN faenas AS f ON f.id = j.faena_id"
+    )
+    parametros = []
+    if faena_id is not None:
+        consulta += " WHERE j.faena_id = ?"
+        parametros.append(faena_id)
+    consulta += " ORDER BY j.fecha DESC, j.id DESC"
+    try:
+        with conexion() as db:
+            filas = db.execute(consulta, parametros).fetchall()
+    except (sqlite3.OperationalError, psycopg.errors.UndefinedTable) as error:
+        raise HTTPException(
+            status_code=503,
+            detail="La tabla de jornadas no está disponible. Aplica migracion_jornadas_faenas.sql.",
+        ) from error
+    return [dict(fila) for fila in filas]
+
+
+@app.post("/faenas/{faena_id}/jornadas", status_code=201)
+def crear_jornada_faena(
+    faena_id: int,
+    datos: JornadaFaenaCreate,
+    usuario=Depends(administrador),
+):
+    with conexion() as db:
+        faena = db.execute(
+            "SELECT id FROM faenas WHERE id = ?", (faena_id,)
+        ).fetchone()
+        if not faena:
+            raise HTTPException(status_code=404, detail="Faena no encontrada")
+        try:
+            db.execute(
+                "INSERT INTO jornadas_faenas (faena_id, fecha) VALUES (?, ?)",
+                (faena_id, datos.fecha.isoformat()),
+            )
+        except (sqlite3.OperationalError, psycopg.errors.UndefinedTable) as error:
+            raise HTTPException(
+                status_code=503,
+                detail="La tabla de jornadas no está disponible. Aplica migracion_jornadas_faenas.sql.",
+            ) from error
+        except sqlite3.IntegrityError as error:
+            if "unique" in str(error).lower():
+                raise HTTPException(
+                    status_code=409,
+                    detail="Ya hay una jornada registrada para esta faena en esa fecha.",
+                ) from error
+            raise
+        except psycopg.errors.UniqueViolation as error:
+            raise HTTPException(
+                status_code=409,
+                detail="Ya hay una jornada registrada para esta faena en esa fecha.",
+            ) from error
+        fila = db.execute(
+            "SELECT id, faena_id, fecha FROM jornadas_faenas "
+            "WHERE faena_id = ? AND fecha = ?",
+            (faena_id, datos.fecha.isoformat()),
+        ).fetchone()
+    return dict(fila)
+
+
 @app.post("/faenas", status_code=201)
 def crear_faena(datos: FaenaCreate, usuario=Depends(administrador)):
     valores = datos.model_dump()
@@ -1325,10 +1399,10 @@ def borrar_faena(faena_id: int, usuario=Depends(administrador)):
             cursor = db.execute("DELETE FROM faenas WHERE id = ?", (faena_id,))
             if cursor.rowcount == 0:
                 raise HTTPException(status_code=404, detail="Faena no encontrada")
-    except psycopg.errors.ForeignKeyViolation as error:
+    except (psycopg.errors.ForeignKeyViolation, sqlite3.IntegrityError) as error:
         raise HTTPException(
             status_code=409,
-            detail="No se puede borrar: la faena tiene gastos o pagos vinculados. "
+            detail="No se puede borrar: la faena tiene gastos, pagos o jornadas vinculados. "
                    "Desvincula esos datos o solicita una eliminación completa.",
         ) from error
     return {"eliminado": True, "id": faena_id}

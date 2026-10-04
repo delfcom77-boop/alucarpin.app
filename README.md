@@ -267,6 +267,10 @@ export ALUCARPIN_SESSION_SECRET="tu-secreto"
 uvicorn api_central:app --host 0.0.0.0 --port 8000
 ```
 
+### Registrar los días trabajados en faenas
+
+En Supabase, ejecuta `migracion_jornadas_faenas.sql` después de que existan las tablas `faenas` y `pagos_faenas`. Cuando la API usa SQLite, la tabla se crea al iniciar; si usa `DATABASE_URL`, hay que aplicar la migración en Supabase. En **Mi control → Mis trabajos**, filtra por tipo, cliente y obra; cada faena permite registrar sus días reales de trabajo. Las fechas antiguas no se convierten automáticamente en jornadas.
+
 ### Desktop App
 
 ```bash
