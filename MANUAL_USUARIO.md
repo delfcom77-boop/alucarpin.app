@@ -83,6 +83,16 @@ En **Ayudantes -> Listado general de fichajes** estan disponibles los mismos fil
 
 El selector de ayudante se coordina con los botones de ayudantes de la parte superior, y el estado de pago con los botones Pagado, Parcial, Pendiente y Total jornadas. **Limpiar filtros de fichajes** restablece todos los filtros del listado. Estos filtros no cambian el resumen de Gastos registrados. Los botones Modificar, Validar y Borrar siguen disponibles en las filas filtradas.
 
+### Organizacion de Ayudantes
+
+La pantalla se divide en apartados: **Fichajes**, **Pagos**, **Liquidaciones**, **Gastos y dias**, **Faenas**, **Presupuestos**, **Ayudantes** y **Configuracion**. Solo se muestran las secciones del apartado seleccionado; cambiar de apartado conserva los filtros y los formularios sin guardar mientras no recargues la pagina.
+
+Los botones superiores permiten seleccionar el ayudante activo, cuyo nombre se muestra debajo de los apartados. En **Ayudantes** aparecen tambien las acciones para modificar y borrar ayudantes. En **Configuracion** se gestionan los usuarios y las contrasenas. Los contadores de estado de pago abren **Fichajes** con el filtro correspondiente.
+
+En el movil, los formularios y los botones se ajustan al ancho de la pantalla. Las tablas se desplazan horizontalmente dentro de su propio recuadro, sin desplazar toda la pagina. Tambien puedes enfocar una tabla con el teclado y desplazarla con las flechas. El formulario de edicion de fichajes solo aparece al seleccionar un registro; la pantalla se desplaza hasta el formulario. **Cancelar edicion** descarta ese borrador sin modificar el fichaje.
+
+Esta reorganizacion no modifica los datos ni las reglas de pago y liquidacion.
+
 ## 3. Programa de escritorio
 
 ### Abrir el programa

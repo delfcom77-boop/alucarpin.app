@@ -10,6 +10,7 @@
   <style>
     :root { font-family: Segoe UI, sans-serif; color: #223238; }
     * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
     body { margin: 0; background: #f3f1eb; }
     main { width: min(900px, 100%); margin: auto; padding: 24px 16px 40px; }
     header { background: #293f4a; color: #fff; border-radius: 14px; padding: 22px; }
@@ -23,14 +24,14 @@
     .ayudante-acciones button { min-height: 34px; border: 0; padding: 6px 10px; cursor: pointer; font-weight: 700; }
     .borrar-ayudante { background: #f4cccc; color: #7b2020; }
     form { display: grid; gap: 12px; }
-    label { font-weight: 700; display: grid; gap: 6px; }
+    label { font-weight: 700; display: grid; gap: 6px; min-width: 0; }
     input, select, button { min-height: 46px; border-radius: 8px; font: inherit; }
-    input, select { border: 1px solid #b9c4c2; padding: 10px; }
-    .fila { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-    .resumen { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 14px; }
+    input, select { border: 1px solid #b9c4c2; padding: 10px; min-width: 0; width: 100%; }
+    .fila { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .resumen { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
     .dato { background: #f1f5f3; border-radius: 8px; padding: 12px; }
     .dato strong { display: block; font-size: 20px; margin-top: 4px; }
-      .lista-general { overflow-x: auto; }
+      .lista-general { overflow-x: auto; max-width: 100%; margin-top: 12px; }
       table { width: 100%; border-collapse: collapse; min-width: 700px; }
       th, td { border-bottom: 1px solid #ddd8cc; padding: 10px 8px; text-align: left; }
       th { background: #eef3f1; }
@@ -50,7 +51,7 @@
     .agenda-acciones button { border: 0; padding: 8px 12px; cursor: pointer; font-weight: 700; }
     .agenda-acciones button:first-child { background: #293f4a; color: #fff; }
     .agenda-acciones .borrar-trabajo { background: #f4cccc; color: #7b2020; }
-    .estado-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .estado-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
     .estado-dato { border-radius: 8px; padding: 12px; font-weight: 700; }
     .estado-dato { border: 2px solid transparent; cursor: pointer; text-align: left; width: 100%; }
     .estado-dato.seleccionado { border-color: #293f4a; }
@@ -59,10 +60,27 @@
     .estado-parcial { background: #fff3cd; color: #765b00; }
     .estado-pendiente { background: #fce4e4; color: #7a2020; }
     .estado-total { background: #eef3f1; color: #293f4a; }
-    @media (max-width: 560px) { .fila, .resumen { grid-template-columns: 1fr; } }
+    .menu-apartados { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 16px 0; }
+    .menu-apartados button { background: #e5efed; color: #1d4d50; border: 2px solid transparent; padding: 10px; font-weight: 700; cursor: pointer; }
+    .menu-apartados button[aria-pressed="true"] { background: #293f4a; color: #fff; }
+    button:focus-visible, a:focus-visible, .lista-general:focus-visible { outline: 3px solid #d45d3f; outline-offset: 3px; }
+    section, form, .fila > *, .ayudante-item, .estado-dato { min-width: 0; }
+    section p, .mensaje, .dato, .ayudante { overflow-wrap: anywhere; }
+    .ayudante-acciones { flex-wrap: wrap; }
+    body:not([data-apartado="ayudantes"]) .ayudante-acciones { display: none; }
+    .contexto-ayudante { margin: 0 0 12px; }
+    #formulario-edicion { scroll-margin-top: 16px; }
+    @media (max-width: 560px) {
+      .fila, .resumen { grid-template-columns: minmax(0, 1fr); }
+      .estado-grid, .menu-apartados { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      main { padding: 16px 12px 28px; }
+      section { padding: 14px; }
+      .ayudantes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .ayudante { padding: 10px; }
+    }
   </style>
 </head>
-<body>
+<body data-apartado="fichajes">
   <main>
     <header><h1>Ayudantes</h1><p>Fichajes, jornadas y pagos</p></header>
     <nav><a href="/app/inicio.html" style="display:inline-block;background:#293f4a;color:#fff;border-radius:8px;padding:12px 16px;text-decoration:none;font-weight:700;">Volver al menú</a></nav>
@@ -84,7 +102,18 @@
       <div class="lista-general"><table><thead><tr><th>Fechas</th><th>Tipo</th><th>Cliente</th><th>Obra</th><th>Presupuesto</th><th>Importe</th><th>Cobro</th><th>Acciones</th></tr></thead><tbody id="lista-trabajos"><tr><td colspan="8">Cargando...</td></tr></tbody></table></div>
     </section>
     <section><h2>Seleccionar ayudante</h2><div id="ayudantes" class="ayudantes">Cargando...</div></section>
-    <section>
+    <nav class="menu-apartados" aria-label="Apartados de Ayudantes">
+      <button type="button" data-apartado="fichajes" aria-pressed="true" aria-controls="apartado-fichajes apartado-edicion">Fichajes</button>
+      <button type="button" data-apartado="pagos" aria-pressed="false" aria-controls="apartado-pagos apartado-periodo">Pagos</button>
+      <button type="button" data-apartado="liquidaciones" aria-pressed="false" aria-controls="apartado-liquidaciones apartado-crear-liquidacion">Liquidaciones</button>
+      <button type="button" data-apartado="gastos" aria-pressed="false" aria-controls="apartado-gastos apartado-crear-gasto">Gastos y días</button>
+      <button type="button" data-apartado="faenas" aria-pressed="false" aria-controls="apartado-faenas">Faenas</button>
+      <button type="button" data-apartado="presupuestos" aria-pressed="false" aria-controls="apartado-presupuestos">Presupuestos</button>
+      <button type="button" data-apartado="ayudantes" aria-pressed="false" aria-controls="apartado-ayudantes">Ayudantes</button>
+      <button type="button" data-apartado="configuracion" aria-pressed="false" aria-controls="apartado-configuracion">Configuración</button>
+    </nav>
+    <p id="contexto-ayudante" class="contexto-ayudante" role="status" aria-live="polite">Ayudante activo: todos. Selecciona uno para preparar sus pagos.</p>
+    <section id="apartado-ayudantes" data-contenido="ayudantes" hidden>
       <h2>Añadir ayudante</h2>
       <form id="formulario-ayudante">
         <label>Nombre completo <input id="nombre-ayudante" required></label>
@@ -92,7 +121,7 @@
         <div id="mensaje-ayudante" class="mensaje"></div>
       </form>
     </section>
-    <section>
+    <section id="apartado-fichajes" data-contenido="fichajes">
       <h2>Listado general de fichajes</h2>
       <p>Selecciona una línea para modificarla o borrarla.</p>
       <div class="fila">
@@ -112,7 +141,7 @@
       </div>
       <div id="mensaje-general" class="mensaje"></div>
     </section>
-    <section>
+    <section id="apartado-edicion" data-contenido="fichajes" hidden>
       <h2>Modificar fichaje seleccionado</h2>
       <form id="formulario-edicion">
         <input id="editar-id" type="hidden">
@@ -130,9 +159,10 @@
         </div>
         <label>Faena vinculada <select id="faena-general"><option value="">Sin vincular</option></select></label>
         <button type="submit">Guardar modificación</button>
+        <button type="button" id="cancelar-edicion-fichaje">Cancelar edición</button>
       </form>
     </section>
-    <section>
+    <section id="apartado-pagos" data-contenido="pagos" hidden>
       <h2>Preparar pago por jornadas</h2>
       <div class="fila">
         <label>Desde <input id="desde" type="date" required></label>
@@ -150,7 +180,7 @@
         <div class="dato">Estado<strong id="estado">Pendiente</strong></div>
       </div>
     </section>
-    <section>
+    <section id="apartado-liquidaciones" data-contenido="liquidaciones" hidden>
       <h2>Liquidaciones guardadas</h2>
       <div class="fila">
         <label>Desde <input id="liquidacion-desde" type="date"></label>
@@ -159,7 +189,7 @@
       <div class="lista-general"><table><thead><tr><th>Ayudante</th><th>Periodo</th><th>Días</th><th>Total</th><th>Pagado</th><th>Pendiente</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista-liquidaciones"><tr><td colspan="8">Cargando...</td></tr></tbody></table></div>
       <div id="mensaje-liquidaciones" class="mensaje"></div>
     </section>
-    <section>
+    <section id="apartado-gastos" data-contenido="gastos" hidden>
       <h2>Gastos registrados</h2>
       <h3>Días trabajados por faena</h3>
       <div class="fila">
@@ -182,7 +212,7 @@
       <div class="lista-general"><table><thead><tr><th>Tipo</th><th>Fecha</th><th>Proveedor</th><th>Concepto</th><th>Importe</th><th>Pagado</th><th>Pendiente</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista-gastos"><tr><td colspan="9">Cargando...</td></tr></tbody></table></div>
       <div id="mensaje-gastos" class="mensaje"></div>
     </section>
-    <section>
+    <section id="apartado-crear-gasto" data-contenido="gastos" hidden>
       <h2>Añadir gasto</h2>
       <form id="formulario-gasto">
         <div class="fila"><label>Tipo <select id="gasto-tipo"><option value="faena">Faena</option><option value="presupuesto">Presupuesto</option></select></label><label>Destino <select id="gasto-destino" required></select></label></div>
@@ -192,7 +222,7 @@
         <button type="submit">Guardar gasto</button><div id="mensaje-alta-gasto" class="mensaje"></div>
       </form>
     </section>
-    <section>
+    <section id="apartado-crear-liquidacion" data-contenido="liquidaciones" hidden>
       <h2>Crear liquidación</h2>
       <form id="formulario-liquidacion">
         <div class="fila">
@@ -208,7 +238,7 @@
         <div id="mensaje-liquidacion-form" class="mensaje"></div>
       </form>
     </section>
-    <section>
+    <section id="apartado-faenas" data-contenido="faenas" hidden>
       <h2>Gestión de Faenas</h2>
       <form id="formulario-faena">
         <input id="faena-id" type="hidden">
@@ -243,7 +273,7 @@
         </table>
       </div>
     </section>
-    <section>
+    <section id="apartado-presupuestos" data-contenido="presupuestos" hidden>
       <h2>Gestión de Presupuestos</h2>
       <form id="formulario-presupuesto">
         <input id="presupuesto-id" type="hidden">
@@ -285,12 +315,42 @@
         </table>
       </div>
     </section>
-    <section><h2>Fichajes del periodo</h2><div id="fichajes">Selecciona un ayudante y un rango de fechas.</div></section>
-    <section><h2>Usuarios y contraseñas</h2><div class="lista-general"><table><thead><tr><th>Usuario</th><th>Rol</th><th>Ayudante</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="usuarios"><tr><td colspan="5">Cargando...</td></tr></tbody></table></div><div id="mensaje-usuarios" class="mensaje"></div></section>
+    <section id="apartado-periodo" data-contenido="pagos" hidden><h2>Fichajes del periodo</h2><div id="fichajes">Selecciona un ayudante y un rango de fechas.</div></section>
+    <section id="apartado-configuracion" data-contenido="configuracion" hidden><h2>Usuarios y contraseñas</h2><div class="lista-general"><table><thead><tr><th>Usuario</th><th>Rol</th><th>Ayudante</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="usuarios"><tr><td colspan="5">Cargando...</td></tr></tbody></table></div><div id="mensaje-usuarios" class="mensaje"></div></section>
   </main>
   <script src="/app/jornadas.js"></script>
   <script>
     const api = '';
+    function mostrarApartado(nombre) {
+      const botones = Array.from(document.querySelectorAll('.menu-apartados button'));
+      const activo = botones.find(boton => boton.dataset.apartado === nombre) || botones[0];
+      document.body.dataset.apartado = activo.dataset.apartado;
+      botones.forEach(boton => boton.setAttribute('aria-pressed', String(boton === activo)));
+      document.querySelectorAll('[data-contenido]').forEach(seccion => {
+        seccion.hidden = seccion.dataset.contenido !== activo.dataset.apartado
+          || (seccion.id === 'apartado-edicion' && !document.querySelector('#editar-id').value);
+      });
+    }
+    document.querySelectorAll('.menu-apartados button').forEach(boton => {
+      boton.addEventListener('click', () => {
+        mostrarApartado(boton.dataset.apartado);
+        location.hash = boton.dataset.apartado;
+      });
+    });
+    window.addEventListener('hashchange', () => mostrarApartado(location.hash.slice(1)));
+    mostrarApartado(location.hash.slice(1));
+    document.querySelector('#cancelar-edicion-fichaje').addEventListener('click', () => {
+      document.querySelector('#formulario-edicion').reset();
+      document.querySelector('#editar-id').value = '';
+      document.querySelectorAll('#lista-general tr.seleccionada').forEach(fila => fila.classList.remove('seleccionada'));
+      mostrarApartado('fichajes');
+      document.querySelector('#apartado-fichajes').scrollIntoView({ block: 'start' });
+    });
+    document.querySelectorAll('.lista-general').forEach(contenedor => {
+      contenedor.tabIndex = 0;
+      contenedor.setAttribute('role', 'region');
+      contenedor.setAttribute('aria-label', `Tabla de ${contenedor.closest('section').querySelector('h2').textContent}. Desplaza horizontalmente para ver todas las columnas.`);
+    });
     const token = localStorage.getItem('alucarpin_token');
     if (!token) location.replace('/app/login.html');
     const apiFetch = (url, options = {}) => {
@@ -630,6 +690,8 @@
           faenaGeneral.value = fichaje.faena_id_vinculada || '';
           document.querySelector('#fecha-general').value = fichaje.fecha;
           document.querySelector('#editar-id').value = fichaje.id;
+          mostrarApartado('fichajes');
+          document.querySelector('#formulario-edicion').scrollIntoView({ block: 'start' });
           cargarFichajes().catch(mostrarError);
         }
 
@@ -883,6 +945,8 @@
       filtroEstadoPago = boton.dataset.filtroEstado;
       document.querySelector('#listado-estado').value = filtroEstadoPago;
       actualizarSeleccionEstado();
+      mostrarApartado('fichajes');
+      location.hash = 'fichajes';
       pintarListadoGeneral();
     }));
     document.querySelector('#formulario-ayudante').addEventListener('submit', async event => {
@@ -911,6 +975,23 @@
       document.querySelectorAll('.ayudante').forEach(item => {
         item.classList.toggle('seleccionado', Number(item.dataset.ayudanteId) === ayudanteId);
       });
+      const seleccionado = Array.from(document.querySelectorAll('.ayudante')).find(item =>
+        item.dataset.ayudanteId && Number(item.dataset.ayudanteId) === ayudanteId
+      );
+      document.querySelector('#contexto-ayudante').textContent = seleccionado
+        ? `Ayudante activo: ${seleccionado.textContent}. Los pagos y las liquidaciones se consultan para este ayudante.`
+        : 'Ayudante activo: todos. Selecciona uno para preparar sus pagos.';
+      if (ayudanteId === null) {
+        jornadasPago = [];
+        pintarJornadasPago();
+        actualizarResumen(0);
+        document.querySelector('#dias').textContent = '0';
+        fichajes.textContent = 'Selecciona un ayudante y un rango de fechas.';
+        cargarLiquidaciones().catch(error => {
+          mensajeLiquidaciones.textContent = error.message;
+          mensajeLiquidaciones.className = 'mensaje error';
+        });
+      }
     }
     async function seleccionar(id, boton) {
       marcarAyudante(id);
