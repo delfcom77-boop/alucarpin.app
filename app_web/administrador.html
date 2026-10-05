@@ -493,14 +493,20 @@
               }
               throw new Error(`Fichajes de ${ayudante.nombre}: ${detalle}`);
             }
-            return (await respuesta.json()).map(fichaje => ({ ...fichaje, nombreAyudante: ayudante.nombre }));
+            const fichajesAyudante = await respuesta.json();
+            if (!fichajesAyudante.length) return [];
+            const fechas = fichajesAyudante.map(fichaje => fichaje.fecha).sort();
+            const respuestaPagos = await apiFetch(`${api}/ayudantes/${ayudante.id}/jornadas-pago?desde=${fechas[0]}&hasta=${fechas[fechas.length - 1]}`);
+            if (!respuestaPagos.ok) throw new Error(`No se pudieron consultar los pagos de ${ayudante.nombre}.`);
+            const pagosPorFecha = new Map((await respuestaPagos.json()).map(jornada => [
+              jornada.fecha, jornada.revision ? 'Revisar' : jornada.pago.estado_pago,
+            ]));
+            return fichajesAyudante.map(fichaje => {
+              if (!pagosPorFecha.has(fichaje.fecha)) throw new Error(`Falta el pago diario de ${fichaje.fecha}. Recarga el listado.`);
+              return { ...fichaje, nombreAyudante: ayudante.nombre, estadoPago: pagosPorFecha.get(fichaje.fecha) };
+            });
           }));
-          registrosGenerales = await Promise.all(grupos.flat().sort((a, b) => b.fecha.localeCompare(a.fecha) || b.id - a.id).map(async fichaje => {
-            const respuestaPago = await apiFetch(`${api}/fichajes/${fichaje.id}/pago`);
-            if (!respuestaPago.ok) throw new Error(`No se pudo consultar el pago del fichaje ${fichaje.id}.`);
-            const pago = await respuestaPago.json();
-            return { ...fichaje, estadoPago: pago.estado_pago || 'No pagado' };
-          }));
+          registrosGenerales = grupos.flat().sort((a, b) => b.fecha.localeCompare(a.fecha) || b.id - a.id);
           registrosDiasCargados = true;
           actualizarContadores();
           actualizarFiltrosDias();
