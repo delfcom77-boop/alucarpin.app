@@ -13,7 +13,7 @@
       URL.createObjectURL = blob => { window.archivo = blob; return 'blob:prueba'; };
       HTMLAnchorElement.prototype.click = function () { descargas.push(this.download); };
       window.fetch = async (url, opciones = {}) => {
-        if (url === '/copias-seguridad') {
+        if (url.startsWith('/copias-seguridad')) {
           solicitudes.push({ url, opciones });
           await new Promise(r => setTimeout(r, 40));
           if (fallar) return new Response(JSON.stringify({ detail: 'La base central no esta disponible' }), { status: 503 });
@@ -45,6 +45,7 @@
       comprobar(boton.disabled, 'Permite doble descarga');
       await esperar(() => !boton.disabled);
       comprobar(w.solicitudes.length === 1 && w.descargas.length === 1, 'Duplica copia');
+      comprobar(w.solicitudes[0].url === '/copias-seguridad?alcance=aplicacion', 'No elige copia de la app');
       comprobar(w.solicitudes[0].opciones.cache === 'no-store', 'Respuesta puede almacenarse en cache');
       comprobar(w.descargas[0] === 'alucarpin-sqlite-20261005-210000.zip' && w.archivo.size > 0, 'Nombre o archivo incorrecto');
       comprobar(mensaje.textContent.includes('Todavía falta verificar') && mensaje.classList.contains('exito'), 'Confunde descarga con restauracion verificada');
@@ -53,6 +54,9 @@
       comprobar(w.descargas.length === 1, 'Descarga error como si fuera ZIP');
       w.fallar = false; w.tipoInvalido = true; boton.click(); await esperar(() => !boton.disabled);
       comprobar(mensaje.textContent.includes('no contiene') && w.descargas.length === 1, 'Descarga HTML como respaldo');
+      w.tipoInvalido = false;
+      d.querySelector('#alcance-respaldo').value = 'completa'; boton.click(); await esperar(() => !boton.disabled);
+      comprobar(w.solicitudes.at(-1).url === '/copias-seguridad?alcance=completa' && w.descargas.length === 2, 'No permite copia completa separada');
       comprobar(d.documentElement.scrollWidth <= d.documentElement.clientWidth, 'Desbordamiento movil');
       document.querySelector('#resultado').textContent = 'OK: Respaldo en Configuracion y confirmacion de privacidad\nOK: Una descarga con nombre y sin cache\nOK: Errores explicitos sin falso ZIP\nOK: No afirma restauracion verificada y sin desbordamiento movil';
     })().catch(error => { document.querySelector('#resultado').textContent = 'ERROR: ' + error.message; throw error; });

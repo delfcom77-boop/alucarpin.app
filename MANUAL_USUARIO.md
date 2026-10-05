@@ -215,9 +215,11 @@ Los filtros, PDF y WhatsApp separan cada referencia y los grupos antiguos sin vi
 
 ### Copia completa y comprobacion de restauracion
 
-En **Ayudantes / Administracion → Configuracion → Copias de seguridad**, pulsa **Descargar copia de seguridad** y confirma. Guarda el ZIP en un lugar privado fuera del servidor y del repositorio. Contiene datos personales, movimientos economicos y hashes de contrasenas. No lo envies por WhatsApp ni lo publiques. El archivo no esta cifrado: usa almacenamiento privado cifrado. No sustituye a copias automaticas.
+En **Ayudantes / Administracion → Configuracion → Copias de seguridad**, elige el contenido, pulsa **Descargar copia de seguridad** y confirma. **Todos los datos de la app** es la opcion recomendada: respalda todos los objetos y tablas del esquema `public`, incluidos usuarios, movimientos economicos, agenda, obras, remates y vinculos, sin los esquemas internos de Supabase. **Base completa** conserva tambien esos esquemas y requiere sus extensiones para restaurarse (por ejemplo, `supabase_vault` no existe en PostgreSQL estandar). En SQLite ambas opciones contienen toda la base.
 
-La copia incluye la base completa y un manifiesto con fecha UTC, SHA-256, tablas, columnas, recuentos y huellas del contenido. SQLite utiliza una instantanea nativa, incluidos datos pendientes de volcar desde WAL. PostgreSQL usa `pg_dump` nativo y una instantanea compartida con el inventario; requiere acceso directo compatible con snapshots, no un pool en modo transaccion. Si falla la base o el respaldo, aparece un error: nunca se descarga otra base como alternativa.
+Guarda el ZIP en un lugar privado fuera del servidor y del repositorio. Contiene datos personales, movimientos economicos y hashes de contrasenas. No lo envies por WhatsApp ni lo publiques. El archivo no esta cifrado: usa almacenamiento privado cifrado. No sustituye a copias automaticas.
+
+La copia incluye un manifiesto con alcance, fecha UTC, SHA-256, tablas, columnas, recuentos y huellas del contenido. SQLite utiliza una instantanea nativa, incluidos datos pendientes de volcar desde WAL. PostgreSQL usa `pg_dump` nativo y una instantanea compartida con el inventario; requiere acceso directo compatible con snapshots, no un pool en modo transaccion. Si falla la base o el respaldo, aparece un error: nunca se descarga otra base como alternativa.
 
 El ZIP no incluye archivos externos, configuracion del servidor, secretos de conexion ni roles globales de PostgreSQL. Guarda por separado la configuracion necesaria para una recuperacion completa del servicio. PostgreSQL requiere herramientas cliente compatibles con la version del servidor; Docker las instala. La descarga web admite bases de hasta 256 MB y no guarda copias permanentes en Render.
 
@@ -232,7 +234,7 @@ El ZIP no incluye archivos externos, configuracion del servidor, secretos de con
 & '.\.venv\Scripts\python.exe' respaldo.py 'C:\CopiasPrivadas\alucarpin-postgresql.zip' --destino-postgres-env RESTAURACION_DATABASE_URL --confirmar-copia-confiable
 ```
 
-El verificador rechaza destinos existentes en SQLite y destinos con tablas, funciones o tipos propios en PostgreSQL. PostgreSQL restaura en una transaccion, sin propietarios ni permisos originales: deben configurarse para el entorno de recuperacion. Un dump puede ejecutar codigo; solo verifica copias propias. No se permite restaurar desde la web.
+El verificador rechaza destinos existentes en SQLite y destinos con tablas, funciones o tipos propios en PostgreSQL. La copia de la app recrea el esquema `public` vacio del destino. PostgreSQL restaura en una transaccion, sin propietarios ni permisos originales: deben configurarse para el entorno de recuperacion. Un dump puede ejecutar codigo; solo verifica copias propias. No se permite restaurar desde la web.
 
 **RESTAURACION VERIFICADA** significa que se ha restaurado en el destino separado y comparado el contenido de todas las tablas con el inventario; en SQLite tambien se comparan el esquema y la integridad. Los problemas de claves foraneas ya existentes se conservan y se avisan, no se corrigen silenciosamente. Una mera descarga o un SHA-256 correcto no prueba que se pueda restaurar. Si falla la comparacion PostgreSQL, no uses la base de prueba como recuperacion; permanece separada para investigar.
 

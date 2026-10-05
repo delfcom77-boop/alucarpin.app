@@ -324,7 +324,9 @@
     <section id="apartado-periodo" data-contenido="pagos" hidden><h2>Fichajes del periodo</h2><div id="fichajes">Selecciona un ayudante y un rango de fechas.</div></section>
     <section id="apartado-configuracion" data-contenido="configuracion" hidden><h2>Usuarios y contraseñas</h2><div class="lista-general"><table><thead><tr><th>Usuario</th><th>Rol</th><th>Ayudante</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="usuarios"><tr><td colspan="5">Cargando...</td></tr></tbody></table></div><div id="mensaje-usuarios" class="mensaje"></div>
       <h3>Copias de seguridad</h3>
-      <p>Descarga la base de datos completa con un inventario y una huella de comprobación. Incluye datos personales, importes y usuarios: guárdala en un lugar privado, fuera de Render y del repositorio.</p>
+      <p>Descarga todos los datos de la app con un inventario y una huella de comprobación. Incluye datos personales, importes y usuarios: guárdala en un lugar privado, fuera de Render y del repositorio.</p>
+      <label>Contenido de la copia <select id="alcance-respaldo"><option value="aplicacion">Todos los datos de la app (recomendado)</option><option value="completa">Base completa, incluidas extensiones de Supabase</option></select></label>
+      <p>La copia de la app incluye todo su esquema público: obras, usuarios, pagos, agenda, remates y vínculos. No incluye los esquemas internos de Supabase. La base completa también los incluye y requiere un entorno con sus extensiones para restaurarse. En SQLite ambas opciones incluyen toda la base.</p>
       <p>Esta descarga es manual, no una copia automática. La restauración se comprueba con la herramienta del programa sobre una base nueva y separada; no se restaura desde la web. No incluye archivos externos ni la configuración del servidor.</p>
       <button id="descargar-respaldo" type="button">Descargar copia de seguridad</button>
       <p id="mensaje-respaldo" class="mensaje" role="status" aria-live="polite"></p>
@@ -380,10 +382,11 @@
       if (boton.disabled) return;
       if (!confirm('La copia contiene datos privados y usuarios. ¿Descargarla para guardarla en un lugar seguro?')) return;
       boton.disabled = true;
-      aviso.className = 'mensaje'; aviso.textContent = 'Preparando copia completa. No cierres esta página…';
+      const alcance = document.querySelector('#alcance-respaldo').value;
+      aviso.className = 'mensaje'; aviso.textContent = 'Preparando copia. No cierres esta página…';
       let url;
       try {
-        const respuesta = await fetch('/copias-seguridad', {
+        const respuesta = await fetch(`/copias-seguridad?alcance=${encodeURIComponent(alcance)}`, {
           headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
           signal: AbortSignal.timeout(180000),
         });

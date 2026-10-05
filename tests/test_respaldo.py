@@ -157,11 +157,20 @@ class RespaldoTests(unittest.TestCase):
             respuesta = api.descargar_copia_seguridad({})
         self.assertEqual(respuesta.media_type, "application/zip")
         self.assertEqual(respuesta.headers["cache-control"], "no-store")
+        self.assertEqual(respuesta.headers["x-alucarpin-alcance"], "aplicacion")
         self.assertIn("attachment", respuesta.headers["content-disposition"])
         self.copia.write_bytes(respuesta.body)
         respaldo.verificar_sqlite(self.copia, self.carpeta / "endpoint.sqlite")
         ruta = next(r for r in api.app.routes if r.name == "descargar_copia_seguridad")
         self.assertIn(api.administrador, [d.call for d in ruta.dependant.dependencies])
+
+    def test_endpoint_permite_copia_completa_separada(self):
+        with patch.object(api, "DATABASE_URL", None), patch.object(api, "DATABASE_PATH", self.origen):
+            respuesta = api.descargar_copia_seguridad({}, "completa")
+        self.copia.write_bytes(respuesta.body)
+        _, manifiesto = respaldo.leer_respaldo(self.copia)
+        self.assertEqual(manifiesto["alcance_copia"], "completa")
+        self.assertEqual(respuesta.headers["x-alucarpin-alcance"], "completa")
 
     def test_error_de_respaldo_es_visible_sin_falso_archivo(self):
         with patch.object(api, "crear_respaldo", side_effect=respaldo.ErrorRespaldo("Falta pg_dump")), self.assertLogs(api.logger, level="ERROR"):

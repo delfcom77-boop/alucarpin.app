@@ -68,13 +68,16 @@ def integridad_sqlite(db):
     return sorted([list(fila) for fila in db.execute("PRAGMA foreign_key_check")], key=repr)
 
 
-def inventario_postgres(db):
+def inventario_postgres(db, alcance="completa"):
     resultado = {}
-    tablas = db.execute(
+    consulta = (
         "SELECT n.nspname, c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace "
         "WHERE c.relkind IN ('r','p') AND n.nspname NOT LIKE 'pg_%' "
-        "AND n.nspname <> 'information_schema' ORDER BY n.nspname,c.relname"
-    ).fetchall()
+        "AND n.nspname <> 'information_schema'"
+    )
+    if alcance == "aplicacion":
+        consulta += " AND n.nspname = 'public'"
+    tablas = db.execute(consulta + " ORDER BY n.nspname,c.relname").fetchall()
     for esquema, nombre in tablas:
         with db.cursor(name=f"inventario_{len(resultado)}") as cursor:
             cursor.execute(sql.SQL("SELECT * FROM {}.{}").format(sql.Identifier(esquema), sql.Identifier(nombre)))
@@ -119,7 +122,9 @@ def ejecutar_postgres(programa, argumentos, url):
         raise ErrorRespaldo(f"{programa} no ha completado la operacion. Revisa permisos y compatibilidad de versiones; no hay una copia o restauracion verificada.")
 
 
-def crear_respaldo(url, ruta_sqlite):
+def crear_respaldo(url, ruta_sqlite, alcance="completa"):
+    if alcance not in {"completa", "aplicacion"}:
+        raise ErrorRespaldo("El alcance del respaldo no es valido.")
     with tempfile.TemporaryDirectory(prefix="alucarpin-respaldo-") as carpeta:
         archivo = Path(carpeta) / ("base.dump" if url else "base.sqlite")
         try:
@@ -129,9 +134,11 @@ def crear_respaldo(url, ruta_sqlite):
                     db.execute("SET LOCAL TIME ZONE 'UTC'")
                     db.execute("SET LOCAL statement_timeout = '120s'")
                     snapshot = db.execute("SELECT pg_export_snapshot()").fetchone()[0]
-                    inventario = inventario_postgres(db)
-                    ejecutar_postgres("pg_dump", ["--format=custom", "--no-password", f"--snapshot={snapshot}",
-                                                  f"--file={archivo}"], url)
+                    inventario = inventario_postgres(db, alcance)
+                    argumentos = ["--format=custom", "--no-password", f"--snapshot={snapshot}", f"--file={archivo}"]
+                    if alcance == "aplicacion":
+                        argumentos.append("--schema=public")
+                    ejecutar_postgres("pg_dump", argumentos, url)
                     motor = "postgresql"
             else:
                 inicio = time.monotonic()
@@ -155,7 +162,12 @@ def crear_respaldo(url, ruta_sqlite):
             "formato": "alucarpin-respaldo", "version": 1, "motor": motor,
             "creado_utc": datetime.now(timezone.utc).isoformat(), "archivo": archivo.name,
             "bytes": len(datos), "sha256": hashlib.sha256(datos).hexdigest(), **inventario,
-            "alcance": "Base de datos completa; no incluye archivos externos, variables de entorno ni roles globales de PostgreSQL.",
+            "alcance_copia": alcance,
+            "alcance": ("Todos los objetos y datos del esquema public de la app; excluye esquemas internos "
+                        "de Supabase y extensiones externas. En SQLite incluye toda la base."
+                        if alcance == "aplicacion" else
+                        "Base de datos completa; necesita un servidor con sus extensiones compatibles."),
+            "exclusiones": "No incluye archivos externos, variables de entorno ni roles globales de PostgreSQL.",
         }
         salida = io.BytesIO()
         with zipfile.ZipFile(salida, "w", compression=zipfile.ZIP_DEFLATED) as paquete:
@@ -172,6 +184,8 @@ def leer_respaldo(ruta):
             manifiesto = json.loads(paquete.read("manifiesto.json"))
             if manifiesto.get("formato") != "alucarpin-respaldo" or manifiesto.get("version") != 1:
                 raise ErrorRespaldo("El formato o la version del respaldo no es compatible.")
+            if manifiesto.get("alcance_copia", "completa") not in {"completa", "aplicacion"}:
+                raise ErrorRespaldo("El alcance del respaldo no es compatible.")
             motor = manifiesto.get("motor")
             nombre = {"sqlite": "base.sqlite", "postgresql": "base.dump"}.get(motor)
             if not nombre or manifiesto.get("archivo") != nombre or set(paquete.namelist()) != {nombre, "manifiesto.json"}:
@@ -235,13 +249,15 @@ def verificar_postgres(ruta, url):
     with tempfile.TemporaryDirectory(prefix="alucarpin-restauracion-") as carpeta:
         archivo = Path(carpeta) / "base.dump"
         archivo.write_bytes(datos)
-        ejecutar_postgres("pg_restore", ["--no-password", "--exit-on-error", "--single-transaction",
-                                        "--no-owner", "--no-acl", "--dbname=", str(archivo)], url)
+        argumentos = ["--no-password", "--exit-on-error", "--single-transaction", "--no-owner", "--no-acl"]
+        if manifiesto.get("alcance_copia") == "aplicacion":
+            argumentos.extend(["--clean", "--if-exists"])
+        ejecutar_postgres("pg_restore", [*argumentos, "--dbname=", str(archivo)], url)
     with psycopg.connect(url, connect_timeout=15) as db:
         db.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
         db.execute("SET LOCAL TIME ZONE 'UTC'")
         db.execute("SET LOCAL statement_timeout = '120s'")
-        comprobar_inventario(inventario_postgres(db), manifiesto)
+        comprobar_inventario(inventario_postgres(db, manifiesto.get("alcance_copia", "completa")), manifiesto)
     return manifiesto
 
 

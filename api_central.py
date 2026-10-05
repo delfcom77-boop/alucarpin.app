@@ -417,18 +417,19 @@ def administrador(usuario=Depends(usuario_actual)):
 
 
 @app.get("/copias-seguridad")
-def descargar_copia_seguridad(usuario=Depends(administrador)):
+def descargar_copia_seguridad(usuario=Depends(administrador), alcance: Literal["aplicacion", "completa"] = "aplicacion"):
     try:
-        contenido, manifiesto = crear_respaldo(DATABASE_URL, DATABASE_PATH)
+        contenido, manifiesto = crear_respaldo(DATABASE_URL, DATABASE_PATH, alcance)
     except ErrorRespaldo as error:
         logger.error("No se pudo generar la copia de seguridad: %s", error)
         raise HTTPException(status_code=503, detail=str(error)) from error
-    nombre = f"alucarpin-{manifiesto['motor']}-{datetime.now().strftime('%Y%m%d-%H%M%S')}.zip"
+    nombre = f"alucarpin-{alcance}-{manifiesto['motor']}-{datetime.now().strftime('%Y%m%d-%H%M%S')}.zip"
     return Response(contenido, media_type="application/zip", headers={
         "Content-Disposition": f'attachment; filename="{nombre}"',
         "Cache-Control": "no-store",
         "X-Content-Type-Options": "nosniff",
         "X-Alucarpin-Motor": manifiesto["motor"],
+        "X-Alucarpin-Alcance": alcance,
     })
 
 

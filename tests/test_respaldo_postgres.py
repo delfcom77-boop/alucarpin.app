@@ -13,6 +13,40 @@ import respaldo
 
 @unittest.skipUnless(os.getenv("ALUCARPIN_TEST_POSTGRES"), "Requiere un cluster local temporal de PostgreSQL")
 class RespaldoPostgresTests(unittest.TestCase):
+    def test_copia_aplicacion_separa_esquemas_internos_y_conserva_vinculos(self):
+        configuracion = conninfo_to_dict(os.environ["ALUCARPIN_TEST_POSTGRES"])
+        self.assertEqual(configuracion.get("host"), "127.0.0.1")
+        nombres = [f"alucarpin_app_{uuid4().hex}" for _ in range(2)]
+        urls = [make_conninfo(**{**configuracion, "dbname": nombre}) for nombre in nombres]
+        with psycopg.connect(os.environ["ALUCARPIN_TEST_POSTGRES"], autocommit=True) as administrador:
+            for nombre in nombres:
+                administrador.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(nombre)))
+            try:
+                with psycopg.connect(urls[0]) as db:
+                    db.execute("""
+                        CREATE SCHEMA interno;
+                        CREATE TABLE interno.secreto (dato TEXT);
+                        INSERT INTO interno.secreto VALUES ('No pertenece a la app');
+                        CREATE TABLE public.obras (id BIGSERIAL PRIMARY KEY, nombre TEXT);
+                        CREATE TABLE public.remates (id BIGSERIAL PRIMARY KEY, obra_id BIGINT REFERENCES public.obras(id), medida REAL);
+                        INSERT INTO public.obras(nombre) VALUES ('Obra');
+                        INSERT INTO public.remates(obra_id,medida) VALUES (1,25);
+                    """)
+                with tempfile.TemporaryDirectory() as carpeta:
+                    copia = Path(carpeta) / "app.zip"
+                    datos, manifiesto = respaldo.crear_respaldo(urls[0], None, "aplicacion")
+                    self.assertEqual(manifiesto["alcance_copia"], "aplicacion")
+                    self.assertEqual(set(manifiesto["tablas"]), {"public.obras", "public.remates"})
+                    copia.write_bytes(datos)
+                    respaldo.verificar_postgres(copia, urls[1])
+                    with psycopg.connect(urls[1]) as db:
+                        self.assertIsNone(db.execute("SELECT to_regclass('interno.secreto')").fetchone()[0])
+                        self.assertEqual(db.execute("SELECT obra_id,medida FROM public.remates").fetchone(), (1, 25))
+                        self.assertTrue(db.execute("SELECT 1 FROM pg_constraint WHERE conname='remates_obra_id_fkey'").fetchone())
+            finally:
+                for nombre in nombres:
+                    administrador.execute(sql.SQL("DROP DATABASE {}").format(sql.Identifier(nombre)))
+
     def test_copia_y_restauracion_nativas_en_bases_aisladas(self):
         configuracion = conninfo_to_dict(os.environ["ALUCARPIN_TEST_POSTGRES"])
         self.assertEqual(configuracion.get("host"), "127.0.0.1", "Solo se permite un cluster de prueba local")
