@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<title>Pruebas del resumen de jornadas</title>
+<pre id="resultado">Ejecutando...</pre>
+<script src="../app_web/jornadas.js"></script>
+<script>
+  const { resumir, normalizar } = AlucarpinJornadas;
+  const base = { ayudante_id: 1, nombreAyudante: 'Ana', tipo_destino: 'faena', cliente: 'Mercedes', obra: 'Ventanas', ubicacion: 'Calle A', poblacion: 'Jaca' };
+  const registros = [
+    { ...base, fecha: '2026-10-02' },
+    { ...base, fecha: '2026-10-02' },
+    { ...base, fecha: '2026-10-03' },
+    { ...base, ayudante_id: 2, nombreAyudante: 'Luis', fecha: '2026-10-03' },
+    { ...base, cliente: ' MERCEDES ', obra: 'Puertas', fecha: '2026-10-02' },
+    { ...base, ubicacion: 'Calle B', fecha: '2026-10-02' },
+    { ...base, tipo_destino: 'presupuesto', cliente: 'Alucarpin Samitier', fecha: '2026-10-04' },
+    { ...base, tipo_destino: 'reparacion', cliente: 'José', fecha: '2026-10-05' },
+    { ...base, tipo_destino: 'pendiente', fecha: '2026-10-06' },
+  ];
+  let pruebas = 0;
+  const comprobar = (condicion, nombre) => {
+    if (!condicion) throw new Error(nombre);
+    pruebas++;
+  };
+  try {
+    const total = resumir(registros);
+    comprobar(total.dias === 6 && total.fechas === 5, 'Total sin duplicar fechas por ayudante');
+    const terceros = resumir(registros, { tipo: 'faena' });
+    comprobar(terceros.dias === 3 && terceros.grupos.length === 4, 'Terceros y desglose por ubicacion');
+    comprobar(terceros.grupos.find(grupo => grupo.ayudante === 'Ana' && grupo.obra === 'Ventanas' && grupo.ubicacion.startsWith('Calle A')).dias === 2, 'Duplicados y sabado');
+    comprobar(resumir(registros, { tipo: 'presupuesto', cliente: normalizar('Alucarpin Samitier') }).dias === 1, 'Trabajo Alucarpin en domingo');
+    comprobar(resumir(registros, { cliente: normalizar('mercedes'), ayudante: '2' }).dias === 1, 'Cliente y ayudante');
+    comprobar(resumir(registros, { tipo: 'faena', cliente: normalizar('Mercedes'), ayudante: '1', obra: 'vent', desde: '2026-10-03', hasta: '2026-10-03' }).dias === 1, 'Todos los filtros y limites inclusivos');
+    comprobar(resumir(registros, { cliente: normalizar('Jose') }).dias === 1, 'Cliente sin distinguir acentos');
+    comprobar(resumir(registros, { tipo: 'pendiente' }).dias === 1, 'Pendientes de vincular');
+    comprobar(resumir(registros, { obra: 'inexistente' }).dias === 0, 'Sin coincidencias');
+    comprobar(resumir([]).grupos.length === 0, 'Sin fichajes');
+    comprobar(resumir([{ ...base, tipo_destino: undefined, fecha: '2026-10-02' }], { tipo: 'faena' }).dias === 1, 'Fichaje antiguo sin tipo');
+    let errorRango = false;
+    try { resumir(registros, { desde: '2026-10-06', hasta: '2026-10-01' }); }
+    catch (error) { errorRango = error.message.includes('fecha desde'); }
+    comprobar(errorRango, 'Rango invalido muestra error');
+    document.querySelector('#resultado').textContent = `${pruebas} pruebas correctas.`;
+    document.body.dataset.estado = 'correcto';
+  } catch (error) {
+    document.querySelector('#resultado').textContent = `ERROR: ${error.message}`;
+    document.body.dataset.estado = 'error';
+    throw error;
+  }
+</script>
+</html>

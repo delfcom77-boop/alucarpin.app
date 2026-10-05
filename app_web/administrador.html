@@ -149,6 +149,20 @@
     </section>
     <section>
       <h2>Gastos registrados</h2>
+      <h3>Días trabajados por faena</h3>
+      <div class="fila">
+        <label>Tipo de trabajo <select id="resumen-tipo"><option value="">Todos</option><option value="faena">Faenas a 3º</option><option value="presupuesto">Presupuestos Alucarpin</option><option value="reparacion">Reparaciones</option><option value="pendiente">Pendientes de vincular</option></select></label>
+        <label>Cliente <select id="resumen-cliente"><option value="">Todos los clientes</option></select></label>
+        <label>Ayudante <select id="resumen-ayudante"><option value="">Todos los ayudantes</option></select></label>
+        <label>Buscar faena / obra <input id="resumen-obra" type="search" placeholder="Nombre de la obra"></label>
+        <label>Desde <input id="resumen-desde" type="date"></label>
+        <label>Hasta <input id="resumen-hasta" type="date"></label>
+      </div>
+      <button id="resumen-limpiar" type="button">Limpiar filtros de días</button>
+      <p>Recuento basado en los fichajes, incluidos sábados y domingos. Cada fecha cuenta una vez por ayudante; dos ayudantes el mismo día suman dos días de trabajo. Si un ayudante trabaja en varias faenas el mismo día, ese día aparece en cada faena, pero solo una vez en el total.</p>
+      <p id="resumen-dias" class="mensaje" role="status" aria-live="polite">Cargando días trabajados...</p>
+      <div class="lista-general"><table><thead><tr><th>Ayudante</th><th>Tipo de trabajo</th><th>Cliente</th><th>Faena / obra</th><th>Ubicación</th><th>Días trabajados</th></tr></thead><tbody id="resumen-faenas"><tr><td colspan="6">Cargando...</td></tr></tbody></table></div>
+      <h3>Compras y otros gastos</h3>
       <div class="fila">
         <label>Tipo <select id="filtro-gastos"><option value="">Todos</option><option value="faena">Faenas</option><option value="presupuesto">Presupuestos</option></select></label>
         <label>Estado <select id="filtro-estado-gastos"><option value="">Todos</option><option value="No pagado">No pagado</option><option value="Parcial">Parcial</option><option value="Pagado">Pagado</option></select></label>
@@ -262,6 +276,7 @@
     <section><h2>Fichajes del periodo</h2><div id="fichajes">Selecciona un ayudante y un rango de fechas.</div></section>
     <section><h2>Usuarios y contraseñas</h2><div class="lista-general"><table><thead><tr><th>Usuario</th><th>Rol</th><th>Ayudante</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="usuarios"><tr><td colspan="5">Cargando...</td></tr></tbody></table></div><div id="mensaje-usuarios" class="mensaje"></div></section>
   </main>
+  <script src="/app/jornadas.js"></script>
   <script>
     const api = '';
     const token = localStorage.getItem('alucarpin_token');
@@ -410,9 +425,80 @@
             const pago = respuestaPago.ok ? await respuestaPago.json() : { estado_pago: 'No pagado' };
             return { ...fichaje, estadoPago: pago.estado_pago || 'No pagado' };
           }));
+          registrosDiasCargados = true;
           actualizarContadores();
           pintarListadoGeneral();
+          actualizarFiltrosDias();
+          pintarResumenDias();
         }
+
+        function actualizarFiltrosDias() {
+          const clientes = new Map();
+          const ayudantes = new Map();
+          registrosGenerales.forEach(fichaje => {
+            const cliente = AlucarpinJornadas.normalizar(fichaje.cliente);
+            if (cliente) clientes.set(cliente, fichaje.cliente.trim());
+            ayudantes.set(String(fichaje.ayudante_id), fichaje.nombreAyudante);
+          });
+          [
+            ['#resumen-cliente', clientes, 'Todos los clientes'],
+            ['#resumen-ayudante', ayudantes, 'Todos los ayudantes'],
+          ].forEach(([selector, opciones, etiqueta]) => {
+            const select = document.querySelector(selector);
+            const valor = select.value;
+            select.replaceChildren(new Option(etiqueta, ''));
+            Array.from(opciones).sort((a, b) => a[1].localeCompare(b[1], 'es')).forEach(([id, nombre]) => {
+              select.add(new Option(nombre, id));
+            });
+            select.value = opciones.has(valor) ? valor : '';
+          });
+        }
+
+        function pintarResumenDias() {
+          const mensajeResumen = document.querySelector('#resumen-dias');
+          const cuerpo = document.querySelector('#resumen-faenas');
+          cuerpo.replaceChildren();
+          try {
+            if (!registrosDiasCargados) {
+              throw new Error('Los fichajes aún no están disponibles. Recarga la página para volver a intentarlo.');
+            }
+            const resumen = AlucarpinJornadas.resumir(registrosGenerales, {
+              tipo: document.querySelector('#resumen-tipo').value,
+              cliente: document.querySelector('#resumen-cliente').value,
+              ayudante: document.querySelector('#resumen-ayudante').value,
+              obra: document.querySelector('#resumen-obra').value,
+              desde: document.querySelector('#resumen-desde').value,
+              hasta: document.querySelector('#resumen-hasta').value,
+            });
+            mensajeResumen.className = 'mensaje';
+            mensajeResumen.textContent = `${resumen.dias} ${resumen.dias === 1 ? 'día' : 'días'} de trabajo de ayudantes en ${resumen.fechas} ${resumen.fechas === 1 ? 'fecha distinta' : 'fechas distintas'}.`;
+            if (!resumen.grupos.length) {
+              cuerpo.innerHTML = '<tr><td colspan="6">No hay días trabajados con estos filtros.</td></tr>';
+            }
+            resumen.grupos.forEach(grupo => {
+              const fila = document.createElement('tr');
+              [grupo.ayudante, grupo.tipo, grupo.cliente, grupo.obra, grupo.ubicacion, grupo.dias].forEach(valor => {
+                const celda = document.createElement('td');
+                celda.textContent = valor;
+                fila.appendChild(celda);
+              });
+              cuerpo.appendChild(fila);
+            });
+          } catch (error) {
+            mensajeResumen.textContent = error.message;
+            mensajeResumen.className = 'mensaje error';
+          }
+        }
+
+        ['tipo', 'cliente', 'ayudante', 'obra', 'desde', 'hasta'].forEach(nombre => {
+          document.querySelector(`#resumen-${nombre}`).addEventListener('input', pintarResumenDias);
+        });
+        document.querySelector('#resumen-limpiar').addEventListener('click', () => {
+          ['tipo', 'cliente', 'ayudante', 'obra', 'desde', 'hasta'].forEach(nombre => {
+            document.querySelector(`#resumen-${nombre}`).value = '';
+          });
+          pintarResumenDias();
+        });
 
         function actualizarContadores() {
           const estados = { Pagado: 0, Parcial: 0, 'No pagado': 0 };
@@ -746,6 +832,7 @@
       await cargarUsuarios();
     });
     let registrosGenerales = [];
+    let registrosDiasCargados = false;
     let filtroAyudanteGeneral = null;
     let filtroEstadoPago = 'Todos';
 
@@ -1116,6 +1203,10 @@
     });
     cargarListadoGeneral().catch(error => {
       document.querySelector('#lista-general').innerHTML = `<tr><td colspan="8">${error.message}</td></tr>`;
+      const resumen = document.querySelector('#resumen-dias');
+      resumen.textContent = `No se pudieron cargar los días trabajados: ${error.message}`;
+      resumen.className = 'mensaje error';
+      document.querySelector('#resumen-faenas').innerHTML = '<tr><td colspan="6">No se pudo cargar el resumen.</td></tr>';
     });
     cargarUsuarios().catch(error => { mensajeUsuarios.textContent = error.message; mensajeUsuarios.className = 'mensaje error'; });
     cargarPresupuestos().catch(error => { mensajeTrabajo.textContent = error.message; mensajeTrabajo.className = 'mensaje error'; });

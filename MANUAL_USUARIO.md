@@ -65,6 +65,18 @@ Desde el panel de administracion tambien se gestionan:
 
 Antes de borrar datos, comprueba siempre el cliente, la fecha y la obra mostrados en la confirmacion.
 
+### Dias trabajados de ayudantes por faena
+
+En **Ayudantes -> Gastos registrados -> Dias trabajados por faena** puedes:
+
+- Filtrar por tipo de trabajo: faenas a terceros, presupuestos Alucarpin, reparaciones o pendientes de vincular.
+- Seleccionar un cliente, por ejemplo Mercedes o Alucarpin Samitier, y un ayudante.
+- Buscar una obra y limitar el periodo con las fechas Desde y Hasta, ambas incluidas.
+- Ver el total de dias y el desglose por ayudante, cliente, obra y ubicacion.
+- Pulsar **Limpiar filtros de dias** para volver a ver todos los fichajes.
+
+Los dias se calculan a partir de los fichajes, no de las compras ni de los importes pagados. Se incluyen los fines de semana registrados. Una misma fecha cuenta una vez por ayudante: dos ayudantes trabajando el mismo dia suman dos dias de trabajo. Si un ayudante tiene varios fichajes en una misma faena y fecha, ese dia no se duplica. Si trabaja en varias faenas el mismo dia, figura en cada faena, pero solo una vez en el total. Los filtros de compras y los del resumen de dias son independientes.
+
 ## 3. Programa de escritorio
 
 ### Abrir el programa
