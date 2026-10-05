@@ -255,10 +255,11 @@ class AlarmasTrabajoTests(unittest.TestCase):
             CREATE TABLE citas_agenda (id INTEGER, fecha TEXT, hora TEXT, cliente TEXT,
                 ubicacion TEXT, poblacion TEXT, observaciones TEXT, estado TEXT);
             CREATE TABLE trabajos_propios (id INTEGER PRIMARY KEY, fecha_inicio TEXT,
-                cliente TEXT, ubicacion TEXT, poblacion TEXT, obra TEXT, estado_cobro TEXT);
+                cliente TEXT, ubicacion TEXT, poblacion TEXT, obra TEXT, estado_cobro TEXT,
+                importe REAL DEFAULT 0);
             INSERT INTO trabajos_propios VALUES
-                (1,'2020-01-01','Cliente','Calle','Jaca','Reparación','No cobrado'),
-                (2,'2020-01-01','Otro','Calle','Jaca','Puerta','Cobrado');
+                (1,'2020-01-01','Cliente','Calle','Jaca','Reparación','No cobrado',50),
+                (2,'2020-01-01','Otro','Calle','Jaca','Puerta','Cobrado',50);
             CREATE TABLE estados_ejecucion_trabajos (
                 trabajo_id INTEGER PRIMARY KEY, estado TEXT, actualizado_en TEXT
             );
@@ -387,7 +388,7 @@ class AlarmasTrabajoTests(unittest.TestCase):
 
     def test_mi_control_comparte_estados_y_cobros_con_alarmas(self):
         self.cargar_obras()
-        for columna in ("fecha_fin", "tipo", "observaciones", "num_presupuesto", "importe",
+        for columna in ("fecha_fin", "tipo", "observaciones", "num_presupuesto",
                         "forma_pago", "fecha_cobro", "estado_revision"):
             self.db.execute(f"ALTER TABLE trabajos_propios ADD COLUMN {columna} TEXT")
         self.db.execute("UPDATE trabajos_propios SET tipo='reparacion'")

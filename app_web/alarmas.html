@@ -29,6 +29,8 @@
     const token = localStorage.getItem('alucarpin_token'); if (!token) location.replace('/app/login.html');
     const apiFetch = (url, options = {}) => fetch(url, { ...options, headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` } });
     const buscar = document.querySelector('#buscar'); const filtro = document.querySelector('#filtro'); const filtroEstado = document.querySelector('#filtro-estado'); const lista = document.querySelector('#lista'); const mensaje = document.querySelector('#mensaje'); let alarmas = [];
+    const tipoInicial = new URLSearchParams(location.search).get('tipo');
+    if (Array.from(filtro.options).some(opcion => opcion.value === tipoInicial)) filtro.value = tipoInicial;
     const fecha = valor => String(valor || '').split('-').reverse().join('/'); const tipos = { nota: 'NOTA', cita: 'CITA', trabajo: 'TRABAJO', cobro: 'COBRO' };
     const fechaIso = dias => { const valor = new Date(); valor.setDate(valor.getDate() + dias); return valor.toISOString().slice(0, 10); };
     async function silenciar(fecha, motivo) { const respuesta = await apiFetch('/calendario/silenciar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fecha, motivo }) }); if (!respuesta.ok) throw new Error('No se pudo silenciar ese día.'); const calendario = await fetch('/calendario.ics', { headers: { Authorization: `Bearer ${token}` } }); const enlace = document.createElement('a'); enlace.href = URL.createObjectURL(await calendario.blob()); enlace.download = 'alucarpin-calendario-completo.ics'; enlace.click(); URL.revokeObjectURL(enlace.href); mensaje.textContent = `Alarmas sin sonido el ${fecha}. Vuelve a sincronizar mañana para reactivarlas.`; }

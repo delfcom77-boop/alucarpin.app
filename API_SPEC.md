@@ -397,6 +397,12 @@ curl -X DELETE \
 
 ## Fichajes, pagos y validacion
 
+### Panel principal
+
+`GET /panel-resumen` requiere administrador. Devuelve `fecha`, `trabajos` (pendientes y vencidos), `cobros` (numero de pendientes, importe_pendiente y sin_importe), `ayudantes` (jornadas, pagadas, parciales, pendientes, revision, sin_registro e importe_pendiente_registrado), y `agenda` (hasta, total, vencidos y hasta ocho avisos).
+
+Los dias de ayudantes se cuentan por persona y fecha hasta hoy, usando la misma resolucion diaria que Pagos. No se asigna importe a jornadas sin registro ni se suman conflictos o liquidaciones. La agenda incluye notas/citas pendientes vencidas y hasta hoy + 7 dias, ordenadas por fecha/hora. Los cobros y la ejecucion usan las fuentes existentes de Alarmas y Mi control. Los errores de consulta se propagan: no devuelven un resumen vacio con apariencia de exito.
+
 ```http
 GET    /ayudantes/{id}/fichajes
 POST   /fichajes

@@ -125,6 +125,14 @@ Los pendientes de faenas se calculan con su precio registrado menos sus pagos si
 
 Los presupuestos en estado Presupuesto o Rechazado no generan estos recordatorios. Los antiguos Completado se respetan como terminados y cobrados; su importe de cobros registrado no se modifica. Si desde la app se cambia el estado comercial de un presupuesto, su ejecucion previa se conserva. Completar una nota mantiene su telefono y observaciones.
 
+### Panel resumen al entrar
+
+El menu principal muestra al administrador un **Resumen de gestion** con accesos a trabajos por terminar, cobros pendientes, pagos de ayudantes y agenda. **Actualizar resumen** consulta de nuevo los registros; si falla, se muestra el error y se ocultan las cifras anteriores.
+
+Los cobros pendientes utilizan los mismos datos que Alarmas y Mi control; terminar una obra no la cobra. Los casos sin importe se indican aparte. Los pagos de ayudantes cuentan fechas distintas por persona hasta hoy, incluidos fines de semana, y usan el pago diario como referencia. Solo se suma el pendiente de importes registrados: los dias sin registro y los casos para revisar se cuentan aparte, sin inventar deuda ni sumar las liquidaciones.
+
+La agenda muestra notas y citas pendientes vencidas y las previstas hasta dentro de siete dias, ambos extremos incluidos. Se muestran los primeros ocho avisos, pero el contador incluye todos. Los enlaces de trabajos, cobros y avisos abren Alarmas con el tipo seleccionado. El panel no modifica registros ni genera pagos.
+
 ## 3. Programa de escritorio
 
 ### Abrir el programa

@@ -4,6 +4,8 @@ const ARCHIVOS = [
   '/app/administrador.html',
   '/app/jornadas.js',
   '/app/catalogo.js',
+  '/app/inicio.html',
+  '/app/panel.js',
   '/app/ayudante.html',
   '/app/manifest.json',
   '/app/icon.svg',

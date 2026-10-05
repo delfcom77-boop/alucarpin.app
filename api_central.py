@@ -492,6 +492,72 @@ def resumen_gestion(usuario=Depends(administrador)):
     }
 
 
+@app.get("/panel-resumen")
+def panel_resumen(usuario=Depends(administrador)):
+    from datetime import timedelta
+
+    hoy = date.today()
+    limite = hoy + timedelta(days=7)
+    alarmas = listar_alarmas(usuario)
+    pendientes = [a for a in alarmas if a["tipo"] == "trabajo" and a["estado"] == "Pendiente"]
+    cobros = [a for a in alarmas if a["tipo"] == "cobro"]
+    importe_cobros = 0
+    cobros_sin_importe = 0
+    for alarma in cobros:
+        importe = float(alarma["pendiente_cobro"])
+        if importe > 0:
+            importe_cobros += importe
+        else:
+            cobros_sin_importe += 1
+
+    avisos = []
+    for alarma in alarmas:
+        if alarma["tipo"] not in ("nota", "cita") or alarma["estado"] != "Pendiente":
+            continue
+        fecha = alarma.get("fecha")
+        if not fecha:
+            continue
+        fecha = fecha if isinstance(fecha, date) else date.fromisoformat(str(fecha))
+        if fecha <= limite:
+            avisos.append({**alarma, "fecha": fecha.isoformat(), "vencido": fecha < hoy})
+    avisos.sort(key=lambda a: (a["fecha"], str(a.get("hora") or ""), a["tipo"], a["referencia_id"]))
+
+    with conexion() as db:
+        fichajes = [dict(f) for f in db.execute(
+            "SELECT * FROM fichajes_ayudantes WHERE fecha <= ? ORDER BY ayudante_id, fecha, id",
+            (hoy.isoformat(),),
+        ).fetchall()]
+        pagos = obtener_pagos_fichajes(db, fichajes)
+        grupos = {}
+        for fichaje in fichajes:
+            grupos.setdefault((fichaje["ayudante_id"], fichaje["fecha"]), []).append(fichaje)
+        jornadas = [agrupar_pagos_dia(db, grupo, pagos) for grupo in grupos.values()]
+    estados = {"pagadas": 0, "parciales": 0, "pendientes": 0, "revision": 0, "sin_registro": 0}
+    importe_pagos = 0
+    for jornada in jornadas:
+        if jornada["revision"]:
+            estados["revision"] += 1
+        elif not jornada["pagos_existentes"]:
+            estados["sin_registro"] += 1
+        else:
+            pago = jornada["pago"]
+            estado = pago["estado_pago"]
+            estados["pagadas" if estado == "Pagado" else "parciales" if estado == "Parcial" else "pendientes"] += 1
+            importe_pagos += max(float(pago["importe"]) - float(pago["importe_pagado"]), 0)
+    return {
+        "fecha": hoy.isoformat(),
+        "trabajos": {
+            "pendientes": len(pendientes),
+            "vencidos": sum(str(a.get("fecha") or "")[:10] < hoy.isoformat() for a in pendientes if a.get("fecha")),
+        },
+        "cobros": {"pendientes": len(cobros), "importe_pendiente": round(importe_cobros, 2),
+                   "sin_importe": cobros_sin_importe},
+        "ayudantes": {**estados, "jornadas": len(jornadas), "importe_pendiente_registrado": round(importe_pagos, 2)},
+        "agenda": {"hasta": limite.isoformat(), "total": len(avisos),
+                   "vencidos": sum(a["vencido"] for a in avisos), "avisos": avisos[:8]},
+    }
+
+
 @app.get("/gastos")
 def listar_gastos(
     tipo: Optional[Literal["faena", "presupuesto"]] = None,
@@ -955,7 +1021,7 @@ def listar_alarmas(usuario=Depends(administrador)):
         citas = db.execute("SELECT id, fecha, hora, cliente, ubicacion, poblacion, observaciones AS detalle, estado FROM citas_agenda WHERE estado IN ('Pendiente', 'Archivado')").fetchall()
         trabajos = db.execute(
             "SELECT t.id, t.fecha_inicio AS fecha, '' AS hora, t.cliente, t.ubicacion, "
-            "t.poblacion, t.obra AS detalle, t.estado_cobro, 'propio' AS origen, "
+            "t.poblacion, t.obra AS detalle, t.estado_cobro, t.importe, 'propio' AS origen, "
             "COALESCE(e.estado, 'Pendiente') AS estado_ejecucion "
             "FROM trabajos_propios t LEFT JOIN estados_ejecucion_trabajos e ON e.trabajo_id = t.id"
         ).fetchall()
@@ -974,7 +1040,8 @@ def listar_alarmas(usuario=Depends(administrador)):
                         "estado": "Archivado" if ejecucion == "Terminado" else "Pendiente",
                         "estado_ejecucion": ejecucion})
         if cobro != "Cobrado":
-            alarmas.append({**datos, "tipo": "cobro", "referencia_id": ident, "estado": "No cobrado"})
+            alarmas.append({**datos, "tipo": "cobro", "referencia_id": ident, "estado": "No cobrado",
+                            "pendiente_cobro": max(float(datos["importe"] or 0), 0)})
     for obra in obras:
         datos = {
             "fecha": obra["fecha_inicio"], "hora": "", "cliente": obra["cliente"],

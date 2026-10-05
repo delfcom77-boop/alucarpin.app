@@ -96,6 +96,22 @@
       text-decoration: none;
       font-size: 1rem;
     }
+    [hidden] { display: none !important; }
+    .resumen { margin-top: 24px; background: var(--panel); padding: 20px; border-radius: 18px; }
+    .resumen h2 { margin: 0; }
+    .cabecera-resumen { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+    button { font: inherit; border: 0; border-radius: 8px; padding: 10px 14px; background: var(--brand); color: white; cursor: pointer; }
+    button:disabled { opacity: .6; cursor: wait; }
+    .indicadores { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 16px 0; }
+    .indicador { display: flex; flex-direction: column; gap: 8px; padding: 16px; background: #eef3f1; border-radius: 12px; color: var(--text); text-decoration: none; min-width: 0; overflow-wrap: anywhere; }
+    .indicador strong { font-size: 1.8rem; color: var(--brand); }
+    .indicador small, #actualizado { color: var(--muted); }
+    .error { color: #a13333; font-weight: 700; }
+    #avisos { padding-left: 22px; }
+    #avisos li { margin: 12px 0; overflow-wrap: anywhere; }
+    #avisos a { color: var(--brand); }
+    a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+    @media (max-width: 380px) { .indicadores { grid-template-columns: 1fr; } }
     @media (max-width: 620px) {
       .menu { grid-template-columns: 1fr; }
       .opcion { min-height: 140px; }
@@ -109,6 +125,23 @@
       <h1>AlucarpinSamitier</h1>
       <p>¿Qué quieres hacer?</p>
     </header>
+    <section class="resumen" id="panel" aria-labelledby="titulo-resumen" hidden>
+      <div class="cabecera-resumen"><h2 id="titulo-resumen">Resumen de gestión</h2><button id="actualizar" type="button">Actualizar resumen</button></div>
+      <p id="actualizado">Consulta actual de tus registros.</p>
+      <p id="mensaje-panel" role="status" aria-live="polite"></p>
+      <div id="datos-panel" hidden>
+        <div class="indicadores">
+          <a class="indicador" href="/app/alarmas.html?tipo=trabajo"><span>Trabajos por terminar</span><strong id="trabajos-pendientes"></strong><small id="trabajos-detalle"></small></a>
+          <a class="indicador" href="/app/alarmas.html?tipo=cobro"><span>Cobros pendientes</span><strong id="cobros-importe"></strong><small id="cobros-detalle"></small></a>
+          <a class="indicador" href="/app/administrador.html#pagos"><span>Pagos de ayudantes</span><strong id="pagos-importe"></strong><small id="pagos-detalle"></small></a>
+          <a class="indicador" href="/app/agenda.html"><span>Agenda: vencidos y próximos 7 días</span><strong id="agenda-total"></strong><small id="agenda-detalle"></small></a>
+        </div>
+        <p>Los pagos de ayudantes cuentan un día por persona y fecha hasta hoy, independientemente de la obra. Los días sin pago registrado no se dan por impagados ni se les asigna un importe. Las liquidaciones no se suman como otro pago.</p>
+        <h3>Notas y citas a atender</h3>
+        <ul id="avisos"></ul>
+        <a href="/app/alarmas.html">Ver todos los recordatorios</a>
+      </div>
+    </section>
     <section class="menu">
       <a class="opcion agenda" href="/app/agenda.html"><strong>Agenda y citas</strong><span>Visitas, reuniones, llamadas y recordatorios.</span></a>
       <a class="opcion control" href="/app/mi_control.html"><strong>Mi control</strong><span>Trabajos propios, reparaciones, presupuestos e ingresos.</span></a>
@@ -122,5 +155,7 @@
     if (!localStorage.getItem('alucarpin_token')) location.replace('/app/login.html');
     document.querySelector('#salir').onclick = event => { event.preventDefault(); localStorage.removeItem('alucarpin_token'); location.replace('/app/login.html'); };
   </script>
+  <script src="/app/panel.js"></script>
+  <script src="/app/pwa.js"></script>
 </body>
 </html>
