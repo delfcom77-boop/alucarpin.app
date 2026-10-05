@@ -349,6 +349,29 @@ def startup():
             "estado TEXT NOT NULL CHECK (estado IN ('Pendiente', 'Terminado')), "
             "actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
         )
+        for tabla, columna, destino in (
+            ("estados_ejecucion_faenas", "faena_id", "faenas"),
+            ("estados_ejecucion_presupuestos", "presupuesto_id", "presupuestos"),
+        ):
+            db.execute(
+                f"CREATE TABLE IF NOT EXISTS {tabla} ("
+                f"{columna} BIGINT PRIMARY KEY REFERENCES {destino}(id) ON DELETE CASCADE, "
+                "estado TEXT NOT NULL CHECK (estado IN ('Pendiente', 'Terminado')), "
+                "actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+            )
+        identificador = "BIGSERIAL PRIMARY KEY" if DATABASE_URL else "INTEGER PRIMARY KEY AUTOINCREMENT"
+        db.execute(
+            f"CREATE TABLE IF NOT EXISTS pagos_faenas (id {identificador}, "
+            "faena_id BIGINT NOT NULL REFERENCES faenas(id), fecha DATE, "
+            "importe_iva DOUBLE PRECISION DEFAULT 0, importe_b DOUBLE PRECISION DEFAULT 0, "
+            "observaciones TEXT, forma_pago TEXT DEFAULT 'Transferencia')"
+        )
+        db.execute(
+            f"CREATE TABLE IF NOT EXISTS pagos_ingresos (id {identificador}, "
+            "num_presupuesto TEXT NOT NULL, fecha DATE, "
+            "importe_iva DOUBLE PRECISION DEFAULT 0, importe_b DOUBLE PRECISION DEFAULT 0, "
+            "observaciones TEXT, forma_pago TEXT DEFAULT 'Transferencia')"
+        )
 
 
 def usuario_actual(credenciales: HTTPAuthorizationCredentials = Depends(seguridad)):
@@ -883,6 +906,48 @@ def listar_citas(usuario=Depends(administrador)):
     return [dict(fila) for fila in filas]
 
 
+def consultar_estados_obras(db):
+    filas = db.execute("""
+        SELECT f.id AS origen_id, 'faena' AS origen, f.fecha AS fecha_inicio,
+               f.cliente, f.obra, f.ubicacion, f.poblacion, f.precio AS importe,
+               COALESCE(p.cobrado, 0) AS importe_cobrado,
+               COALESCE(e.estado, 'Pendiente') AS estado_ejecucion,
+               '' AS estado_presupuesto, NULL AS num_presupuesto
+        FROM faenas f
+        LEFT JOIN estados_ejecucion_faenas e ON e.faena_id = f.id
+        LEFT JOIN (
+            SELECT faena_id, SUM(COALESCE(importe_iva, 0) + COALESCE(importe_b, 0)) AS cobrado
+            FROM pagos_faenas GROUP BY faena_id
+        ) p ON p.faena_id = f.id
+        UNION ALL
+        SELECT b.id AS origen_id, 'presupuesto' AS origen, b.fecha AS fecha_inicio,
+               b.cliente, 'Presupuesto' AS obra, '' AS ubicacion, '' AS poblacion,
+               b.presupuesto_final AS importe, COALESCE(p.cobrado, 0) AS importe_cobrado,
+               COALESCE(e.estado, CASE WHEN UPPER(TRIM(b.estado)) = 'COMPLETADO'
+                    THEN 'Terminado' ELSE 'Pendiente' END) AS estado_ejecucion,
+               b.estado AS estado_presupuesto, b.num_presupuesto
+        FROM presupuestos b
+        LEFT JOIN estados_ejecucion_presupuestos e ON e.presupuesto_id = b.id
+        LEFT JOIN (
+            SELECT num_presupuesto, SUM(COALESCE(importe_iva, 0) + COALESCE(importe_b, 0)) AS cobrado
+            FROM pagos_ingresos GROUP BY num_presupuesto
+        ) p ON p.num_presupuesto = b.num_presupuesto
+        WHERE UPPER(TRIM(b.estado)) IN ('ACEPTADO', 'COMPLETADO')
+    """).fetchall()
+    resultado = []
+    for fila in filas:
+        obra = dict(fila)
+        obra["importe"] = round(float(obra["importe"] or 0), 2)
+        obra["importe_cobrado"] = round(float(obra["importe_cobrado"] or 0), 2)
+        historico = str(obra["estado_presupuesto"]).strip().upper() == "COMPLETADO"
+        obra["pendiente_cobro"] = 0 if historico else round(max(obra["importe"] - obra["importe_cobrado"], 0), 2)
+        obra["estado_cobro"] = "Cobrado" if historico or obra["importe"] > 0 and obra["pendiente_cobro"] == 0 else "No cobrado"
+        if obra["origen"] == "presupuesto":
+            obra["obra"] = f"Presupuesto nº {obra['num_presupuesto']}" if obra["num_presupuesto"] else f"Presupuesto provisional #{obra['origen_id']}"
+        resultado.append(obra)
+    return resultado
+
+
 @app.get("/alarmas")
 def listar_alarmas(usuario=Depends(administrador)):
     with conexion() as db:
@@ -890,10 +955,11 @@ def listar_alarmas(usuario=Depends(administrador)):
         citas = db.execute("SELECT id, fecha, hora, cliente, ubicacion, poblacion, observaciones AS detalle, estado FROM citas_agenda WHERE estado IN ('Pendiente', 'Archivado')").fetchall()
         trabajos = db.execute(
             "SELECT t.id, t.fecha_inicio AS fecha, '' AS hora, t.cliente, t.ubicacion, "
-            "t.poblacion, t.obra AS detalle, t.estado_cobro, "
+            "t.poblacion, t.obra AS detalle, t.estado_cobro, 'propio' AS origen, "
             "COALESCE(e.estado, 'Pendiente') AS estado_ejecucion "
             "FROM trabajos_propios t LEFT JOIN estados_ejecucion_trabajos e ON e.trabajo_id = t.id"
         ).fetchall()
+        obras = consultar_estados_obras(db)
     alarmas = []
     for fila in notas:
         item = dict(fila); item.update(tipo="nota", referencia_id=item.pop("id")); alarmas.append(item)
@@ -909,19 +975,41 @@ def listar_alarmas(usuario=Depends(administrador)):
                         "estado_ejecucion": ejecucion})
         if cobro != "Cobrado":
             alarmas.append({**datos, "tipo": "cobro", "referencia_id": ident, "estado": "No cobrado"})
+    for obra in obras:
+        datos = {
+            "fecha": obra["fecha_inicio"], "hora": "", "cliente": obra["cliente"],
+            "ubicacion": obra["ubicacion"], "poblacion": obra["poblacion"],
+            "detalle": obra["obra"], "origen": obra["origen"], "referencia_id": obra["origen_id"],
+        }
+        ejecucion = obra["estado_ejecucion"]
+        alarmas.append({**datos, "tipo": "trabajo", "estado_ejecucion": ejecucion,
+                        "estado": "Archivado" if ejecucion == "Terminado" else "Pendiente"})
+        if obra["pendiente_cobro"] > 0:
+            alarmas.append({**datos, "tipo": "cobro", "estado": "No cobrado",
+                            "importe": obra["importe"], "importe_cobrado": obra["importe_cobrado"],
+                            "pendiente_cobro": obra["pendiente_cobro"]})
     return sorted(alarmas, key=lambda item: (str(item.get("fecha") or ""), str(item.get("hora") or "")))
 
 @app.patch("/trabajos/{trabajo_id}/ejecucion")
-def actualizar_ejecucion_trabajo(trabajo_id: int, datos: EstadoEjecucionUpdate, usuario=Depends(administrador)):
+def actualizar_ejecucion_trabajo(
+    trabajo_id: int, datos: EstadoEjecucionUpdate, usuario=Depends(administrador),
+    origen: Literal["propio", "faena", "presupuesto"] = "propio",
+):
+    tablas = {
+        "propio": ("trabajos_propios", "estados_ejecucion_trabajos", "trabajo_id"),
+        "faena": ("faenas", "estados_ejecucion_faenas", "faena_id"),
+        "presupuesto": ("presupuestos", "estados_ejecucion_presupuestos", "presupuesto_id"),
+    }
+    destino, estados, columna = tablas[origen]
     with conexion() as db:
-        if not db.execute("SELECT id FROM trabajos_propios WHERE id = ?", (trabajo_id,)).fetchone():
+        if not db.execute(f"SELECT id FROM {destino} WHERE id = ?", (trabajo_id,)).fetchone():
             raise HTTPException(status_code=404, detail="Trabajo no encontrado")
         db.execute(
-            "INSERT INTO estados_ejecucion_trabajos (trabajo_id, estado) VALUES (?, ?) "
-            "ON CONFLICT (trabajo_id) DO UPDATE SET estado = excluded.estado, actualizado_en = CURRENT_TIMESTAMP",
+            f"INSERT INTO {estados} ({columna}, estado) VALUES (?, ?) "
+            f"ON CONFLICT ({columna}) DO UPDATE SET estado = excluded.estado, actualizado_en = CURRENT_TIMESTAMP",
             (trabajo_id, datos.estado),
         )
-    return {"trabajo_id": trabajo_id, "estado": datos.estado}
+    return {"trabajo_id": trabajo_id, "origen": origen, "estado": datos.estado}
 
 
 @app.post("/calendario/silenciar")
@@ -1297,10 +1385,17 @@ def modificar_presupuesto(presupuesto_id: int, datos: PresupuestoUpdate, usuario
         cambios["fecha"] = cambios["fecha"].isoformat()
     with conexion() as db:
         existente = db.execute(
-            "SELECT 1 FROM presupuestos WHERE id = ?", (presupuesto_id,)
+            "SELECT estado FROM presupuestos WHERE id = ?", (presupuesto_id,)
         ).fetchone()
         if not existente:
             raise HTTPException(status_code=404, detail="Presupuesto no encontrado")
+        if "estado" in cambios:
+            ejecucion_anterior = "Terminado" if str(existente["estado"]).strip().upper() == "COMPLETADO" else "Pendiente"
+            db.execute(
+                "INSERT INTO estados_ejecucion_presupuestos (presupuesto_id, estado) VALUES (?, ?) "
+                "ON CONFLICT (presupuesto_id) DO NOTHING",
+                (presupuesto_id, ejecucion_anterior),
+            )
         set_clause = ", ".join(f"{clave} = ?" for clave in cambios.keys())
         db.execute(
             f"UPDATE presupuestos SET {set_clause} WHERE id = ?",
@@ -1610,7 +1705,27 @@ def listar_trabajos(usuario=Depends(administrador)):
          ORDER BY fecha_inicio DESC, origen_id DESC
          """
         ).fetchall()
-    return [dict(fila) for fila in filas]
+        estados = {(obra["origen"], obra["origen_id"]): obra for obra in consultar_estados_obras(db)}
+        propios = {fila["trabajo_id"]: fila["estado"] for fila in db.execute(
+            "SELECT trabajo_id, estado FROM estados_ejecucion_trabajos"
+        ).fetchall()}
+        presupuestos = {fila["id"]: fila["estado"] for fila in db.execute(
+            "SELECT id, estado FROM presupuestos"
+        ).fetchall()}
+    resultado = []
+    for fila in filas:
+        trabajo = dict(fila)
+        estado = estados.get((trabajo["origen"], trabajo["origen_id"]))
+        if estado:
+            trabajo.update(estado)
+        elif trabajo["origen"] == "propio":
+            trabajo["estado_ejecucion"] = propios.get(trabajo["origen_id"], "Pendiente")
+        else:
+            trabajo["estado_ejecucion"] = None
+        if trabajo["origen"] == "presupuesto":
+            trabajo["estado"] = presupuestos[trabajo["origen_id"]]
+        resultado.append(trabajo)
+    return resultado
 
 
 @app.post("/trabajos", status_code=201)

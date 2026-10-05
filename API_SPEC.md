@@ -414,11 +414,13 @@ El pago corresponde a una fecha y ayudante, incluidos fines de semana. El endpoi
 
 Varios pagos historicos generan `revision: true`, estado `Revisar` e importes agregados `null` (no se suman automaticamente). PATCH devuelve 409 sin modificar ninguno. Un pago historico de gastos tambien bloquea PATCH con 409 para evitar duplicarlo. Los rangos invertidos devuelven 400 en jornadas y 422 al crear/modificar una liquidacion. Las liquidaciones cuentan fechas distintas confirmadas, incluyendo sabados y domingos.
 
-### Ejecucion y cobro de trabajos propios
+### Ejecucion y cobro de obras
 
-`GET /alarmas` incluye trabajos propios de fechas pasadas y futuras. Emite `tipo: trabajo`, `estado_ejecucion: Pendiente|Terminado` y estado visible `Pendiente|Archivado`; si no esta cobrado emite tambien `tipo: cobro`. No incluye en estos recordatorios las tablas independientes de faenas y presupuestos.
+`GET /alarmas` incluye trabajos propios, faenas y presupuestos Aceptado o Completado, de fechas pasadas y futuras. Emite `tipo: trabajo`, `origen: propio|faena|presupuesto`, `referencia_id`, `estado_ejecucion: Pendiente|Terminado` y estado visible `Pendiente|Archivado`; si queda dinero pendiente emite tambien `tipo: cobro`. Para faenas y presupuestos devuelve `importe`, `importe_cobrado` y `pendiente_cobro`, calculados con pagos_faenas/pagos_ingresos. Los importes cero no generan cobro pendiente. Presupuesto y Rechazado quedan fuera.
 
-`PATCH /trabajos/{id}/ejecucion` recibe `{"estado":"Pendiente"}` o `{"estado":"Terminado"}` y no modifica el cobro. Se almacena en `estados_ejecucion_trabajos`, creada idempotentemente al arrancar y definida en `migracion_estado_ejecucion.sql`. Un id inexistente devuelve 404.
+`PATCH /trabajos/{id}/ejecucion?origen=propio|faena|presupuesto` recibe `{"estado":"Pendiente"}` o `{"estado":"Terminado"}` y no modifica el cobro. `origen` es propio por defecto para preservar los clientes anteriores; evita mezclar identificadores de tablas distintas. Se almacena en estados_ejecucion_trabajos, estados_ejecucion_faenas o estados_ejecucion_presupuestos, creadas idempotentemente al arrancar y definidas en `migracion_estado_ejecucion.sql`. Un id inexistente devuelve 404.
+
+`GET /trabajos` comparte estos estados y pendientes con Alarmas; los presupuestos no aceptados tienen estado_ejecucion null. Completado historico conserva la interpretacion anterior de terminado/cobrado sin fabricar movimientos monetarios; PATCH de estado comercial conserva la ejecucion previa.
 
 `PATCH /seguimientos/{id}/estado` recibe `{"estado":"Realizado"}` (tambien admite Pendiente y Archivado) y modifica exclusivamente el estado, conservando el resto de la nota. Todos estos endpoints requieren administrador.
 

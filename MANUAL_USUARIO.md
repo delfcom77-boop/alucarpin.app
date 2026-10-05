@@ -115,9 +115,13 @@ Las liquidaciones cuentan las fechas distintas confirmadas por el ayudante, tamb
 
 ### Trabajo terminado y cobro pendiente
 
-En **Alarmas**, los trabajos propios registrados (incluidas reparaciones) tienen recordatorios separados para **Trabajos por realizar** y **Cobros pendientes**, tambien cuando la fecha ya ha pasado. **Marcar terminado** solo cambia la ejecucion: no modifica el importe ni el cobro. Desde el historial archivado se puede **Reabrir trabajo**. Un trabajo cobrado sigue pendiente de ejecucion hasta marcarlo terminado.
+En **Alarmas**, los trabajos propios registrados (incluidas reparaciones), las faenas y los presupuestos aceptados tienen recordatorios separados para **Trabajos por realizar** y **Cobros pendientes**, tambien cuando la fecha ya ha pasado. **Marcar terminado** solo cambia la ejecucion: no modifica el importe ni el cobro. Desde el historial archivado se puede **Reabrir trabajo**. Un trabajo cobrado sigue pendiente de ejecucion hasta marcarlo terminado.
 
-**Revisar cobro en Mi control** permite ir a la gestion de cobros sin marcar automaticamente un trabajo como cobrado. Las notas y las citas mantienen sus acciones de finalizar; completar una nota conserva su telefono y observaciones. Estos recordatorios de trabajos no incluyen automaticamente las faenas y presupuestos almacenados en sus tablas independientes.
+**Revisar cobro en Mi control** abre la obra concreta, sin marcarla automaticamente como cobrada. **Ver todos los trabajos** elimina ese enfoque. Mi control muestra el cobro y la ejecucion por separado y permite terminar o reabrir la obra.
+
+Los pendientes de faenas se calculan con su precio registrado menos sus pagos sincronizados (`pagos_faenas`). Para presupuestos aceptados se usa el importe final menos los cobros de su numero (`pagos_ingresos`). Un pago parcial reduce el aviso; un pago completo lo elimina, sin terminar la obra. Las obras de importe cero no generan un aviso monetario. No se convierten fechas antiguas en jornadas ni se inventan cobros.
+
+Los presupuestos en estado Presupuesto o Rechazado no generan estos recordatorios. Los antiguos Completado se respetan como terminados y cobrados; su importe de cobros registrado no se modifica. Si desde la app se cambia el estado comercial de un presupuesto, su ejecucion previa se conserva. Completar una nota mantiene su telefono y observaciones.
 
 ## 3. Programa de escritorio
 

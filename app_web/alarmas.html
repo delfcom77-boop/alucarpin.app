@@ -20,7 +20,7 @@
 </head>
 <body>
   <main>
-    <header><h1>TODAS LAS ALARMAS</h1><p>Notas, citas, trabajos propios por realizar y cobros pendientes</p></header>
+    <header><h1>TODAS LAS ALARMAS</h1><p>Notas, citas, faenas, presupuestos aceptados y reparaciones</p></header>
     <nav><a href="/app/inicio.html">Volver al menú</a></nav>
     <section><p>Los trabajos y los cobros se recuerdan por separado, también si su fecha ya ha pasado. Terminar un trabajo no lo marca como cobrado. Los cobros se revisan en Mi control.</p><div class="controles"><input id="buscar" placeholder="Buscar cliente, dirección o detalle"><select id="filtro"><option value="todas">Todos los tipos</option><option value="nota">Notas</option><option value="cita">Citas</option><option value="trabajo">Trabajos por realizar</option><option value="cobro">Cobros pendientes</option></select><select id="filtro-estado"><option value="pendientes">Pendientes</option><option value="archivadas">Historial archivado</option><option value="todas">Todo</option></select></div><div class="acciones"><button id="silenciar-hoy" type="button">Silenciar alarmas de hoy</button><button id="silenciar-manana" type="button">Silenciar alarmas de mañana</button><label>Día festivo sin sonido <input id="festivo" type="date"></label><button id="silenciar-festivo" type="button">Añadir festivo</button></div><div id="mensaje" role="status" aria-live="polite"></div></section>
     <section><div class="lista"><table><thead><tr><th>Tipo</th><th>Fecha</th><th>Hora</th><th>Cliente</th><th>Dirección / población</th><th>Detalle</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista"><tr><td colspan="8">Cargando...</td></tr></tbody></table></div></section>
@@ -51,12 +51,13 @@
         const fila = document.createElement('tr');
         [tipos[item.tipo], fecha(item.fecha), item.hora || '-', item.cliente || '-',
           [item.ubicacion, item.poblacion].filter(Boolean).join(', ') || '-', item.detalle || '-',
-          item.tipo === 'trabajo' ? item.estado_ejecucion : item.estado].forEach(texto => {
+          item.tipo === 'trabajo' ? item.estado_ejecucion : item.pendiente_cobro !== undefined
+            ? `${item.estado}: ${Number(item.pendiente_cobro).toFixed(2)} € pendientes` : item.estado].forEach(texto => {
           const celda = document.createElement('td'); celda.textContent = texto; fila.appendChild(celda);
         });
         const acciones = document.createElement('td'); acciones.className = 'acciones';
         if (item.tipo === 'cobro') {
-          const enlace = document.createElement('a'); enlace.href = '/app/mi_control.html';
+          const enlace = document.createElement('a'); enlace.href = `/app/mi_control.html?origen=${encodeURIComponent(item.origen || 'propio')}&obra=${item.referencia_id}`;
           enlace.textContent = 'Revisar cobro en Mi control'; acciones.appendChild(enlace);
         } else {
           const boton = document.createElement('button'); boton.type = 'button';
@@ -68,7 +69,7 @@
             try {
               let respuesta;
               if (item.tipo === 'trabajo') {
-                respuesta = await apiFetch(`/trabajos/${item.referencia_id}/ejecucion`, {
+                respuesta = await apiFetch(`/trabajos/${item.referencia_id}/ejecucion?origen=${encodeURIComponent(item.origen || 'propio')}`, {
                   method: 'PATCH', headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ estado: item.estado_ejecucion === 'Terminado' ? 'Pendiente' : 'Terminado' }),
                 });

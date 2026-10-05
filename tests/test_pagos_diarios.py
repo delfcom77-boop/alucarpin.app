@@ -199,6 +199,26 @@ class AlarmasTrabajoTests(unittest.TestCase):
             CREATE TABLE estados_ejecucion_trabajos (
                 trabajo_id INTEGER PRIMARY KEY, estado TEXT, actualizado_en TEXT
             );
+            CREATE TABLE faenas (
+                id INTEGER PRIMARY KEY, fecha TEXT, cliente TEXT, obra TEXT,
+                ubicacion TEXT, poblacion TEXT, precio REAL
+            );
+            CREATE TABLE presupuestos (
+                id INTEGER PRIMARY KEY, fecha TEXT, cliente TEXT, num_presupuesto TEXT,
+                presupuesto_final REAL, estado TEXT
+            );
+            CREATE TABLE estados_ejecucion_faenas (
+                faena_id INTEGER PRIMARY KEY, estado TEXT, actualizado_en TEXT
+            );
+            CREATE TABLE estados_ejecucion_presupuestos (
+                presupuesto_id INTEGER PRIMARY KEY, estado TEXT, actualizado_en TEXT
+            );
+            CREATE TABLE pagos_faenas (
+                id INTEGER PRIMARY KEY, faena_id INTEGER, importe_iva REAL, importe_b REAL
+            );
+            CREATE TABLE pagos_ingresos (
+                id INTEGER PRIMARY KEY, num_presupuesto TEXT, importe_iva REAL, importe_b REAL
+            );
         """)
 
         @contextlib.contextmanager
@@ -244,3 +264,78 @@ class AlarmasTrabajoTests(unittest.TestCase):
         self.assertEqual(nota["telefono"], "600123123")
         self.assertEqual(nota["observaciones"], "Detalle conservado")
         self.assertEqual(nota["fecha_recordatorio"], "2026-10-05")
+
+    def cargar_obras(self):
+        self.db.executescript("""
+            INSERT INTO faenas VALUES
+                (1,'2020-01-01','Faena parcial','Puerta','Calle','Jaca',100),
+                (2,'2020-01-01','Faena cobrada','Ventana','Calle','Jaca',100),
+                (3,NULL,'Medidas','Visita','Calle','Jaca',0);
+            INSERT INTO pagos_faenas VALUES (1,1,20,10), (2,2,100,0);
+            INSERT INTO presupuestos VALUES
+                (1,'2020-01-01','Aceptado parcial','P1',100,'Aceptado'),
+                (2,'2020-01-01','Aceptado cobrado','P2',100,'Aceptado'),
+                (3,'2020-01-01','Borrador','P3',100,'Presupuesto'),
+                (4,'2020-01-01','Rechazado','P4',100,'Rechazado'),
+                (5,'2020-01-01','Completado antiguo','P5',100,'Completado');
+            INSERT INTO pagos_ingresos VALUES (1,'P1',25,0), (2,'P2',100,0);
+        """)
+
+    def test_faenas_presupuestos_aceptados_y_cobros_parciales(self):
+        self.cargar_obras()
+        alarmas = api.listar_alarmas({})
+        faenas = [a for a in alarmas if a.get("origen") == "faena"]
+        self.assertEqual(len([a for a in faenas if a["tipo"] == "trabajo"]), 3)
+        cobros = [a for a in faenas if a["tipo"] == "cobro"]
+        self.assertEqual(len(cobros), 1)
+        self.assertEqual(cobros[0]["pendiente_cobro"], 70)
+        presupuestos = [a for a in alarmas if a.get("origen") == "presupuesto"]
+        self.assertEqual({a["referencia_id"] for a in presupuestos}, {1, 2, 5})
+        self.assertEqual(next(a["pendiente_cobro"] for a in presupuestos if a["tipo"] == "cobro"), 75)
+        self.assertEqual(next(a["estado"] for a in presupuestos if a["referencia_id"] == 5), "Archivado")
+
+    def test_ids_iguales_no_mezclan_origen_y_terminar_no_modifica_pagos(self):
+        self.cargar_obras()
+        pagos = [tuple(f) for f in self.db.execute("SELECT * FROM pagos_faenas")]
+        api.actualizar_ejecucion_trabajo(1, api.EstadoEjecucionUpdate(estado="Terminado"), {}, origen="faena")
+        alarmas = api.listar_alarmas({})
+        propios = [a for a in alarmas if a["referencia_id"] == 1 and a["tipo"] == "trabajo"]
+        self.assertEqual(next(a["estado"] for a in propios if a["origen"] == "faena"), "Archivado")
+        self.assertEqual(next(a["estado"] for a in propios if a["origen"] == "propio"), "Pendiente")
+        self.assertEqual(next(a["estado"] for a in propios if a["origen"] == "presupuesto"), "Pendiente")
+        self.assertTrue(any(a["tipo"] == "cobro" and a["origen"] == "faena" for a in alarmas))
+        self.assertEqual(pagos, [tuple(f) for f in self.db.execute("SELECT * FROM pagos_faenas")])
+
+    def test_completar_presupuesto_no_termina_ejecucion(self):
+        self.cargar_obras()
+        api.modificar_presupuesto(1, api.PresupuestoUpdate(estado="Completado"), {})
+        obra = next(o for o in api.consultar_estados_obras(self.db) if o["origen"] == "presupuesto" and o["origen_id"] == 1)
+        self.assertEqual(obra["estado_cobro"], "Cobrado")
+        self.assertEqual(obra["estado_ejecucion"], "Pendiente")
+        api.actualizar_ejecucion_trabajo(1, api.EstadoEjecucionUpdate(estado="Terminado"), {}, origen="presupuesto")
+        api.actualizar_ejecucion_trabajo(1, api.EstadoEjecucionUpdate(estado="Pendiente"), {}, origen="presupuesto")
+        self.assertEqual(self.db.execute("SELECT estado FROM presupuestos WHERE id=1").fetchone()[0], "Completado")
+
+    def test_migracion_ejecucion_idempotente(self):
+        with patch.object(api, "inicializar_base_datos"):
+            api.startup()
+            api.startup()
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM estados_ejecucion_faenas").fetchone()[0], 0)
+
+    def test_mi_control_comparte_estados_y_cobros_con_alarmas(self):
+        self.cargar_obras()
+        for columna in ("fecha_fin", "tipo", "observaciones", "num_presupuesto", "importe",
+                        "forma_pago", "fecha_cobro", "estado_revision"):
+            self.db.execute(f"ALTER TABLE trabajos_propios ADD COLUMN {columna} TEXT")
+        self.db.execute("UPDATE trabajos_propios SET tipo='reparacion'")
+        self.db.execute("ALTER TABLE faenas ADD COLUMN estado_revision TEXT")
+        self.db.execute("ALTER TABLE presupuestos ADD COLUMN estado_revision TEXT")
+        self.db.commit()
+        trabajos = api.listar_trabajos({})
+        faena = next(t for t in trabajos if t["origen"] == "faena" and t["origen_id"] == 1)
+        self.assertEqual(faena["pendiente_cobro"], 70)
+        presupuesto = next(t for t in trabajos if t["origen"] == "presupuesto" and t["origen_id"] == 1)
+        self.assertEqual(presupuesto["estado"], "Aceptado")
+        self.assertEqual(presupuesto["pendiente_cobro"], 75)
+        borrador = next(t for t in trabajos if t["origen"] == "presupuesto" and t["origen_id"] == 3)
+        self.assertIsNone(borrador["estado_ejecucion"])

@@ -59,13 +59,14 @@
     </section>
     <section>
       <h2>Mis trabajos</h2>
+      <p>La ejecución y el cobro son independientes. Los cobros de faenas se calculan con sus pagos registrados y sincronizados; los presupuestos solo generan recordatorios cuando están aceptados. Terminar una obra no registra un cobro.</p>
       <div class="fila">
         <label>Mostrar tipo <select id="filtro-tipo-trabajos"><option value="">Todos</option><option value="faena">Faenas</option><option value="presupuesto">Presupuestos</option><option value="reparacion">Reparaciones</option></select></label>
         <label>Buscar cliente <input id="filtro-cliente-trabajos" type="search" placeholder="Ej.: Alucarpin Samitier"></label>
         <label>Buscar obra <input id="filtro-obra-trabajos" type="search" placeholder="Ej.: Mercedes"></label>
       </div>
       <div id="mensaje-trabajos" class="mensaje" aria-live="polite"></div>
-      <div class="lista"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Origen</th><th>Cliente</th><th>Obra</th><th>Presupuesto</th><th>Importe</th><th>Cobro</th><th>Días trabajados</th><th>Acciones</th></tr></thead><tbody id="lista"><tr><td colspan="10">Cargando...</td></tr></tbody></table></div>
+      <div class="lista"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Origen</th><th>Cliente</th><th>Obra</th><th>Presupuesto</th><th>Importe</th><th>Cobro / ejecución</th><th>Días trabajados</th><th>Acciones</th></tr></thead><tbody id="lista"><tr><td colspan="10">Cargando...</td></tr></tbody></table></div>
     </section>
     <dialog id="dialogo-edicion"><form method="dialog" id="formulario-edicion-trabajo"><h2>Editar registro</h2><label>Cliente <input id="editar-cliente" required></label><label>Obra <input id="editar-obra"></label><label>Fecha <input id="editar-fecha" type="date"></label><label>Importe (€) <input id="editar-importe" type="number" min="0" step="0.01"></label><label>Estado <select id="editar-estado"><option value="No cobrado">No cobrado</option><option value="Cobrado">Cobrado</option><option value="Presupuesto">Presupuesto</option><option value="Aceptado">Aceptado</option><option value="Rechazado">Rechazado</option><option value="Completado">Completado</option></select></label><div class="acciones"><button value="cancelar" type="button" id="cancelar-edicion-trabajo">Cancelar</button><button value="guardar" type="submit">Guardar cambios</button></div><div id="mensaje-edicion-trabajo" class="mensaje"></div></form></dialog>
     <dialog id="dialogo-jornada">
@@ -115,6 +116,20 @@
     let trabajoEnEdicion = null;
     let faenaEnJornada = null;
     let jornadasFaenas = [];
+    const parametrosAlarma = new URLSearchParams(location.search);
+    let obraDesdeAlarma = parametrosAlarma.has('origen') && parametrosAlarma.has('obra')
+      ? { origen: parametrosAlarma.get('origen'), id: parametrosAlarma.get('obra') } : null;
+    const verTodosTrabajos = document.createElement('button');
+    verTodosTrabajos.type = 'button';
+    verTodosTrabajos.textContent = 'Ver todos los trabajos';
+    verTodosTrabajos.hidden = !obraDesdeAlarma;
+    verTodosTrabajos.onclick = () => {
+      obraDesdeAlarma = null;
+      verTodosTrabajos.hidden = true;
+      history.replaceState(null, '', location.pathname);
+      filtrarTrabajos();
+    };
+    mensajeTrabajos.after(verTodosTrabajos);
     const fecha = value => String(value || '').split('-').reverse().join('/');
     const normalizarBusqueda = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase();
     const fechaLocalHoy = () => { const hoy = new Date(); hoy.setMinutes(hoy.getMinutes() - hoy.getTimezoneOffset()); return hoy.toISOString().slice(0, 10); };
@@ -133,7 +148,19 @@
       if (!respuesta.ok) throw new Error('No se pudo generar el calendario.');
       const enlace = document.createElement('a'); enlace.href = URL.createObjectURL(await respuesta.blob()); enlace.download = `alucarpin-trabajo-${id}.ics`; enlace.click(); URL.revokeObjectURL(enlace.href);
     }
-    function abrirEdicion(trabajo) { trabajoEnEdicion = trabajo; document.querySelector('#editar-cliente').value = trabajo.cliente || ''; document.querySelector('#editar-obra').value = trabajo.obra || ''; document.querySelector('#editar-fecha').value = trabajo.fecha_inicio || ''; document.querySelector('#editar-importe').value = trabajo.importe || 0; document.querySelector('#editar-estado').value = trabajo.origen === 'presupuesto' ? (trabajo.estado || 'Presupuesto') : (trabajo.estado_cobro || 'No cobrado'); document.querySelector('#mensaje-edicion-trabajo').textContent = ''; dialogoEdicion.showModal(); }
+    function abrirEdicion(trabajo) {
+      trabajoEnEdicion = trabajo;
+      document.querySelector('#editar-cliente').value = trabajo.cliente || '';
+      document.querySelector('#editar-obra').value = trabajo.obra || '';
+      document.querySelector('#editar-fecha').value = trabajo.fecha_inicio || '';
+      document.querySelector('#editar-importe').value = trabajo.importe || 0;
+      const estado = document.querySelector('#editar-estado');
+      estado.value = trabajo.origen === 'presupuesto' ? (trabajo.estado || 'Presupuesto') : (trabajo.estado_cobro || 'No cobrado');
+      estado.parentElement.hidden = trabajo.origen === 'faena';
+      document.querySelector('#mensaje-edicion-trabajo').textContent = trabajo.origen === 'faena'
+        ? 'El cobro se calcula a partir de los pagos de la faena ya registrados y sincronizados.' : '';
+      dialogoEdicion.showModal();
+    }
     document.querySelector('#cancelar-edicion-trabajo').onclick = () => dialogoEdicion.close();
     document.querySelector('#formulario-edicion-trabajo').onsubmit = async event => { event.preventDefault(); const cliente = document.querySelector('#editar-cliente').value.trim(); if (!cliente || !trabajoEnEdicion) return; const fechaEditar = document.querySelector('#editar-fecha').value || null; const obra = document.querySelector('#editar-obra').value || null; const importe = Number(document.querySelector('#editar-importe').value || 0); let url; let datos; if (trabajoEnEdicion.origen === 'faena') { url = `/faenas/${trabajoEnEdicion.origen_id}`; datos = { cliente, obra, fecha: fechaEditar, ubicacion: trabajoEnEdicion.ubicacion || null, poblacion: trabajoEnEdicion.poblacion || null, precio: importe, ayudantes: trabajoEnEdicion.ayudantes || null }; } else if (trabajoEnEdicion.origen === 'presupuesto') { url = `/presupuestos/${trabajoEnEdicion.origen_id}`; datos = { cliente, num_presupuesto: trabajoEnEdicion.num_presupuesto || null, fecha: fechaEditar, bruto: trabajoEnEdicion.bruto || importe, iva: trabajoEnEdicion.iva || 0, total_iva: trabajoEnEdicion.total_iva || importe, presupuesto_iva: trabajoEnEdicion.presupuesto_iva || importe, efectivo: trabajoEnEdicion.efectivo || 0, estado: document.querySelector('#editar-estado').value, presupuesto_final: importe }; } else { url = `/trabajos/${trabajoEnEdicion.origen_id}`; datos = { tipo: trabajoEnEdicion.tipo, fecha_inicio: fechaEditar, fecha_fin: trabajoEnEdicion.fecha_fin || null, cliente, obra: obra || '', ubicacion: trabajoEnEdicion.ubicacion || '', poblacion: trabajoEnEdicion.poblacion || '', observaciones: trabajoEnEdicion.observaciones || '', num_presupuesto: trabajoEnEdicion.num_presupuesto || null, importe, estado_cobro: document.querySelector('#editar-estado').value, forma_pago: trabajoEnEdicion.forma_pago || '', fecha_cobro: trabajoEnEdicion.fecha_cobro || null }; } const respuesta = await apiFetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) }); if (!respuesta.ok) { document.querySelector('#mensaje-edicion-trabajo').textContent = 'No se pudo guardar el cambio.'; return; } dialogoEdicion.close(); await cargarTrabajos(); };
     async function borrarTrabajo(trabajo) { if (!confirm(`¿Borrar ${tipos[trabajo.tipo] || 'este trabajo'} de ${trabajo.cliente}?`)) return; const rutas = { propio: `/trabajos/${trabajo.origen_id}`, faena: `/faenas/${trabajo.origen_id}`, presupuesto: `/presupuestos/${trabajo.origen_id}` }; const respuesta = await apiFetch(rutas[trabajo.origen], { method: 'DELETE' }); if (!respuesta.ok) { const resultado = await respuesta.json().catch(() => null); mensaje.textContent = resultado?.detail || 'No se pudo borrar el registro.'; mensaje.className = 'mensaje error'; return; } await cargarTrabajos(); }
@@ -170,6 +197,8 @@
         fila.dataset.tipo = trabajo.tipo;
         fila.dataset.cliente = normalizarBusqueda(trabajo.cliente);
         fila.dataset.obra = normalizarBusqueda(trabajo.obra);
+        fila.dataset.origen = trabajo.origen;
+        fila.dataset.origenId = String(trabajo.origen_id);
         const celdas = [
           `${fecha(trabajo.fecha_inicio)}${trabajo.fecha_fin ? ` - ${fecha(trabajo.fecha_fin)}` : ''}`,
           tipos[trabajo.tipo] || trabajo.tipo,
@@ -178,7 +207,9 @@
           trabajo.obra || '-',
           trabajo.num_presupuesto || '-',
           `${Number(trabajo.importe || 0).toFixed(2)} €`,
-          trabajo.estado_cobro || '-'
+          [trabajo.estado_cobro || '-',
+            trabajo.pendiente_cobro !== undefined ? `${Number(trabajo.pendiente_cobro).toFixed(2)} € pendientes` : '',
+            trabajo.estado_ejecucion ? `Ejecución: ${trabajo.estado_ejecucion}` : 'Sin aceptar'].filter(Boolean).join(' | ')
         ];
         celdas.forEach(texto => {
           const celda = document.createElement('td');
@@ -195,6 +226,26 @@
         fila.appendChild(celdaJornadas);
         const celdaAcciones = document.createElement('td');
         celdaAcciones.className = 'acciones';
+        if (trabajo.estado_ejecucion) {
+          const botonEjecucion = document.createElement('button');
+          botonEjecucion.type = 'button';
+          botonEjecucion.textContent = trabajo.estado_ejecucion === 'Terminado' ? 'Reabrir trabajo' : 'Marcar terminado';
+          botonEjecucion.onclick = async () => {
+            botonEjecucion.disabled = true;
+            try {
+              const respuesta = await apiFetch(`/trabajos/${trabajo.origen_id}/ejecucion?origen=${encodeURIComponent(trabajo.origen)}`, {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ estado: trabajo.estado_ejecucion === 'Terminado' ? 'Pendiente' : 'Terminado' }),
+              });
+              if (!respuesta.ok) throw new Error('No se pudo actualizar la ejecución. El cobro no ha cambiado.');
+              await cargarTrabajos();
+            } catch (error) {
+              mensajeTrabajos.textContent = error.message;
+              mensajeTrabajos.className = 'mensaje error';
+            } finally { botonEjecucion.disabled = false; }
+          };
+          celdaAcciones.appendChild(botonEjecucion);
+        }
         if (trabajo.origen === 'faena') {
           const botonJornada = document.createElement('button');
           botonJornada.type = 'button';
@@ -227,18 +278,19 @@
       filas.forEach(fila => {
         const coincide = (!tipoSeleccionado || fila.dataset.tipo === tipoSeleccionado)
           && (!clienteBuscado || fila.dataset.cliente.includes(clienteBuscado))
-          && (!obraBuscada || fila.dataset.obra.includes(obraBuscada));
+          && (!obraBuscada || fila.dataset.obra.includes(obraBuscada))
+          && (!obraDesdeAlarma || fila.dataset.origen === obraDesdeAlarma.origen && fila.dataset.origenId === obraDesdeAlarma.id);
         fila.hidden = !coincide;
         if (coincide) visibles += 1;
       });
       const aviso = cuerpo.querySelector('.sin-resultados');
-      if (!visibles && filas.length) {
+      if (!visibles) {
         if (!aviso) {
           const fila = document.createElement('tr');
           fila.className = 'sin-resultados';
           const celda = document.createElement('td');
           celda.colSpan = 10;
-          celda.textContent = 'No hay trabajos para estos filtros.';
+          celda.textContent = obraDesdeAlarma ? 'La obra del recordatorio no aparece con estos filtros.' : 'No hay trabajos para estos filtros.';
           fila.appendChild(celda);
           cuerpo.appendChild(fila);
         }
