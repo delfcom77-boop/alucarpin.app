@@ -10,29 +10,30 @@
     body { margin: 0; background: #f3f1eb; }
     main { width: min(1000px, 100%); margin: auto; padding: 24px 16px 40px; }
     header { background: #293f4a; color: #fff; border-radius: 14px; padding: 22px; }
-    h1, h2 { margin: 0 0 10px; }
+    h1, h2 { margin: 0 0 10px; overflow-wrap: anywhere; }
     nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
     nav a { background: #d45d3f; color: #fff; border-radius: 8px; padding: 12px 16px; text-decoration: none; font-weight: 700; }
-    section { background: #fff; border: 1px solid #ddd8cc; border-radius: 12px; padding: 18px; margin-top: 16px; }
-    form { display: grid; gap: 12px; }
-    label { font-weight: 700; display: grid; gap: 6px; }
-    input, select, button { min-height: 46px; border-radius: 8px; font: inherit; }
-    input, select { border: 1px solid #b9c4c2; padding: 10px; }
-    button { background: #d45d3f; color: #fff; border: 0; font-weight: 700; cursor: pointer; padding: 10px 14px; }
-    .fila { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-    .mensaje { min-height: 24px; font-weight: 700; }
+    section { min-width: 0; background: #fff; border: 1px solid #ddd8cc; border-radius: 12px; padding: 18px; margin-top: 16px; }
+    form { display: grid; min-width: 0; gap: 12px; }
+    label { min-width: 0; font-weight: 700; display: grid; gap: 6px; }
+    input, select, button { min-width: 0; max-width: 100%; min-height: 46px; border-radius: 8px; font: inherit; }
+    input, select { width: 100%; border: 1px solid #b9c4c2; padding: 10px; }
+    button { overflow-wrap: anywhere; background: #d45d3f; color: #fff; border: 0; font-weight: 700; cursor: pointer; padding: 10px 14px; }
+    .fila { display: grid; min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .mensaje { min-height: 24px; font-weight: 700; overflow-wrap: anywhere; }
     .error { color: #a52e2e; }
     .exito { color: #1c6b42; }
-    .lista { overflow-x: auto; }
+    .lista { max-width: 100%; overflow-x: auto; }
+    .lista:focus-visible { outline: 3px solid #293f4a; outline-offset: 3px; }
     table { width: 100%; border-collapse: collapse; min-width: 780px; }
     th, td { border-bottom: 1px solid #ddd8cc; padding: 10px 8px; text-align: left; }
     th { background: #eef3f1; }
-    .acciones { display: flex; gap: 8px; }
+    .acciones { display: flex; flex-wrap: wrap; gap: 8px; }
     .acciones button { min-height: 38px; padding: 7px 12px; }
     .borrar { background: #f4cccc; color: #7b2020; }
-    dialog { width: min(520px, calc(100% - 24px)); border: 1px solid #ddd8cc; border-radius: 12px; padding: 20px; color: #223238; }
+    dialog { width: min(520px, calc(100% - 24px)); max-height: calc(100dvh - 24px); overflow-y: auto; overflow-wrap: anywhere; border: 1px solid #ddd8cc; border-radius: 12px; padding: 20px; color: #223238; }
     dialog::backdrop { background: rgb(0 0 0 / 45%); }
-    @media (max-width: 560px) { .fila { grid-template-columns: 1fr; } }
+    @media (max-width: 560px) { .fila { grid-template-columns: minmax(0, 1fr); } }
   </style>
 </head>
 <body>
@@ -49,13 +50,13 @@
         <div class="fila"><label>Población <input id="poblacion"></label><label>Presupuesto existente <select id="presupuesto"><option value="">Sin vincular</option></select></label></div>
         <div class="fila"><label>Importe (€) <input id="importe" type="number" min="0" step="0.01" value="0"></label><label>Cobro <select id="estado"><option>No cobrado</option><option>Cobrado</option></select></label></div>
         <div class="fila"><label>Forma de cobro <input id="forma" placeholder="Efectivo, transferencia..."></label><label>Observaciones <input id="observaciones"></label></div>
-        <button type="submit">Guardar y añadir al calendario</button><div id="mensaje" class="mensaje"></div>
+        <button type="submit">Guardar trabajo</button><div id="mensaje" class="mensaje"></div>
       </form>
     </section>
     <section>
       <h2>Citas pendientes</h2>
       <label>Mostrar tipo <select id="filtro-tipo-citas"><option value="">Todas</option><option value="faena">Faenas</option><option value="presupuesto">Presupuestos</option><option value="reparacion">Reparaciones</option></select></label>
-      <div class="lista"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Tipo</th><th>Cliente</th><th>Dirección</th><th>Descripción</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista-citas"><tr><td colspan="8">Cargando...</td></tr></tbody></table></div>
+      <div class="lista" role="region" tabindex="0" aria-label="Citas pendientes. Desplaza horizontalmente para ver todas las columnas."><table><thead><tr><th>Fecha</th><th>Hora</th><th>Tipo</th><th>Cliente</th><th>Dirección</th><th>Descripción</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista-citas"><tr><td colspan="8">Cargando...</td></tr></tbody></table></div>
     </section>
     <section>
       <h2>Mis trabajos</h2>
@@ -67,7 +68,7 @@
       </div>
       <div id="mensaje-trabajos" class="mensaje" aria-live="polite"></div>
       <button id="exportar-trabajos" type="button">Descargar trabajos filtrados (CSV)</button>
-      <div class="lista"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Origen</th><th>Cliente</th><th>Obra</th><th>Presupuesto</th><th>Importe</th><th>Cobro / ejecución</th><th>Días trabajados</th><th>Acciones</th></tr></thead><tbody id="lista"><tr><td colspan="10">Cargando...</td></tr></tbody></table></div>
+      <div class="lista" role="region" tabindex="0" aria-label="Mis trabajos. Desplaza horizontalmente para ver todas las columnas."><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Origen</th><th>Cliente</th><th>Obra</th><th>Presupuesto</th><th>Importe</th><th>Cobro / ejecución</th><th>Días trabajados</th><th>Acciones</th></tr></thead><tbody id="lista"><tr><td colspan="10">Cargando...</td></tr></tbody></table></div>
     </section>
     <dialog id="dialogo-edicion"><form method="dialog" id="formulario-edicion-trabajo"><h2>Editar registro</h2><label>Cliente <input id="editar-cliente" required></label><label>Obra <input id="editar-obra"></label><label>Fecha <input id="editar-fecha" type="date"></label><label>Importe (€) <input id="editar-importe" type="number" min="0" step="0.01"></label><label>Estado <select id="editar-estado"><option value="No cobrado">No cobrado</option><option value="Cobrado">Cobrado</option><option value="Presupuesto">Presupuesto</option><option value="Aceptado">Aceptado</option><option value="Rechazado">Rechazado</option><option value="Completado">Completado</option></select></label><div class="acciones"><button value="cancelar" type="button" id="cancelar-edicion-trabajo">Cancelar</button><button value="guardar" type="submit">Guardar cambios</button></div><div id="mensaje-edicion-trabajo" class="mensaje"></div></form></dialog>
     <dialog id="dialogo-jornada">

@@ -149,6 +149,8 @@ Las citas y recordatorios tienen una descarga aparte y no se incluyen en los dos
 
 ### Ficha de obra y exportaciones
 
+En movil, los formularios y dialogos de Mi control se adaptan al ancho de pantalla. Las tablas se desplazan horizontalmente dentro de su recuadro para consultar todas las columnas y acciones, sin mover toda la pagina.
+
 Al editar un presupuesto desde **Mi control**, cambiar cliente, fecha o estado conserva todos los importes. El campo Importe cambia solo el total final si lo modificas expresamente; no recalcula ni sobrescribe bruto, IVA, efectivo ni el desglose fiscal. El numero de presupuesto tampoco se modifica desde este editor.
 
 En **Mi control -> Mis trabajos**, **Ver ficha** abre una consulta de cliente, obra, ubicacion, ejecucion, cobro, dias de ayudantes, dias propios de faena, gastos y cobros vinculados. Se agrupan los fichajes por ayudante y fecha. El pago mostrado es el del dia completo contigo, aunque ese dia se trabaje en otras obras; no se suma como coste de cada obra ni se calcula un beneficio ficticio.

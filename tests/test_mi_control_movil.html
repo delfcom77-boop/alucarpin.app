@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Pruebas de Mi control en movil</title></head>
+<body>
+  <pre id="resultado">Ejecutando...</pre>
+  <iframe id="app" title="Mi control de prueba" style="border:0;height:700px"></iframe>
+  <script>
+    function preparar() {
+      localStorage.setItem('alucarpin_token', 'prueba');
+      window.escrituras = [];
+      window.fetch = async (url, opciones = {}) => {
+        if (opciones.method) escrituras.push(url);
+        const cliente = 'Cliente con nombre muy largo '.repeat(10);
+        const trabajo = { origen: 'presupuesto', origen_id: 1, tipo: 'presupuesto', cliente,
+          obra: 'Obra'.repeat(100), num_presupuesto: 'P-1', importe: 100, estado: 'Aceptado', fecha_inicio: '2026-10-05' };
+        let datos = [];
+        if (url === '/trabajos') datos = [trabajo];
+        if (url === '/presupuestos') datos = [{ cliente, num_presupuesto: 'P-1', estado: 'Aceptado' }];
+        return new Response(JSON.stringify(datos));
+      };
+    }
+    (async () => {
+      const html = (await fetch('../app_web/mi_control.html').then(r => r.text()))
+        .replaceAll('/app/', '/app_web/').replace('<script src="/app_web/pwa.js"><\/script>', '');
+      const marco = document.querySelector('#app');
+      marco.srcdoc = html.replace('<head>', `<head><script>(${preparar.toString()})();<\/script>`);
+      await new Promise(resolve => marco.onload = resolve);
+      const w = marco.contentWindow;
+      const d = marco.contentDocument;
+      const esperar = async condicion => {
+        for (let i = 0; i < 100; i++) {
+          if (condicion()) return;
+          await new Promise(resolve => setTimeout(resolve, 20));
+        }
+        throw new Error('Tiempo agotado');
+      };
+      const comprobar = (ok, mensaje) => { if (!ok) throw new Error(mensaje); };
+      await esperar(() => d.querySelector('#lista tr[data-origen]') && d.querySelector('#presupuesto').options.length === 2);
+      const boton = texto => Array.from(d.querySelectorAll('#lista button')).find(b => b.textContent === texto);
+      const ajustar = async ancho => {
+        marco.style.width = ancho + 'px';
+        await new Promise(resolve => w.requestAnimationFrame(() => w.requestAnimationFrame(resolve)));
+      };
+      const sinDesbordar = contexto => {
+        comprobar(d.documentElement.scrollWidth <= w.innerWidth, contexto + ': pagina se sale');
+        for (const elemento of d.querySelectorAll('input,select,button')) {
+          const r = elemento.getBoundingClientRect();
+          if (!r.width || elemento.closest('.lista')) continue;
+          comprobar(r.left >= 0 && r.right <= w.innerWidth + 1, contexto + ': control se sale ' + elemento.id);
+        }
+      };
+      for (const ancho of [320, 390, 560, 768, 1280]) {
+        await ajustar(ancho);
+        for (const tipo of ['faena', 'presupuesto', 'reparacion']) {
+          d.querySelector('#tipo').value = tipo;
+          d.querySelector('#tipo').dispatchEvent(new w.Event('change'));
+          sinDesbordar(ancho + ' ' + tipo);
+        }
+        for (const texto of ['Editar', 'Registrar día']) {
+          boton(texto).click();
+          sinDesbordar(ancho + ' ' + texto);
+          const dialogo = d.querySelector('dialog[open]');
+          comprobar(dialogo.scrollWidth <= dialogo.clientWidth + 1, 'Dialogo recorta contenido');
+          const cerrar = dialogo.querySelector('button[type="button"]');
+          cerrar.click();
+        }
+        const lista = d.querySelector('#lista').closest('.lista');
+        comprobar(lista.tabIndex === 0 && lista.getAttribute('role') === 'region', 'Tabla no accesible con teclado');
+        lista.scrollLeft = lista.scrollWidth;
+        comprobar(lista.scrollLeft > 0, 'Tabla pierde desplazamiento');
+      }
+      marco.style.height = '320px';
+      await ajustar(390);
+      boton('Editar').click();
+      const dialogo = d.querySelector('dialog[open]');
+      comprobar(dialogo.getBoundingClientRect().height <= w.innerHeight - 24 + 1, 'Dialogo se sale en pantalla baja');
+      comprobar(dialogo.scrollHeight > dialogo.clientHeight, 'Dialogo no permite desplazarse');
+      const cancelar = d.querySelector('#cancelar-edicion-trabajo');
+      cancelar.scrollIntoView();
+      const r = cancelar.getBoundingClientRect();
+      comprobar(r.top >= 0 && r.bottom <= w.innerHeight, 'Cancelar no accesible con pantalla baja');
+      cancelar.click();
+      comprobar(w.escrituras.length === 0, 'Prueba modifica datos');
+      document.querySelector('#resultado').textContent = 'OK: 320, 390, 560, 768 y 1280 px\nOK: Todos los tipos y nombres largos sin desbordamiento\nOK: Editar y Registrar dia sin recorte horizontal\nOK: Dialogos desplazables con pantalla baja\nOK: Tablas desplazables con teclado y sin escrituras';
+    })().catch(error => { document.querySelector('#resultado').textContent = 'ERROR: ' + error.message; throw error; });
+  </script>
+</body>
+</html>
