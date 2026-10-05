@@ -19,6 +19,7 @@ class CalendarioJornadasTests(unittest.TestCase):
                 id INTEGER PRIMARY KEY, tipo TEXT, cliente TEXT, obra TEXT, ubicacion TEXT, poblacion TEXT
             );
             CREATE TABLE faenas (id INTEGER PRIMARY KEY, cliente TEXT, obra TEXT, ubicacion TEXT, poblacion TEXT);
+            CREATE TABLE remates (id INTEGER PRIMARY KEY);
             CREATE TABLE jornadas_faenas (faena_id INTEGER, fecha TEXT);
             CREATE TABLE citas_agenda (
                 id INTEGER, fecha TEXT, hora TEXT, duracion_minutos INTEGER, tipo TEXT,

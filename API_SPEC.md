@@ -1,5 +1,15 @@
 # API - Especificación de Endpoints (CRUD Completo)
 
+## Remates vinculados (administrador)
+
+- `GET /remates`: incluye `obra_catalogo` (`faena:ID`, `presupuesto:ID`, `reparacion:ID`) o `null` para historicos sin vinculo. Los nombres y el origen de los vinculados se resuelven desde su obra actual. Se mantienen los filtros exactos `origen`, `cliente` y `obra`.
+- `POST /remates`: requiere `obra_catalogo` de `/catalogo-obras` ademas de los campos del remate. El servidor valida la existencia y compatibilidad con `origen` (`tercero` para faenas, `propia` para presupuestos/reparaciones), y obtiene cliente, obra y `origen_id` del destino. Falta de referencia, destino inexistente o tipo incompatible: 400, sin insertar.
+- `PATCH /remates/{id}/vinculacion`, cuerpo `{"obra_catalogo":"faena:25"}`: asigna o corrige el destino, sin modificar campos del remate ni movimientos economicos. Devuelve `id` y `obra_catalogo`; remate inexistente: 404; destino invalido: 400.
+- `DELETE /remates/{id}`: elimina tambien su vinculo. Los destinos con remates vinculados quedan protegidos contra borrado.
+- `GET /obras/{origen}/{id}` incluye `remates`, filtrados por referencia exacta; `propio` corresponde a `reparacion`. No incluye historicos por coincidencia de nombres.
+
+El inicio crea `remates_vinculos` con claves foraneas y exactamente un destino por remate. No interpreta ni migra automaticamente el antiguo `origen_id`, que no distingue presupuestos y reparaciones.
+
 ## Base URL
 ```
 https://alucarpin-app.onrender.com

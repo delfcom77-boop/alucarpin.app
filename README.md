@@ -18,6 +18,10 @@ Sistema profesional de gestión empresarial con sincronización bidireccional en
 
 ## 🏗️ Arquitectura
 
+### Remates por obra
+
+La web vincula los nuevos remates al catalogo de faenas, presupuestos y reparaciones por referencia exacta. Los antiguos se conservan sin asignacion automatica y pueden vincularse manualmente. Filtros, PDF, WhatsApp y ficha de obra separan destinos aunque tengan nombres iguales. La ficha permite imprimir o exportar sus remates a CSV. `remates_vinculos` se crea al iniciar la API y protege las obras vinculadas contra borrado.
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     SUPABASE (PostgreSQL)                   │

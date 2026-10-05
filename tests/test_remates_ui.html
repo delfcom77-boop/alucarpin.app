@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Pruebas de vinculos de remates</title></head>
+<body>
+  <pre id="resultado">Ejecutando...</pre>
+  <iframe id="app" title="Remates de prueba" style="width:390px;height:800px"></iframe>
+  <script>
+    function preparar() {
+      localStorage.setItem('alucarpin_token', 'prueba-local');
+      window.cambios = []; window.salidas = []; window.fallar = false;
+      window.confirm = () => true;
+      window.open = url => {
+        salidas.push({ url, html: '' });
+        const salida = salidas.at(-1);
+        return { document: { open() {}, write(html) { salida.html = html; }, close() {} }, print() {} };
+      };
+      const catalogo = [
+        { referencia: 'faena:1', tipo: 'faena', cliente: 'Cliente', obra: 'Obra', id: 1 },
+        { referencia: 'faena:2', tipo: 'faena', cliente: 'Cliente', obra: 'Obra', id: 2 },
+        { referencia: 'presupuesto:1', tipo: 'presupuesto', cliente: 'Cliente', obra: 'Presupuesto P1', id: 1 },
+        { referencia: 'reparacion:1', tipo: 'reparacion', cliente: 'Cliente', obra: 'Obra', id: 1 },
+      ];
+      const base = { origen: 'tercero', cliente: 'Cliente', obra: 'Obra', tipo: 'u', medida_1: 10, medida_2: 20, medida_3: 30,
+        largura: 2500, cantidad: 2, lacado_color: 'Blanco', observaciones: 'Conservar', posicion_medidas: 'exterior' };
+      const remates = [
+        { ...base, id: 10, pieza: 'Antigua', obra_catalogo: null },
+        { ...base, id: 11, pieza: 'SoloFaena1', obra_catalogo: 'faena:1' },
+        { ...base, id: 12, pieza: 'SoloFaena2', obra_catalogo: 'faena:2' },
+        { ...base, id: 13, pieza: 'SoloReparacion', origen: 'propia', obra_catalogo: 'reparacion:1' },
+      ];
+      window.fetch = async (url, opciones = {}) => {
+        if (opciones.method) {
+          const datos = opciones.body ? JSON.parse(opciones.body) : null;
+          cambios.push({ url, metodo: opciones.method, datos });
+          if (fallar) return new Response(JSON.stringify({ detail: 'Vinculo rechazado' }), { status: 409 });
+          if (opciones.method === 'PATCH') {
+            const remate = remates.find(r => r.id === Number(url.split('/')[2]));
+            remate.obra_catalogo = datos.obra_catalogo;
+          }
+          if (opciones.method === 'POST') remates.push({ ...datos, id: 14 });
+          if (opciones.method === 'DELETE') remates.splice(remates.findIndex(r => r.id === Number(url.split('/')[2])), 1);
+          return new Response(JSON.stringify({ id: 14 }), { status: 200 });
+        }
+        return new Response(JSON.stringify(url === '/catalogo-obras' ? catalogo : remates));
+      };
+    }
+    (async () => {
+      const html = (await fetch('../app_web/remates.html').then(r => r.text())).replaceAll('/app/', '/app_web/');
+      const marco = document.querySelector('#app');
+      marco.srcdoc = html.replace('<head>', `<head><script>(${preparar.toString()})();<\/script>`);
+      await new Promise(resolve => marco.onload = resolve);
+      const w = marco.contentWindow, d = marco.contentDocument;
+      const comprobar = (valor, texto) => { if (!valor) throw new Error(texto); };
+      const esperar = async condicion => {
+        for (let i = 0; i < 100; i++) { if (condicion()) return; await new Promise(r => setTimeout(r, 30)); }
+        throw new Error('Tiempo agotado');
+      };
+      const seleccionar = (id, valor) => { d.querySelector('#' + id).value = valor; d.querySelector('#' + id).dispatchEvent(new w.Event('change')); };
+      await esperar(() => d.querySelectorAll('#lista tr').length === 4);
+      comprobar(d.querySelector('#lista').textContent.includes('Sin vincular'), 'Oculta historicos');
+      comprobar(d.querySelector('#filtro-obra').options.length === 5, 'Agrupa obras distintas por nombre');
+      seleccionar('origen', 'propia'); seleccionar('cliente', 'Cliente');
+      comprobar([...d.querySelector('#obra').options].map(o => o.value).join(',') === ',presupuesto:1,reparacion:1', 'Mezcla tipos de obras');
+      seleccionar('origen', 'tercero'); seleccionar('cliente', 'Cliente'); seleccionar('obra', 'faena:2');
+      const filaAntigua = () => [...d.querySelectorAll('#lista tr')].find(r => r.textContent.includes('Antigua'));
+      w.fallar = true; filaAntigua().querySelector('button').click();
+      await esperar(() => d.querySelector('#mensaje').textContent.includes('Vinculo rechazado'));
+      comprobar(filaAntigua().textContent.includes('Sin vincular'), 'Falso exito en vinculo');
+      comprobar(JSON.stringify(w.cambios.at(-1).datos) === '{"obra_catalogo":"faena:2"}', 'Vinculo altera campos del remate');
+      w.fallar = false; filaAntigua().querySelector('button').click();
+      await esperar(() => filaAntigua().textContent.includes('faena:2'));
+      comprobar(filaAntigua().textContent.includes('10 x 20 x 30') && filaAntigua().textContent.includes('Blanco'), 'Cambia medidas o color');
+      seleccionar('filtro-obra', 'faena:1');
+      await esperar(() => d.querySelectorAll('#lista tr').length === 1);
+      comprobar(d.querySelector('#lista').textContent.includes('SoloFaena1'), 'Filtro incorrecto');
+      d.querySelector('#generar-pdf').click(); await esperar(() => w.salidas.length === 1);
+      comprobar(w.salidas[0].html.includes('SoloFaena1') && !w.salidas[0].html.includes('SoloFaena2') && !w.salidas[0].html.includes('Antigua'), 'PDF mezcla referencias');
+      d.querySelector('#enviar-whatsapp').click(); await esperar(() => w.salidas.length === 2);
+      const whatsapp = decodeURIComponent(w.salidas[1].url);
+      comprobar(whatsapp.includes('SoloFaena1') && !whatsapp.includes('SoloFaena2') && !whatsapp.includes('SoloReparacion'), 'WhatsApp mezcla referencias');
+      seleccionar('origen', 'propia'); seleccionar('cliente', 'Cliente'); seleccionar('obra', 'presupuesto:1');
+      for (const [id, valor] of Object.entries({ pieza: 'Nueva', 'lacado-color': 'Blanco', 'medida-1': 10, 'medida-2': 20, 'medida-3': 30, largura: 2500, cantidad: 1 })) d.querySelector('#' + id).value = valor;
+      d.querySelector('#formulario').requestSubmit();
+      await esperar(() => w.cambios.some(c => c.metodo === 'POST'));
+      const post = w.cambios.find(c => c.metodo === 'POST').datos;
+      comprobar(post.obra_catalogo === 'presupuesto:1' && post.origen === 'propia' && post.obra === 'Presupuesto P1', 'POST no usa referencia canonica');
+      await esperar(() => !d.querySelector('#formulario button[type="submit"]').disabled);
+      seleccionar('filtro-obra', ''); await esperar(() => d.querySelectorAll('#lista tr').length === 5);
+      w.fallar = true; filaAntigua().querySelector('.borrar').click();
+      await esperar(() => d.querySelector('#mensaje').textContent.includes('No se pudo borrar'));
+      comprobar(d.querySelectorAll('#lista tr').length === 5, 'Oculta fila tras borrado rechazado');
+      comprobar(d.documentElement.scrollWidth <= d.documentElement.clientWidth, 'Desbordamiento movil');
+      document.querySelector('#resultado').textContent = 'OK: Catalogo por tipo e ID\nOK: Historicos visibles y vinculo sin alterar medidas\nOK: Errores de vinculo y borrado visibles\nOK: Filtro, PDF y WhatsApp sin mezclar obras homonimas\nOK: Guardado canonico y pantalla movil';
+    })().catch(error => { document.querySelector('#resultado').textContent = 'ERROR: ' + error.message; throw error; });
+  </script>
+</body>
+</html>

@@ -238,6 +238,7 @@ class FaenaUpdate(BaseModel):
 class RemateCreate(BaseModel):
     origen: Literal["propia", "tercero"]
     origen_id: int = Field(default=0, ge=0)
+    obra_catalogo: Optional[str] = None
     cliente: str = Field(min_length=1)
     obra: str = Field(min_length=1)
     pieza: str = Field(min_length=1)
@@ -252,6 +253,10 @@ class RemateCreate(BaseModel):
     largura: float = Field(gt=0)
     cantidad: int = Field(default=1, ge=1)
     observaciones: str = ""
+
+
+class RemateVinculacion(BaseModel):
+    obra_catalogo: str = Field(min_length=1)
 
 
 class PresupuestoCreate(BaseModel):
@@ -360,6 +365,16 @@ def startup():
                 "actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
             )
         identificador = "BIGSERIAL PRIMARY KEY" if DATABASE_URL else "INTEGER PRIMARY KEY AUTOINCREMENT"
+        db.execute(
+            "CREATE TABLE IF NOT EXISTS remates_vinculos ("
+            "remate_id BIGINT PRIMARY KEY REFERENCES remates(id) ON DELETE CASCADE, "
+            "faena_id BIGINT REFERENCES faenas(id) ON DELETE RESTRICT, "
+            "presupuesto_id BIGINT REFERENCES presupuestos(id) ON DELETE RESTRICT, "
+            "trabajo_id BIGINT REFERENCES trabajos_propios(id) ON DELETE RESTRICT, "
+            "CHECK ((CASE WHEN faena_id IS NULL THEN 0 ELSE 1 END + "
+            "CASE WHEN presupuesto_id IS NULL THEN 0 ELSE 1 END + "
+            "CASE WHEN trabajo_id IS NULL THEN 0 ELSE 1 END) = 1))"
+        )
         db.execute(
             f"CREATE TABLE IF NOT EXISTS jornadas_propias (id {identificador}, "
             "presupuesto_id BIGINT REFERENCES presupuestos(id) ON DELETE RESTRICT, "
@@ -1493,6 +1508,8 @@ def modificar_presupuesto(presupuesto_id: int, datos: PresupuestoUpdate, usuario
 @app.delete("/presupuestos/{presupuesto_id}")
 def borrar_presupuesto(presupuesto_id: int, usuario=Depends(administrador)):
     with conexion() as db:
+        if db.execute("SELECT 1 FROM remates_vinculos WHERE presupuesto_id = ? LIMIT 1", (presupuesto_id,)).fetchone():
+            raise HTTPException(status_code=409, detail="El presupuesto tiene remates vinculados y no se puede borrar.")
         if db.execute("SELECT 1 FROM jornadas_propias WHERE presupuesto_id = ? LIMIT 1", (presupuesto_id,)).fetchone():
             raise HTTPException(status_code=409, detail="El presupuesto tiene días propios registrados y no se puede borrar.")
         cursor = db.execute("DELETE FROM presupuestos WHERE id = ?", (presupuesto_id,))
@@ -1744,7 +1761,7 @@ def borrar_faena(faena_id: int, usuario=Depends(administrador)):
     except (psycopg.errors.ForeignKeyViolation, sqlite3.IntegrityError) as error:
         raise HTTPException(
             status_code=409,
-            detail="No se puede borrar: la faena tiene gastos, pagos o jornadas vinculados. "
+            detail="No se puede borrar: la faena tiene gastos, pagos, jornadas o remates vinculados. "
                    "Desvincula esos datos o solicita una eliminación completa.",
         ) from error
     return {"eliminado": True, "id": faena_id}
@@ -1752,30 +1769,59 @@ def borrar_faena(faena_id: int, usuario=Depends(administrador)):
 
 @app.get("/remates")
 def listar_remates(origen: Optional[str] = Query(default=None), cliente: Optional[str] = Query(default=None), obra: Optional[str] = Query(default=None), usuario=Depends(administrador)):
-    consulta = "SELECT * FROM remates"
-    filtros = []
-    parametros = []
-    if origen in {"propia", "tercero"}:
-        filtros.append("origen = ?")
-        parametros.append(origen)
-    if cliente:
-        filtros.append("cliente = ?")
-        parametros.append(cliente)
-    if obra:
-        filtros.append("obra = ?")
-        parametros.append(obra)
-    if filtros:
-        consulta += " WHERE " + " AND ".join(filtros)
-    consulta += " ORDER BY id DESC"
     with conexion() as db:
-        filas = db.execute(consulta, parametros).fetchall()
-    return [dict(fila) for fila in filas]
+        return consultar_remates(db, origen, cliente, obra)
+
+
+def consultar_remates(db, origen=None, cliente=None, obra=None):
+    catalogo = {o["referencia"]: o for o in catalogo_obras(db)}
+    filas = db.execute(
+        "SELECT r.*, v.faena_id AS vinculo_faena, v.presupuesto_id AS vinculo_presupuesto, "
+        "v.trabajo_id AS vinculo_trabajo FROM remates r "
+        "LEFT JOIN remates_vinculos v ON v.remate_id = r.id ORDER BY r.id DESC"
+    ).fetchall()
+    resultado = []
+    for fila in filas:
+        remate = dict(fila)
+        referencia = None
+        for tipo, columna in (("faena", "vinculo_faena"), ("presupuesto", "vinculo_presupuesto"), ("reparacion", "vinculo_trabajo")):
+            ident = remate.pop(columna)
+            if ident is not None:
+                referencia = f"{tipo}:{ident}"
+        remate["obra_catalogo"] = referencia
+        if referencia:
+            destino = catalogo.get(referencia)
+            if not destino:
+                raise HTTPException(status_code=409, detail=f"El remate {remate['id']} tiene un vínculo a una obra no disponible.")
+            remate.update(cliente=destino["cliente"], obra=destino["obra"],
+                          origen="tercero" if destino["tipo"] == "faena" else "propia", origen_id=destino["id"])
+        if (origen not in {"propia", "tercero"} or remate["origen"] == origen) and (not cliente or remate["cliente"] == cliente) and (not obra or remate["obra"] == obra):
+            resultado.append(remate)
+    return resultado
+
+
+def guardar_vinculo_remate(db, remate_id, destino):
+    columnas = {"faena": "faena_id", "presupuesto": "presupuesto_id", "reparacion": "trabajo_id"}
+    valores = {columna: destino["id"] if tipo == destino["tipo"] else None for tipo, columna in columnas.items()}
+    db.execute(
+        "INSERT INTO remates_vinculos (remate_id, faena_id, presupuesto_id, trabajo_id) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT (remate_id) DO UPDATE SET faena_id = excluded.faena_id, "
+        "presupuesto_id = excluded.presupuesto_id, trabajo_id = excluded.trabajo_id",
+        (remate_id, valores["faena_id"], valores["presupuesto_id"], valores["trabajo_id"]),
+    )
 
 
 @app.post("/remates", status_code=201)
 def crear_remate(datos: RemateCreate, usuario=Depends(administrador)):
     with conexion() as db:
         valores = datos.model_dump()
+        if not valores["obra_catalogo"]:
+            raise HTTPException(status_code=400, detail="Selecciona una obra del catálogo para guardar el remate.")
+        destino = resolver_obra_catalogo(db, valores.pop("obra_catalogo"), "pendiente")
+        origen_esperado = "tercero" if destino["tipo"] == "faena" else "propia"
+        if datos.origen != origen_esperado:
+            raise HTTPException(status_code=400, detail="El tipo de faena no coincide con la obra seleccionada.")
+        valores.update(cliente=destino["cliente"], obra=destino["obra"], origen_id=destino["id"])
         columnas = ", ".join(valores)
         marcadores = ", ".join("?" for _ in valores)
         if DATABASE_URL:
@@ -1786,7 +1832,18 @@ def crear_remate(datos: RemateCreate, usuario=Depends(administrador)):
         else:
             db.execute(f"INSERT INTO remates ({columnas}) VALUES ({marcadores})", tuple(valores.values()))
             fila = db.execute("SELECT * FROM remates WHERE id = last_insert_rowid()").fetchone()
-    return dict(fila)
+        guardar_vinculo_remate(db, fila["id"], destino)
+    return {**dict(fila), "obra_catalogo": destino["referencia"]}
+
+
+@app.patch("/remates/{remate_id}/vinculacion")
+def vincular_remate(remate_id: int, datos: RemateVinculacion, usuario=Depends(administrador)):
+    with conexion() as db:
+        if not db.execute("SELECT id FROM remates WHERE id = ?", (remate_id,)).fetchone():
+            raise HTTPException(status_code=404, detail="Remate no encontrado")
+        destino = resolver_obra_catalogo(db, datos.obra_catalogo, "pendiente")
+        guardar_vinculo_remate(db, remate_id, destino)
+    return {"id": remate_id, "obra_catalogo": destino["referencia"]}
 
 
 @app.delete("/remates/{remate_id}")
@@ -1902,6 +1959,8 @@ def ficha_obra(
             f"SELECT fecha FROM jornadas_propias WHERE {'presupuesto_id' if origen == 'presupuesto' else 'trabajo_id'} = ? ORDER BY fecha",
             (obra_id,),
         ).fetchall()]
+        referencia_remates = f"{'reparacion' if origen == 'propio' else origen}:{obra_id}"
+        remates = [r for r in consultar_remates(db) if r["obra_catalogo"] == referencia_remates]
         if origen == "faena":
             cobros = [dict(f) for f in db.execute(
                 "SELECT id, fecha, importe_iva, importe_b, forma_pago, observaciones "
@@ -1926,7 +1985,7 @@ def ficha_obra(
                        "forma_pago": obra["forma_pago"], "observaciones": "Estado de cobro registrado en Mi control, sin movimiento independiente."})
     return {
         "obra": obra, "jornadas_ayudantes": jornadas, "dias_obra": dias_obra,
-        "gastos": gastos, "cobros": cobros,
+        "gastos": gastos, "cobros": cobros, "remates": remates,
         "resumen": {
             "dias_ayudantes": len(jornadas),
             "fechas_trabajadas": len({j["fecha"] for j in jornadas}),
@@ -2000,6 +2059,8 @@ def modificar_trabajo(trabajo_id: int, datos: TrabajoUpdate, usuario=Depends(adm
 @app.delete("/trabajos/{trabajo_id}")
 def borrar_trabajo(trabajo_id: int, usuario=Depends(administrador)):
     with conexion() as db:
+        if db.execute("SELECT 1 FROM remates_vinculos WHERE trabajo_id = ? LIMIT 1", (trabajo_id,)).fetchone():
+            raise HTTPException(status_code=409, detail="La obra tiene remates vinculados y no se puede borrar.")
         if db.execute("SELECT 1 FROM jornadas_propias WHERE trabajo_id = ? LIMIT 1", (trabajo_id,)).fetchone():
             raise HTTPException(status_code=409, detail="La obra tiene días propios registrados y no se puede borrar.")
         cursor = db.execute("DELETE FROM trabajos_propios WHERE id = ?", (trabajo_id,))

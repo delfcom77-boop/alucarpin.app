@@ -205,6 +205,14 @@ Desde **CENTRO DE CONTROL** puedes revisar:
 
 Tras una recepcion, si alguna ventana estaba abierta, sus tablas se actualizan.
 
+### Remates vinculados a obras
+
+En **Remates**, elige tipo de faena, cliente y una obra existente del catalogo antes de guardar. Las referencias distinguen faenas, presupuestos y reparaciones, aunque compartan nombre o numero interno.
+
+Los remates anteriores permanecen como **Sin vincular**. Para asignar uno, selecciona su obra en **Nuevo remate**, pulsa **Vincular** en la fila y confirma el destino. **Cambiar vinculo** permite corregir una asignacion. Solo cambia el vinculo: medidas, pieza, color, cantidad y observaciones se conservan. No se asignan automaticamente por nombres parecidos.
+
+Los filtros, PDF y WhatsApp separan cada referencia y los grupos antiguos sin vinculo. Si se renombra una obra, sus remates vinculados muestran el nombre actual. La **ficha de obra** incluye sus remates y permite imprimirlos o exportarlos a CSV. Las obras con remates vinculados no se pueden borrar.
+
 ## 4. Flujo diario recomendado
 
 ### Si trabajas desde la web

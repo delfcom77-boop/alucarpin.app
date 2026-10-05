@@ -71,6 +71,18 @@
       ]));
       tabla('gastos', ficha.gastos.map(g => [fecha(g.fecha), g.proveedor, g.concepto, g.categoria, euros(g.importe), euros(g.importe_pagado), euros(g.pendiente)]));
       tabla('cobros', ficha.cobros.map(c => [fecha(c.fecha), euros(c.importe), c.forma_pago, c.observaciones]));
+      const tiposRemate = { u: 'Bandeja / U', chapa: 'Chapa', angulo: 'Ángulo / L', tubo: 'Tubo', tubo_redondo: 'Tubo redondo' };
+      const medidasRemate = r => {
+        if (r.tipo === 'u') return `${r.medida_1} × ${r.medida_2} × ${r.medida_3} · Medidas ${r.posicion_medidas === 'exterior' ? 'exteriores' : 'interiores'}`;
+        if (r.tipo === 'chapa' && r.modo_chapa === 'desnivel') return `Izq. ${r.medida_1} × Der. ${r.medida_2} · Recta ${r.orientacion_chapa}`;
+        if (r.tipo === 'chapa' || r.tipo === 'tubo_redondo') return String(r.medida_1);
+        return `${r.medida_1} × ${r.medida_2}`;
+      };
+      tabla('remates', ficha.remates.map(r => [
+        r.pieza, r.lacado_color, tiposRemate[r.tipo],
+        medidasRemate(r),
+        r.largura, r.cantidad, r.observaciones,
+      ]));
       texto('#dias-obra', ficha.dias_obra.length ? ficha.dias_obra.map(d => fecha(d.fecha)).join(', ') : 'Sin días propios vinculados.');
       mensaje.textContent = ''; contenido.hidden = false; imprimir.disabled = false;
     } catch (error) {

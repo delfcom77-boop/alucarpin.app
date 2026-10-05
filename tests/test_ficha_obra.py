@@ -39,6 +39,7 @@ class FichaObraTests(unittest.TestCase):
         with (
             patch.object(api, "listar_trabajos", return_value=[self.obra(origen)]),
             patch.object(api, "listar_gastos", return_value=gastos or []),
+            patch.object(api, "consultar_remates", return_value=[]),
         ):
             return api.ficha_obra(origen, 25, {})
 
@@ -92,6 +93,17 @@ class FichaObraTests(unittest.TestCase):
         self.assertEqual(ficha["resumen"]["gastos_pagados"], 10)
         self.assertEqual(len(ficha["gastos"]), 1)
 
+    def test_remates_de_ficha_se_filtran_por_tipo_e_id_no_por_nombres(self):
+        self.preparar()
+        remates = [{"id": i, "obra_catalogo": referencia, "cliente": "Igual", "obra": "Igual"}
+                   for i, referencia in enumerate(("faena:25", "faena:26", "presupuesto:25", "reparacion:25", None))]
+        for origen, referencia in (("faena", "faena:25"), ("presupuesto", "presupuesto:25"), ("propio", "reparacion:25")):
+            with (patch.object(api, "listar_trabajos", return_value=[self.obra(origen)]),
+                  patch.object(api, "listar_gastos", return_value=[]),
+                  patch.object(api, "consultar_remates", return_value=remates)):
+                ficha = api.ficha_obra(origen, 25, {})
+            self.assertEqual([r["obra_catalogo"] for r in ficha["remates"]], [referencia])
+
     def test_dias_propios_presupuesto_no_se_confunden_con_reparacion(self):
         self.preparar()
         self.db.executescript("""
@@ -109,6 +121,7 @@ class FichaObraTests(unittest.TestCase):
         with (
             patch.object(api, "listar_trabajos", return_value=[obra]),
             patch.object(api, "listar_gastos", return_value=[]),
+            patch.object(api, "consultar_remates", return_value=[]),
         ):
             ficha = api.ficha_obra("presupuesto", 25, {})
         self.assertEqual(ficha["cobros"], [])
@@ -118,7 +131,8 @@ class FichaObraTests(unittest.TestCase):
         self.preparar()
         obra = self.obra("propio")
         obra["estado_cobro"] = "Cobrado"
-        with patch.object(api, "listar_trabajos", return_value=[obra]):
+        with (patch.object(api, "listar_trabajos", return_value=[obra]),
+              patch.object(api, "consultar_remates", return_value=[])):
             ficha = api.ficha_obra("propio", 25, {})
         self.assertEqual(ficha["gastos"], [])
         self.assertIsNone(ficha["cobros"][0]["id"])

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Pruebas de remates en ficha</title></head>
+<body>
+  <pre id="resultado">Ejecutando...</pre>
+  <iframe id="app" title="Ficha de prueba"></iframe>
+  <script>
+    function preparar() {
+      localStorage.setItem('alucarpin_token', 'prueba-local');
+      const Parametros = URLSearchParams;
+      window.URLSearchParams = class extends Parametros { constructor(texto) { super(texto || 'origen=faena&id=1'); } };
+      window.archivo = null; window.impresiones = 0;
+      URL.createObjectURL = blob => { window.archivo = blob; return 'blob:prueba'; };
+      HTMLAnchorElement.prototype.click = function () {};
+      window.print = () => { window.impresiones++; };
+      const r = { pieza: 'Ventana', lacado_color: 'Blanco', tipo: 'u', medida_1: 10, medida_2: 20, medida_3: 30,
+        largura: 2500, cantidad: 2, posicion_medidas: 'exterior', observaciones: '=nota' };
+      window.fetch = async () => new Response(JSON.stringify({
+        obra: { cliente: 'Cliente', obra: 'Obra', tipo: 'faena', importe: 100, estado_cobro: 'No cobrado' },
+        resumen: { dias_ayudantes: 0, fechas_trabajadas: 0, ayudantes: 0, dias_obra_registrados: 0,
+          gastos: 0, gastos_pagados: 0, cobros_registrados: 0 },
+        jornadas_ayudantes: [], gastos: [], cobros: [], dias_obra: [], remates: [r],
+      }));
+    }
+    (async () => {
+      const html = (await fetch('../app_web/obra.html').then(r => r.text()))
+        .replaceAll('/app/', '/app_web/')
+        .replace('<script src="/app_web/pwa.js"><\/script>', '');
+      const marco = document.querySelector('#app');
+      marco.srcdoc = html.replace('<head>', `<head><script>(${preparar.toString()})();<\/script>`);
+      await new Promise(resolve => marco.onload = resolve);
+      const w = marco.contentWindow, d = marco.contentDocument;
+      const comprobar = (valor, texto) => { if (!valor) throw new Error(texto); };
+      const esperar = async condicion => {
+        for (let i = 0; i < 100; i++) { if (condicion()) return; await new Promise(r => setTimeout(r, 30)); }
+        throw new Error('Tiempo agotado: ' + d.querySelector('#mensaje').textContent);
+      };
+      await esperar(() => !d.querySelector('#contenido').hidden);
+      comprobar(d.querySelector('#remates tbody').textContent.includes('exteriores'), 'Pierde posicion de medidas');
+      d.querySelector('[data-exportar="remates"]').click();
+      await esperar(() => w.archivo);
+      const csv = await w.archivo.text();
+      comprobar(csv.includes('Ventana') && csv.includes('2500') && csv.includes("'=nota") && !csv.includes('Borrar'), 'CSV incompleto o inseguro');
+      d.querySelector('#imprimir').click();
+      comprobar(w.impresiones === 1, 'No imprime ficha');
+      document.querySelector('#resultado').textContent = 'OK: Remates en ficha con medidas exteriores\nOK: CSV conserva campos y neutraliza formulas\nOK: Impresion de ficha';
+    })().catch(error => { document.querySelector('#resultado').textContent = 'ERROR: ' + error.message; throw error; });
+  </script>
+</body>
+</html>

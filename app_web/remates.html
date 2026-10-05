@@ -87,7 +87,8 @@
           <label>Tipo de faena <select id="origen"><option value="propia">Faena propia</option><option value="tercero">Faena de 3º</option></select></label>
           <label>Cliente <select id="cliente" required><option value="">Cargando clientes...</option></select></label>
         </div>
-        <label>Obra en la que estoy <input id="obra" required placeholder="Ejemplo: vivienda de Juan, nave industrial..."></label>
+        <label>Obra en la que estoy <select id="obra" required><option value="">Selecciona un cliente</option></select></label>
+        <p class="ayuda">Selecciona una obra del catálogo. Si no existe, créala primero en Mi control o Ayudantes. Para vincular un remate antiguo, selecciona aquí su obra y pulsa Vincular en su fila.</p>
         <label>Referencia de pieza / ventana <input id="pieza" required placeholder="Ejemplo: Ventana 1"></label>
         <label>Lacado / color <input id="lacado-color" required placeholder="Ejemplo: RAL 7016 gris antracita"></label>
         <label>Remate <select id="tipo"><option value="u">Bandeja / U</option><option value="chapa">Chapa</option><option value="angulo">Angulo / L</option><option value="tubo">Tubo</option><option value="tubo_redondo">Tubo redondo</option></select></label>
@@ -119,7 +120,7 @@
       <h2>Remates guardados por obra</h2>
       <label>Seleccionar obra para ver sus remates <select id="filtro-obra"><option value="">Todas las obras</option></select></label>
       <div class="acciones-obra"><button id="generar-pdf" type="button">Generar PDF de la obra</button><button id="enviar-whatsapp" type="button">Enviar resumen por WhatsApp</button></div>
-      <div class="lista"><table><thead><tr><th>Cliente</th><th>Obra</th><th>Pieza</th><th>Tipo faena</th><th>Lacado / color</th><th>Remate</th><th>Medidas</th><th>Largura / cantidad</th><th></th></tr></thead><tbody id="lista"><tr><td colspan="9">Cargando...</td></tr></tbody></table></div>
+      <div class="lista"><table><thead><tr><th>Cliente</th><th>Obra / vínculo</th><th>Pieza</th><th>Tipo faena</th><th>Lacado / color</th><th>Remate</th><th>Medidas</th><th>Largura / cantidad</th><th>Acciones</th></tr></thead><tbody id="lista"><tr><td colspan="9">Cargando...</td></tr></tbody></table></div>
     </section>
   </main>
   <script src="/app/catalogo.js"></script>
@@ -129,6 +130,23 @@
     const apiFetch = (url, options = {}) => fetch(url, { ...options, headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` } });
     const nombres = { u: 'Bandeja / U', chapa: 'Chapa', angulo: 'Angulo / L', tubo: 'Tubo', tubo_redondo: 'Tubo redondo' };
     const origen = document.querySelector('#origen');
+    const cliente = document.querySelector('#cliente');
+    const obraSeleccionada = document.querySelector('#obra');
+    let catalogo = [];
+    function obrasDelTipo() { return catalogo.filter(o => origen.value === 'tercero' ? o.tipo === 'faena' : o.tipo !== 'faena'); }
+    function pintarObras() {
+      obraSeleccionada.replaceChildren(new Option('Selecciona una obra', ''));
+      obrasDelTipo().filter(o => o.cliente === cliente.value).forEach(o => {
+        obraSeleccionada.add(new Option(`${o.obra} · ${o.referencia}`, o.referencia));
+      });
+    }
+    function pintarClientes() {
+      cliente.replaceChildren(new Option('Selecciona un cliente', ''));
+      [...new Set(obrasDelTipo().map(o => o.cliente))].forEach(nombre => cliente.add(new Option(nombre, nombre)));
+      pintarObras();
+    }
+    origen.onchange = pintarClientes;
+    cliente.onchange = pintarObras;
     const tipo = document.querySelector('#tipo');
     const modoChapa = document.querySelector('#modo-chapa');
     const orientacionChapa = document.querySelector('#orientacion-chapa');
@@ -203,31 +221,58 @@
     }
     ['medida-1', 'medida-2', 'medida-3', 'largura'].forEach(id => document.querySelector(`#${id}`).addEventListener('input', actualizarDibujo));
     async function cargarClientes() {
-      const [respuestaTrabajos, respuestaFaenas] = await Promise.all([apiFetch('/trabajos'), apiFetch('/faenas')]);
-      if (!respuestaTrabajos.ok || !respuestaFaenas.ok) throw new Error('No se pudieron cargar los clientes.');
-      const trabajos = await respuestaTrabajos.json();
-      const faenas = await respuestaFaenas.json();
-      const clientes = [...new Set([...trabajos, ...faenas].map(item => item.cliente).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-      const cliente = document.querySelector('#cliente');
-      cliente.innerHTML = '<option value="">Selecciona un cliente</option>';
-      clientes.forEach(nombre => { const opcion = document.createElement('option'); opcion.value = nombre; opcion.textContent = nombre; cliente.appendChild(opcion); });
+      catalogo = await AlucarpinCatalogo.cargar(apiFetch);
+      pintarClientes();
       await cargarRemates();
     }
     async function cargarRemates() {
       const respuesta = await apiFetch('/remates');
       if (!respuesta.ok) throw new Error('No se pudieron cargar los remates.');
       const remates = await respuesta.json();
-      const obras = [...new Map(remates.map(remate => [`${remate.cliente || ''}||${remate.obra || ''}`, remate])).values()].sort((a, b) => `${a.cliente} ${a.obra}`.localeCompare(`${b.cliente} ${b.obra}`));
+      const obras = [...new Map(remates.map(remate => [claveObra(remate), remate])).values()].sort((a, b) => `${a.cliente} ${a.obra}`.localeCompare(`${b.cliente} ${b.obra}`));
       const filtroActual = filtroObra.value;
       filtroObra.innerHTML = '<option value="">Todas las obras</option>';
-      obras.forEach(remate => { const opcion = document.createElement('option'); opcion.value = `${remate.cliente || ''}||${remate.obra || ''}`; opcion.textContent = `${remate.cliente || 'Sin cliente'} - ${remate.obra || 'Sin obra'}`; filtroObra.appendChild(opcion); });
-      filtroObra.value = obras.some(remate => `${remate.cliente || ''}||${remate.obra || ''}` === filtroActual) ? filtroActual : '';
-      const rematesVisibles = filtroObra.value ? remates.filter(remate => `${remate.cliente || ''}||${remate.obra || ''}` === filtroObra.value) : remates;
+      obras.forEach(remate => { const opcion = document.createElement('option'); opcion.value = claveObra(remate); opcion.textContent = `${remate.cliente || 'Sin cliente'} - ${remate.obra || 'Sin obra'} · ${remate.obra_catalogo || 'Sin vincular'}`; filtroObra.appendChild(opcion); });
+      filtroObra.value = obras.some(remate => claveObra(remate) === filtroActual) ? filtroActual : '';
+      const rematesVisibles = filtroObra.value ? remates.filter(remate => claveObra(remate) === filtroObra.value) : remates;
       lista.innerHTML = rematesVisibles.length ? '' : '<tr><td colspan="9">No hay remates guardados para esta obra.</td></tr>';
-      rematesVisibles.forEach(remate => { const medidas = remate.tipo === 'u' ? `${dinero(remate.medida_1)} x ${dinero(remate.medida_2)} x ${dinero(remate.medida_3)}` : remate.tipo === 'chapa' || remate.tipo === 'tubo_redondo' ? dinero(remate.medida_1) : `${dinero(remate.medida_1)} x ${dinero(remate.medida_2)}`; const fila = document.createElement('tr'); fila.innerHTML = `<td>${remate.cliente || '-'}</td><td>${remate.obra || '-'}</td><td>${remate.pieza || '-'}</td><td>${remate.origen === 'propia' ? 'Propia' : '3º'}</td><td>${remate.lacado_color || '-'}</td><td>${nombres[remate.tipo]}</td><td>${medidas} mm</td><td>${dinero(remate.largura)} mm / ${remate.cantidad} ud.</td><td><button type="button" class="borrar">Borrar</button></td>`; fila.querySelector('.borrar').onclick = async () => { if (!confirm('¿Borrar este remate?')) return; await apiFetch(`/remates/${remate.id}`, { method: 'DELETE' }); await cargarRemates(); }; lista.appendChild(fila); });
+      rematesVisibles.forEach(remate => {
+        const medidas = remate.tipo === 'u' ? `${dinero(remate.medida_1)} x ${dinero(remate.medida_2)} x ${dinero(remate.medida_3)}` : remate.tipo === 'chapa' || remate.tipo === 'tubo_redondo' ? dinero(remate.medida_1) : `${dinero(remate.medida_1)} x ${dinero(remate.medida_2)}`;
+        const fila = document.createElement('tr');
+        [remate.cliente || '-', `${remate.obra || '-'} · ${remate.obra_catalogo || 'Sin vincular'}`, remate.pieza, remate.origen === 'propia' ? 'Propia' : '3º', remate.lacado_color, nombres[remate.tipo], `${medidas} mm`, `${dinero(remate.largura)} mm / ${remate.cantidad} ud.`].forEach(valor => {
+          const celda = document.createElement('td'); celda.textContent = valor; fila.appendChild(celda);
+        });
+        const acciones = document.createElement('td');
+        const vincular = document.createElement('button');
+        vincular.type = 'button'; vincular.textContent = remate.obra_catalogo ? 'Cambiar vínculo' : 'Vincular';
+        vincular.onclick = async () => {
+          const destino = catalogo.find(o => o.referencia === obraSeleccionada.value);
+          if (!destino) { mostrarError('Selecciona el tipo, cliente y obra en Nuevo remate antes de vincular.'); return; }
+          if (!confirm(`¿Vincular ${remate.pieza} (#${remate.id}) a ${destino.cliente} — ${destino.obra} (${destino.referencia})? Sus medidas y color no cambian.`)) return;
+          vincular.disabled = true;
+          try {
+            const r = await apiFetch(`/remates/${remate.id}/vinculacion`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ obra_catalogo: destino.referencia }) });
+            if (!r.ok) { const error = await r.json().catch(() => null); throw new Error(error?.detail || `No se pudo vincular (HTTP ${r.status}).`); }
+            await cargarRemates();
+            mensaje.textContent = 'Remate vinculado. Medidas, cantidad y color conservados.'; mensaje.className = 'mensaje exito';
+          } catch (error) { mostrarError(error.message); } finally { vincular.disabled = false; }
+        };
+        const borrar = document.createElement('button');
+        borrar.type = 'button'; borrar.className = 'borrar'; borrar.textContent = 'Borrar';
+        borrar.onclick = async () => {
+          if (!confirm('¿Borrar este remate?')) return;
+          borrar.disabled = true;
+          try {
+            const r = await apiFetch(`/remates/${remate.id}`, { method: 'DELETE' });
+            if (!r.ok) throw new Error(`No se pudo borrar el remate (HTTP ${r.status}).`);
+            await cargarRemates();
+          } catch (error) { mostrarError(error.message); } finally { borrar.disabled = false; }
+        };
+        acciones.append(vincular, borrar); fila.appendChild(acciones); lista.appendChild(fila);
+      });
     }
     const escapar = texto => String(texto || '').replace(/[&<>"']/g, caracter => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[caracter]));
-    const claveObra = remate => `${remate.cliente || ''}||${remate.obra || ''}`;
+    const claveObra = remate => remate.obra_catalogo || JSON.stringify(['sin-vincular', remate.origen, remate.cliente, remate.obra]);
     const rematesSeleccionados = async () => {
       if (!filtroObra.value) throw new Error('Selecciona una obra antes de generar el documento.');
       const respuesta = await apiFetch('/remates');
@@ -349,6 +394,7 @@
       `).join('');
 
       const ventana = window.open('', '_blank');
+      if (!ventana) throw new Error('El navegador ha bloqueado el informe. Permite las ventanas emergentes y vuelve a intentarlo.');
       const htmlPdf = `<!doctype html>
         <html lang="es">
           <head>
@@ -375,6 +421,7 @@
             <div class="cabecera">
               <h1>Remates - ${escapar(primero.obra)}</h1>
               <p>Cliente: ${escapar(primero.cliente || '-')}</p>
+              <p>Referencia: ${escapar(primero.obra_catalogo || 'Sin vincular')}</p>
             </div>
             ${tarjetas}
           </body>
@@ -389,7 +436,7 @@
       const remates = await rematesSeleccionados();
       if (!remates.length) throw new Error('La obra no tiene remates guardados.');
       const primero = remates[0];
-      const texto = [`Remates de obra: ${primero.obra}`, `Cliente: ${primero.cliente}`, '', ...remates.map(remate => `- ${remate.pieza || 'Sin pieza'}: ${medidasInforme(remate)} | Lacado: ${remate.lacado_color} | ${remate.cantidad} ud.`)].join('\n');
+      const texto = [`Remates de obra: ${primero.obra}`, `Cliente: ${primero.cliente}`, `Referencia: ${primero.obra_catalogo || 'Sin vincular'}`, '', ...remates.map(remate => `- ${remate.pieza || 'Sin pieza'}: ${medidasInforme(remate)} | Lacado: ${remate.lacado_color} | ${remate.cantidad} ud.`)].join('\n');
       window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank');
     }
     generarPdf.onclick = () => abrirInformePdf().catch(error => mostrarError(error.message));
@@ -399,23 +446,36 @@
     modoChapa.onchange = actualizarEtiquetas;
     orientacionChapa.onchange = actualizarChapa;
     posicionMedidas.onchange = actualizarPosicionMedidas;
-    document.querySelector('#formulario').onsubmit = async event => { event.preventDefault(); const payload = { origen: origen.value, origen_id: 0, cliente: datos('cliente'), obra: datos('obra'), pieza: datos('pieza'), lacado_color: datos('lacado-color'), tipo: tipo.value, modo_chapa: modoChapa.value, orientacion_chapa: orientacionChapa.value, posicion_medidas: posicionMedidas.value, medida_1: Number(datos('medida-1')), medida_2: Number(datos('medida-2')), medida_3: Number(datos('medida-3')), largura: Number(datos('largura')), cantidad: Number(datos('cantidad')), observaciones: datos('observaciones') }; const respuesta = await apiFetch('/remates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); const resultado = await respuesta.json(); if (!respuesta.ok) { mostrarError(resultado.detail || 'No se pudo guardar el remate.'); return; } mensaje.textContent = `Remate añadido a ${datos('pieza')}. Pulsa + para seguir o Nueva pieza para cambiar.`; mensaje.className = 'mensaje exito'; ['medida-1', 'medida-2', 'medida-3', 'largura', 'observaciones'].forEach(id => { document.querySelector(`#${id}`).value = ''; }); actualizarDibujo(); await cargarRemates(); };
+    document.querySelector('#formulario').onsubmit = async event => {
+      event.preventDefault();
+      const destino = catalogo.find(o => o.referencia === obraSeleccionada.value);
+      if (!destino) { mostrarError('Selecciona una obra del catálogo.'); return; }
+      const boton = event.currentTarget.querySelector('button[type="submit"]');
+      if (boton.disabled) return;
+      boton.disabled = true;
+      try {
+        const payload = { origen: origen.value, obra_catalogo: destino.referencia, cliente: destino.cliente, obra: destino.obra, pieza: datos('pieza'), lacado_color: datos('lacado-color'), tipo: tipo.value, modo_chapa: modoChapa.value, orientacion_chapa: orientacionChapa.value, posicion_medidas: posicionMedidas.value, medida_1: Number(datos('medida-1')), medida_2: Number(datos('medida-2')), medida_3: Number(datos('medida-3')), largura: Number(datos('largura')), cantidad: Number(datos('cantidad')), observaciones: datos('observaciones') };
+        const respuesta = await apiFetch('/remates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const resultado = await respuesta.json();
+        if (!respuesta.ok) throw new Error(typeof resultado.detail === 'string' ? resultado.detail : 'No se pudo guardar el remate.');
+        mensaje.textContent = `Remate añadido a ${datos('pieza')}.`; mensaje.className = 'mensaje exito';
+        ['medida-1', 'medida-2', 'medida-3', 'largura', 'observaciones'].forEach(id => { document.querySelector(`#${id}`).value = ''; });
+        actualizarDibujo(); await cargarRemates();
+      } catch (error) { mostrarError(error.message); } finally { boton.disabled = false; }
+    };
     document.querySelector('#nueva-obra').onclick = () => {
       document.querySelector('#cliente').value = '';
-      document.querySelector('#obra').value = '';
+      pintarObras();
       document.querySelector('#pieza').value = '';
       document.querySelector('#lacado-color').value = '';
       ['medida-1', 'medida-2', 'medida-3', 'largura', 'observaciones'].forEach(id => { document.querySelector(`#${id}`).value = ''; });
       actualizarDibujo();
-      mensaje.textContent = 'Nueva obra: selecciona el cliente y escribe la nueva obra.';
+      mensaje.textContent = 'Selecciona un cliente y una obra del catálogo.';
       mensaje.className = 'mensaje exito';
       document.querySelector('#cliente').focus();
     };
     actualizarEtiquetas();
     actualizarPosicionMedidas();
-    AlucarpinCatalogo.sugerencias({
-      cliente: document.querySelector('#cliente'), obra: document.querySelector('#obra'), mensaje, apiFetch,
-    });
     cargarClientes().catch(error => mostrarError(error.message));
   </script>
 </body>
