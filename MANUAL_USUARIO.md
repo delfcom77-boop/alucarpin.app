@@ -133,6 +133,16 @@ Los cobros pendientes utilizan los mismos datos que Alarmas y Mi control; termin
 
 La agenda muestra notas y citas pendientes vencidas y las previstas hasta dentro de siete dias, ambos extremos incluidos. Se muestran los primeros ocho avisos, pero el contador incluye todos. Los enlaces de trabajos, cobros y avisos abren Alarmas con el tipo seleccionado. El panel no modifica registros ni genera pagos.
 
+### Ficha de obra y exportaciones
+
+En **Mi control -> Mis trabajos**, **Ver ficha** abre una consulta de cliente, obra, ubicacion, ejecucion, cobro, dias de ayudantes, dias propios de faena, gastos y cobros vinculados. Se agrupan los fichajes por ayudante y fecha. El pago mostrado es el del dia completo contigo, aunque ese dia se trabaje en otras obras; no se suma como coste de cada obra ni se calcula un beneficio ficticio.
+
+Los datos se vinculan por identificadores, no por nombres similares. Los gastos y cobros de presupuestos se consultan por numero. Si falta un vinculo no se inventa: la ficha muestra Sin registros vinculados. Las reparaciones no tienen un vinculo directo a gastos en el modelo actual; su cobro es el estado registrado en Mi control. Un presupuesto historico Completado puede indicar cobrado sin tener movimientos independientes.
+
+**Imprimir / guardar PDF** abre la impresion del navegador; selecciona Guardar como PDF. Se imprime la ficha completa consultada, sin botones y con las tablas adaptadas a papel. No se envia a servicios externos.
+
+Puedes descargar CSV de los trabajos filtrados en Mi control y de fichajes, desglose de dias, gastos y liquidaciones en Ayudantes. Solo se exportan las filas visibles con los filtros actuales, sin botones de acciones. La ficha permite descargar sus dias/ayudantes, gastos y cobros por separado. Los CSV llevan separador punto y coma y codificacion UTF-8 para Excel; los textos con apariencia de formulas se exportan como texto. Las exportaciones son consultas, no modifican registros.
+
 ## 3. Programa de escritorio
 
 ### Abrir el programa

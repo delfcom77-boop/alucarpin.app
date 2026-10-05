@@ -403,6 +403,14 @@ curl -X DELETE \
 
 Los dias de ayudantes se cuentan por persona y fecha hasta hoy, usando la misma resolucion diaria que Pagos. No se asigna importe a jornadas sin registro ni se suman conflictos o liquidaciones. La agenda incluye notas/citas pendientes vencidas y hasta hoy + 7 dias, ordenadas por fecha/hora. Los cobros y la ejecucion usan las fuentes existentes de Alarmas y Mi control. Los errores de consulta se propagan: no devuelven un resumen vacio con apariencia de exito.
 
+### Ficha de obra
+
+`GET /obras/{origen}/{id}` requiere administrador; origen es propio, faena o presupuesto. Devuelve `obra`, `resumen`, `jornadas_ayudantes`, `dias_obra`, `gastos` y `cobros`. Un destino inexistente devuelve 404 y un origen no admitido 422.
+
+Los fichajes se vinculan por trabajo_propio_id/faena_id_vinculada/presupuesto_id. Cada ayudante/fecha se cuenta una vez. El pago se resuelve con todos los fichajes de esa persona/fecha, incluso de otras obras, y se indica como importe del dia completo, nunca agregado como coste de la obra. Los gastos y cobros utilizan faena_id o num_presupuesto; no se asignan por similitud de nombre. Reparaciones no tienen gastos vinculados en el modelo actual, y Cobrado se representa como estado, con id null, no como movimiento independiente inventado. No se modifica ningun registro.
+
+CSV e impresion se generan localmente en el navegador usando la consulta ya mostrada. Las exportaciones de tablas conservan filtros y omiten acciones; los textos con prefijos de formula se neutralizan y las comillas/separadores se escapan.
+
 ```http
 GET    /ayudantes/{id}/fichajes
 POST   /fichajes

@@ -134,6 +134,7 @@
         <label>Estado de pago <select id="listado-estado"><option value="Todos">Todos</option><option value="No pagado">No pagado</option><option value="Parcial">Parcial</option><option value="Pagado">Pagado</option><option value="Revisar">Revisión necesaria</option></select></label>
       </div>
       <button id="listado-limpiar" type="button">Limpiar filtros de fichajes</button>
+      <button type="button" data-exportar-listado="lista-general">Descargar fichajes filtrados (CSV)</button>
       <p>El recuento incluye los fines de semana registrados y cuenta cada fecha una vez por ayudante, aunque tenga varios fichajes ese día.</p>
       <p id="listado-dias" class="mensaje" role="status" aria-live="polite">Cargando días trabajados...</p>
       <div class="lista-general">
@@ -187,6 +188,7 @@
         <label>Desde <input id="liquidacion-desde" type="date"></label>
         <label>Hasta <input id="liquidacion-hasta" type="date"></label>
       </div>
+      <button type="button" data-exportar-listado="lista-liquidaciones">Descargar liquidaciones filtradas (CSV)</button>
       <div class="lista-general"><table><thead><tr><th>Ayudante</th><th>Periodo</th><th>Días</th><th>Total</th><th>Pagado</th><th>Pendiente</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista-liquidaciones"><tr><td colspan="8">Cargando...</td></tr></tbody></table></div>
       <div id="mensaje-liquidaciones" class="mensaje"></div>
     </section>
@@ -202,6 +204,7 @@
         <label>Hasta <input id="resumen-hasta" type="date"></label>
       </div>
       <button id="resumen-limpiar" type="button">Limpiar filtros de días</button>
+      <button type="button" data-exportar-listado="resumen-faenas">Descargar desglose de días (CSV)</button>
       <p>Recuento basado en los fichajes, incluidos sábados y domingos. Cada fecha cuenta una vez por ayudante; dos ayudantes el mismo día suman dos días de trabajo. Si un ayudante trabaja en varias faenas el mismo día, ese día aparece en cada faena, pero solo una vez en el total.</p>
       <p id="resumen-dias" class="mensaje" role="status" aria-live="polite">Cargando días trabajados...</p>
       <div class="lista-general"><table><thead><tr><th>Ayudante</th><th>Tipo de trabajo</th><th>Cliente</th><th>Faena / obra</th><th>Ubicación</th><th>Días trabajados</th></tr></thead><tbody id="resumen-faenas"><tr><td colspan="6">Cargando...</td></tr></tbody></table></div>
@@ -211,6 +214,7 @@
         <label>Estado <select id="filtro-estado-gastos"><option value="">Todos</option><option value="No pagado">No pagado</option><option value="Parcial">Parcial</option><option value="Pagado">Pagado</option></select></label>
       </div>
       <div class="lista-general"><table><thead><tr><th>Tipo</th><th>Fecha</th><th>Proveedor</th><th>Concepto</th><th>Importe</th><th>Pagado</th><th>Pendiente</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista-gastos"><tr><td colspan="9">Cargando...</td></tr></tbody></table></div>
+      <button type="button" data-exportar-listado="lista-gastos">Descargar gastos filtrados (CSV)</button>
       <div id="mensaje-gastos" class="mensaje"></div>
     </section>
     <section id="apartado-crear-gasto" data-contenido="gastos" hidden>
@@ -320,6 +324,7 @@
     <section id="apartado-periodo" data-contenido="pagos" hidden><h2>Fichajes del periodo</h2><div id="fichajes">Selecciona un ayudante y un rango de fechas.</div></section>
     <section id="apartado-configuracion" data-contenido="configuracion" hidden><h2>Usuarios y contraseñas</h2><div class="lista-general"><table><thead><tr><th>Usuario</th><th>Rol</th><th>Ayudante</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="usuarios"><tr><td colspan="5">Cargando...</td></tr></tbody></table></div><div id="mensaje-usuarios" class="mensaje"></div></section>
   </main>
+  <script src="/app/exportar.js"></script>
   <script src="/app/jornadas.js"></script>
   <script src="/app/catalogo.js"></script>
   <script>
@@ -371,6 +376,17 @@
     const contenedorAyudantes = document.querySelector('#ayudantes');
     const fichajes = document.querySelector('#fichajes');
     const mensaje = document.querySelector('#mensaje');
+    document.querySelectorAll('[data-exportar-listado]').forEach(boton => {
+      const aviso = document.createElement('p');
+      aviso.setAttribute('role', 'status'); aviso.setAttribute('aria-live', 'polite');
+      boton.after(aviso);
+      boton.onclick = () => {
+        try {
+          const filas = AlucarpinExportar.tabla(document.querySelector(`#${boton.dataset.exportarListado}`).closest('table'), `${boton.dataset.exportarListado}-filtrado.csv`);
+          aviso.className = 'mensaje'; aviso.textContent = `${filas} filas exportadas con los filtros actuales.`;
+        } catch (error) { aviso.className = 'mensaje error'; aviso.textContent = error.message; }
+      };
+    });
     const mensajeUsuarios = document.querySelector('#mensaje-usuarios');
     const mensajeAyudante = document.querySelector('#mensaje-ayudante');
       const mensajeGeneral = document.querySelector('#mensaje-general');
@@ -662,6 +678,7 @@
           registros.forEach(fichaje => {
             const fila = document.createElement('tr');
             fila.dataset.ayudanteId = fichaje.ayudante_id;
+            fila.dataset.exportEstado = fichaje.estadoPago;
             fila.className = fichaje.estadoPago === 'Pagado' ? 'pagado' : fichaje.estadoPago === 'Parcial' ? 'parcial' : 'pendiente';
             const tipo = AlucarpinJornadas.mostrarTipo(fichaje.tipo_destino || 'faena');
             fila.innerHTML = `<td>${fichaje.nombreAyudante}</td><td>${tipo}</td><td>${mostrarFecha(fichaje.fecha)}</td><td>${fichaje.cliente || ''}</td><td>${fichaje.obra}</td><td>${fichaje.ubicacion || ''}</td><td>${fichaje.poblacion || ''}</td><td class="acciones"><button type="button">Modificar</button><button type="button" class="validar" ${fichaje.estado_revision === 'Validado' ? 'disabled' : ''}>${fichaje.estado_revision === 'Validado' ? 'Validado' : 'Validar'}</button><button type="button" class="borrar">Borrar</button></td>`;

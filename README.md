@@ -65,6 +65,8 @@ id (INTEGER) | nombre (TEXT) | activo (INTEGER)
 
 El menu principal del administrador incluye un panel resumen de trabajos, cobros, pagos diarios de ayudantes y agenda. Usa `GET /panel-resumen`, no modifica registros y distingue dias sin pago registrado de deudas con importe conocido.
 
+Mi control permite abrir una ficha de obra (`GET /obras/{origen}/{id}`) con datos vinculados, jornadas, gastos y cobros; se imprime localmente para guardar PDF. Los trabajos y los listados de Ayudantes se exportan a CSV respetando sus filtros. `app_web/exportar.js` comparte el escape CSV y la proteccion contra formulas; los pagos diarios no se suman como coste por obra.
+
 #### `pagos_jornadas`
 
 La app resuelve los pagos por ayudante y fecha (una jornada, incluidos fines de semana), manteniendo los registros historicos vinculados a fichajes. El pago diario es la referencia aunque se abone por semana; los gastos de obra asociados no se suman como otro pago al ayudante. Varios pagos diarios del mismo dia requieren revision y no se sobrescriben ni suman automaticamente. Sin pago diario se mantiene la consulta historica de gastos. Las liquidaciones cuentan fechas confirmadas distintas. Los estados de ejecucion se almacenan por separado del cobro en `estados_ejecucion_trabajos`, `estados_ejecucion_faenas` y `estados_ejecucion_presupuestos`; la API crea las tablas al iniciar y su SQL esta en `migracion_estado_ejecucion.sql`. Alarmas incluye faenas y presupuestos aceptados, usando los cobros sincronizados para calcular pendientes, y enlaza a la obra concreta en Mi control.

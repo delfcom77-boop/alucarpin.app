@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Pruebas de exportación CSV</title></head>
+<body>
+  <table id="tabla"><thead><tr><th>Cliente</th><th>Acciones</th></tr></thead><tbody>
+    <tr data-export-estado="Pagado"><td>Decoradora</td><td>Editar</td></tr>
+    <tr hidden><td>Oculto</td><td>Borrar</td></tr>
+    <tr><td colspan="2">Sin resultados</td></tr>
+  </tbody></table>
+  <pre id="resultado"></pre>
+  <script src="../app_web/exportar.js"></script>
+  <script>
+    const casos = [
+      ['Separador, comillas, acentos y BOM', AlucarpinExportar.csv([['Cliente', 'Obra'], ['José; Jaca', 'Obra "A"']]) === '\ufeff"Cliente";"Obra"\r\n"José; Jaca";"Obra ""A"""'],
+      ['Fórmulas como texto', AlucarpinExportar.csv([['=1+1', ' +SUM(A1)', '-2', '@dato']]) === '\ufeff"\'=1+1";"\' +SUM(A1)";"\'-2";"\'@dato"'],
+      ['Valores vacíos y cero', AlucarpinExportar.csv([[null, undefined, 0]]) === '\ufeff"";"";"0"'],
+      ['Saltos de línea', AlucarpinExportar.csv([['Una\nobra']]) === '\ufeff"Una obra"'],
+    ];
+    document.querySelector('#resultado').textContent = casos.map(([nombre, ok]) => `${ok ? 'OK' : 'ERROR'}: ${nombre}`).join('\n');
+    if (casos.some(([, ok]) => !ok)) throw new Error('Falló la exportación CSV');
+    (async () => {
+      let blob;
+      const crear = URL.createObjectURL;
+      const click = HTMLAnchorElement.prototype.click;
+      try {
+        URL.createObjectURL = valor => { blob = valor; return 'blob:prueba'; };
+        HTMLAnchorElement.prototype.click = function () {};
+        const filas = AlucarpinExportar.tabla(document.querySelector('#tabla'), 'prueba.csv');
+        const resultado = await blob.text();
+        if (filas !== 1 || resultado.includes('Oculto') || resultado.includes('Editar') || !resultado.includes('Estado de pago') || !resultado.includes('Pagado')) throw new Error('No respeta filtros o estado de pago');
+        document.querySelector('#resultado').textContent += '\nOK: Filas visibles, sin acciones, con estado de pago';
+        document.querySelector('#tabla tbody tr').hidden = true;
+        let error = false;
+        try { AlucarpinExportar.tabla(document.querySelector('#tabla'), 'vacio.csv'); } catch (_) { error = true; }
+        if (!error) throw new Error('Exportacion vacia sin aviso');
+        document.querySelector('#resultado').textContent += '\nOK: Exportacion vacia informa error';
+      } finally { URL.createObjectURL = crear; HTMLAnchorElement.prototype.click = click; }
+    })().catch(error => { document.querySelector('#resultado').textContent += '\nERROR: ' + error.message; throw error; });
+  </script>
+</body>
+</html>

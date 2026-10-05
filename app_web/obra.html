@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AlucarpinSamitier | Ficha de obra</title>
+  <style>
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { margin: 0; background: #eef3f1; color: #1d2d34; font-family: Segoe UI, sans-serif; }
+    main { max-width: 1150px; margin: auto; padding: 20px 12px; }
+    section, header { background: white; padding: 20px; border-radius: 14px; margin-bottom: 16px; min-width: 0; }
+    h1, h2 { margin-top: 0; overflow-wrap: anywhere; }
+    nav, .acciones { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+    button, nav a { border: 0; border-radius: 8px; padding: 12px; background: #114e55; color: white; text-decoration: none; font: inherit; cursor: pointer; }
+    button:disabled { opacity: .5; }
+    dl { display: grid; grid-template-columns: minmax(0, 140px) minmax(0, 1fr); gap: 10px; }
+    dt { font-weight: bold; } dd { margin: 0; overflow-wrap: anywhere; }
+    .tabla { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { text-align: left; padding: 10px; border-bottom: 1px solid #dce5e2; }
+    th { background: #e8efed; }
+    .error { color: #a13333; }
+    a:focus-visible, button:focus-visible { outline: 3px solid #f28b42; outline-offset: 3px; }
+    @media print {
+      body { background: white; font-size: 10pt; }
+      nav, button, #mensaje, .acciones { display: none !important; }
+      main { padding: 0; max-width: none; }
+      section, header { padding: 0; border-radius: 0; }
+      .tabla { overflow: visible; }
+      table { table-layout: fixed; }
+      td, th { overflow-wrap: anywhere; padding: 5px; }
+      tr { break-inside: avoid; }
+      thead { display: table-header-group; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <nav><a href="/app/mi_control.html">Volver a Mi control</a><a href="/app/inicio.html">Menú principal</a></nav>
+    <header><h1 id="titulo">Ficha de obra</h1><p id="consulta"></p><div class="acciones"><button id="recargar">Actualizar ficha</button><button id="imprimir" disabled>Imprimir / guardar PDF</button></div><p id="mensaje" role="status" aria-live="polite"></p></header>
+    <div id="contenido" hidden>
+      <section><h2>Datos de la obra</h2><dl id="datos"></dl></section>
+      <section><h2>Resumen</h2><p id="resumen"></p><p id="importe-resumen"></p>
+        <p>Los pagos diarios corresponden al día completo del ayudante contigo, no a un coste adicional por cada obra. No se suman a los gastos ni se calcula un beneficio con ellos. Solo se muestran registros vinculados: no se asignan por nombres parecidos.</p>
+        <p id="limitaciones"></p>
+      </section>
+      <section><h2>Días y ayudantes</h2><button data-exportar="ayudantes">Descargar CSV de días y ayudantes</button>
+        <div class="tabla"><table id="ayudantes"><thead><tr><th>Fecha</th><th>Ayudante</th><th>Pago del día completo</th><th>Importe del día</th><th>Pagado del día</th><th>Todas las obras de ese día</th></tr></thead><tbody></tbody></table></div>
+      </section>
+      <section><h2>Días propios registrados en la faena</h2><p id="dias-obra"></p></section>
+      <section><h2>Gastos vinculados</h2><button data-exportar="gastos">Descargar CSV de gastos</button>
+        <div class="tabla"><table id="gastos"><thead><tr><th>Fecha</th><th>Proveedor</th><th>Concepto</th><th>Categoría</th><th>Importe</th><th>Pagado</th><th>Pendiente</th></tr></thead><tbody></tbody></table></div>
+      </section>
+      <section><h2>Cobros registrados</h2><button data-exportar="cobros">Descargar CSV de cobros</button>
+        <div class="tabla"><table id="cobros"><thead><tr><th>Fecha</th><th>Importe</th><th>Forma</th><th>Observaciones</th></tr></thead><tbody></tbody></table></div>
+      </section>
+    </div>
+  </main>
+  <script src="/app/exportar.js"></script>
+  <script src="/app/obra.js"></script>
+  <script src="/app/pwa.js"></script>
+</body>
+</html>

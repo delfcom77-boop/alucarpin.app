@@ -1795,6 +1795,89 @@ def listar_trabajos(usuario=Depends(administrador)):
     return resultado
 
 
+@app.get("/obras/{origen}/{obra_id}")
+def ficha_obra(
+    origen: Literal["propio", "faena", "presupuesto"], obra_id: int,
+    usuario=Depends(administrador),
+):
+    obra = next((t for t in listar_trabajos(usuario)
+                 if t["origen"] == origen and t["origen_id"] == obra_id), None)
+    if not obra:
+        raise HTTPException(status_code=404, detail="Obra no encontrada")
+    columna = {"propio": "trabajo_propio_id", "faena": "faena_id_vinculada", "presupuesto": "presupuesto_id"}[origen]
+    with conexion() as db:
+        fichajes = [dict(f) for f in db.execute(
+            f"SELECT f.*, a.nombre AS ayudante FROM fichajes_ayudantes f "
+            f"JOIN ayudantes a ON a.id = f.ayudante_id WHERE f.{columna} = ? ORDER BY f.fecha, f.id",
+            (obra_id,),
+        ).fetchall()]
+        hermanos = [dict(f) for f in db.execute(
+            "SELECT f.* FROM fichajes_ayudantes f WHERE EXISTS "
+            f"(SELECT 1 FROM fichajes_ayudantes o WHERE o.{columna} = ? "
+            "AND o.ayudante_id = f.ayudante_id AND o.fecha = f.fecha) ORDER BY f.fecha, f.id",
+            (obra_id,),
+        ).fetchall()]
+        pagos = obtener_pagos_fichajes(db, hermanos)
+        grupos = {}
+        for fichaje in hermanos:
+            grupos.setdefault((fichaje["ayudante_id"], fichaje["fecha"]), []).append(fichaje)
+        diarios = {clave: agrupar_pagos_dia(db, grupo, pagos) for clave, grupo in grupos.items()}
+        jornadas = []
+        vistos = set()
+        for fichaje in fichajes:
+            clave = (fichaje["ayudante_id"], fichaje["fecha"])
+            if clave in vistos:
+                continue
+            vistos.add(clave)
+            diario = diarios[clave]
+            jornadas.append({
+                "fecha": fichaje["fecha"], "ayudante_id": fichaje["ayudante_id"],
+                "ayudante": fichaje["ayudante"], "estado_pago": diario["pago"]["estado_pago"],
+                "importe_dia": diario["pago"]["importe"],
+                "pagado_dia": diario["pago"]["importe_pagado"],
+                "sin_registro": not diario["pagos_existentes"], "revision": diario["revision"],
+                "obras_del_dia": diario["obra"],
+            })
+        dias_obra = [dict(f) for f in db.execute(
+            "SELECT fecha FROM jornadas_faenas WHERE faena_id = ? ORDER BY fecha", (obra_id,),
+        ).fetchall()] if origen == "faena" else []
+        if origen == "faena":
+            cobros = [dict(f) for f in db.execute(
+                "SELECT id, fecha, importe_iva, importe_b, forma_pago, observaciones "
+                "FROM pagos_faenas WHERE faena_id = ? ORDER BY fecha, id", (obra_id,),
+            ).fetchall()]
+        elif origen == "presupuesto" and obra["num_presupuesto"]:
+            cobros = [dict(f) for f in db.execute(
+                "SELECT id, fecha, importe_iva, importe_b, forma_pago, observaciones "
+                "FROM pagos_ingresos WHERE num_presupuesto = ? ORDER BY fecha, id",
+                (obra["num_presupuesto"],),
+            ).fetchall()]
+        else:
+            cobros = []
+    gastos = [g for g in listar_gastos(tipo=origen, usuario=usuario)
+              if (origen == "faena" and g["faena_id"] == obra_id) or
+              (origen == "presupuesto" and obra["num_presupuesto"]
+               and g["num_presupuesto"] == obra["num_presupuesto"])] if origen != "propio" else []
+    for cobro in cobros:
+        cobro["importe"] = round(float(cobro["importe_iva"] or 0) + float(cobro["importe_b"] or 0), 2)
+    if origen == "propio" and obra["estado_cobro"] == "Cobrado":
+        cobros.append({"id": None, "fecha": obra["fecha_cobro"], "importe": obra["importe"],
+                       "forma_pago": obra["forma_pago"], "observaciones": "Estado de cobro registrado en Mi control, sin movimiento independiente."})
+    return {
+        "obra": obra, "jornadas_ayudantes": jornadas, "dias_obra": dias_obra,
+        "gastos": gastos, "cobros": cobros,
+        "resumen": {
+            "dias_ayudantes": len(jornadas),
+            "fechas_trabajadas": len({j["fecha"] for j in jornadas}),
+            "ayudantes": len({j["ayudante_id"] for j in jornadas}),
+            "dias_obra_registrados": len(dias_obra),
+            "gastos": round(sum(float(g["importe"] or 0) for g in gastos), 2),
+            "gastos_pagados": round(sum(float(g["importe_pagado"] or 0) for g in gastos), 2),
+            "cobros_registrados": round(sum(float(c["importe"] or 0) for c in cobros), 2),
+        },
+    }
+
+
 @app.post("/trabajos", status_code=201)
 def crear_trabajo(datos: TrabajoCreate, usuario=Depends(administrador)):
     valores = _trabajo_datos(datos)
