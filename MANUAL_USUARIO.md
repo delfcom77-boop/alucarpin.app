@@ -77,6 +77,12 @@ En **Ayudantes -> Gastos registrados -> Dias trabajados por faena** puedes:
 
 Los dias se calculan a partir de los fichajes, no de las compras ni de los importes pagados. Se incluyen los fines de semana registrados. Una misma fecha cuenta una vez por ayudante: dos ayudantes trabajando el mismo dia suman dos dias de trabajo. Si un ayudante tiene varios fichajes en una misma faena y fecha, ese dia no se duplica. Si trabaja en varias faenas el mismo dia, figura en cada faena, pero solo una vez en el total. Los filtros de compras y los del resumen de dias son independientes.
 
+### Filtros del listado general de fichajes
+
+En **Ayudantes -> Listado general de fichajes** estan disponibles los mismos filtros por tipo de trabajo, cliente, ayudante, obra y fechas. Ademas, puedes filtrar por estado de pago. El listado muestra el numero de fichajes visibles y el total de dias trabajados de esos registros, con el mismo criterio de recuento anterior.
+
+El selector de ayudante se coordina con los botones de ayudantes de la parte superior, y el estado de pago con los botones Pagado, Parcial, Pendiente y Total jornadas. **Limpiar filtros de fichajes** restablece todos los filtros del listado. Estos filtros no cambian el resumen de Gastos registrados. Los botones Modificar, Validar y Borrar siguen disponibles en las filas filtradas.
+
 ## 3. Programa de escritorio
 
 ### Abrir el programa

@@ -5,7 +5,7 @@
 <pre id="resultado">Ejecutando...</pre>
 <script src="../app_web/jornadas.js"></script>
 <script>
-  const { resumir, normalizar } = AlucarpinJornadas;
+  const { filtrar, resumir, normalizar, mostrarTipo } = AlucarpinJornadas;
   const base = { ayudante_id: 1, nombreAyudante: 'Ana', tipo_destino: 'faena', cliente: 'Mercedes', obra: 'Ventanas', ubicacion: 'Calle A', poblacion: 'Jaca' };
   const registros = [
     { ...base, fecha: '2026-10-02' },
@@ -37,6 +37,12 @@
     comprobar(resumir(registros, { obra: 'inexistente' }).dias === 0, 'Sin coincidencias');
     comprobar(resumir([]).grupos.length === 0, 'Sin fichajes');
     comprobar(resumir([{ ...base, tipo_destino: undefined, fecha: '2026-10-02' }], { tipo: 'faena' }).dias === 1, 'Fichaje antiguo sin tipo');
+    const pagos = registros.map((registro, indice) => ({ ...registro, estadoPago: indice < 2 ? 'Pagado' : 'No pagado' }));
+    const pagados = filtrar(pagos, { tipo: 'faena', cliente: normalizar('Mercedes'), ayudante: '1', estado: 'Pagado' });
+    comprobar(pagados.length === 2 && resumir(pagados).dias === 1, 'Estado combinado: dos fichajes y un solo dia');
+    comprobar(filtrar(pagos, { estado: 'Parcial' }).length === 0, 'Estado sin coincidencias');
+    comprobar(filtrar(registros).length === registros.length, 'Limpiar filtros mantiene todos los registros');
+    comprobar(mostrarTipo('pendiente') === 'Pendiente de vincular', 'Etiqueta de pendiente en listado');
     let errorRango = false;
     try { resumir(registros, { desde: '2026-10-06', hasta: '2026-10-01' }); }
     catch (error) { errorRango = error.message.includes('fecha desde'); }

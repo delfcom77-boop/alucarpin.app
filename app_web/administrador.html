@@ -95,6 +95,18 @@
     <section>
       <h2>Listado general de fichajes</h2>
       <p>Selecciona una línea para modificarla o borrarla.</p>
+      <div class="fila">
+        <label>Tipo de trabajo <select id="listado-tipo"><option value="">Todos</option><option value="faena">Faenas a 3º</option><option value="presupuesto">Presupuestos Alucarpin</option><option value="reparacion">Reparaciones</option><option value="pendiente">Pendientes de vincular</option></select></label>
+        <label>Cliente <select id="listado-cliente"><option value="">Todos los clientes</option></select></label>
+        <label>Ayudante <select id="listado-ayudante"><option value="">Todos los ayudantes</option></select></label>
+        <label>Buscar faena / obra <input id="listado-obra" type="search" placeholder="Nombre de la obra"></label>
+        <label>Desde <input id="listado-desde" type="date"></label>
+        <label>Hasta <input id="listado-hasta" type="date"></label>
+        <label>Estado de pago <select id="listado-estado"><option value="Todos">Todos</option><option value="No pagado">No pagado</option><option value="Parcial">Parcial</option><option value="Pagado">Pagado</option></select></label>
+      </div>
+      <button id="listado-limpiar" type="button">Limpiar filtros de fichajes</button>
+      <p>El recuento incluye los fines de semana registrados y cuenta cada fecha una vez por ayudante, aunque tenga varios fichajes ese día.</p>
+      <p id="listado-dias" class="mensaje" role="status" aria-live="polite">Cargando días trabajados...</p>
       <div class="lista-general">
         <table><thead><tr><th>Ayudante</th><th>Tipo</th><th>Día</th><th>Cliente</th><th>Obra</th><th>Ubicación</th><th>Población</th><th>Acciones</th></tr></thead><tbody id="lista-general"><tr><td colspan="8">Cargando...</td></tr></tbody></table>
       </div>
@@ -427,8 +439,8 @@
           }));
           registrosDiasCargados = true;
           actualizarContadores();
-          pintarListadoGeneral();
           actualizarFiltrosDias();
+          pintarListadoGeneral();
           pintarResumenDias();
         }
 
@@ -443,15 +455,29 @@
           [
             ['#resumen-cliente', clientes, 'Todos los clientes'],
             ['#resumen-ayudante', ayudantes, 'Todos los ayudantes'],
+            ['#listado-cliente', clientes, 'Todos los clientes'],
+            ['#listado-ayudante', ayudantes, 'Todos los ayudantes'],
           ].forEach(([selector, opciones, etiqueta]) => {
             const select = document.querySelector(selector);
-            const valor = select.value;
+            const valor = selector === '#listado-ayudante' ? String(filtroAyudanteGeneral ?? '') : select.value;
             select.replaceChildren(new Option(etiqueta, ''));
             Array.from(opciones).sort((a, b) => a[1].localeCompare(b[1], 'es')).forEach(([id, nombre]) => {
               select.add(new Option(nombre, id));
             });
             select.value = opciones.has(valor) ? valor : '';
           });
+          filtroAyudanteGeneral = document.querySelector('#listado-ayudante').value
+            ? Number(document.querySelector('#listado-ayudante').value) : null;
+        }
+
+        function leerFiltrosDias(prefijo) {
+          return Object.fromEntries(['tipo', 'cliente', 'ayudante', 'obra', 'desde', 'hasta'].map(nombre =>
+            [nombre, document.querySelector(`#${prefijo}-${nombre}`).value]
+          ));
+        }
+
+        function textoResumenDias(resumen) {
+          return `${resumen.dias} ${resumen.dias === 1 ? 'día' : 'días'} de trabajo de ayudantes en ${resumen.fechas} ${resumen.fechas === 1 ? 'fecha distinta' : 'fechas distintas'}.`;
         }
 
         function pintarResumenDias() {
@@ -462,16 +488,9 @@
             if (!registrosDiasCargados) {
               throw new Error('Los fichajes aún no están disponibles. Recarga la página para volver a intentarlo.');
             }
-            const resumen = AlucarpinJornadas.resumir(registrosGenerales, {
-              tipo: document.querySelector('#resumen-tipo').value,
-              cliente: document.querySelector('#resumen-cliente').value,
-              ayudante: document.querySelector('#resumen-ayudante').value,
-              obra: document.querySelector('#resumen-obra').value,
-              desde: document.querySelector('#resumen-desde').value,
-              hasta: document.querySelector('#resumen-hasta').value,
-            });
+            const resumen = AlucarpinJornadas.resumir(registrosGenerales, leerFiltrosDias('resumen'));
             mensajeResumen.className = 'mensaje';
-            mensajeResumen.textContent = `${resumen.dias} ${resumen.dias === 1 ? 'día' : 'días'} de trabajo de ayudantes en ${resumen.fechas} ${resumen.fechas === 1 ? 'fecha distinta' : 'fechas distintas'}.`;
+            mensajeResumen.textContent = textoResumenDias(resumen);
             if (!resumen.grupos.length) {
               cuerpo.innerHTML = '<tr><td colspan="6">No hay días trabajados con estos filtros.</td></tr>';
             }
@@ -500,6 +519,42 @@
           pintarResumenDias();
         });
 
+        ['tipo', 'cliente', 'ayudante', 'obra', 'desde', 'hasta', 'estado'].forEach(nombre => {
+          document.querySelector(`#listado-${nombre}`).addEventListener('input', () => {
+            if (nombre === 'ayudante') {
+              const valor = document.querySelector('#listado-ayudante').value;
+              if (valor) {
+                seleccionar(Number(valor)).catch(mostrarError);
+                return;
+              }
+              filtroAyudanteGeneral = valor ? Number(valor) : null;
+              marcarAyudante(filtroAyudanteGeneral);
+            }
+            if (nombre === 'estado') {
+              filtroEstadoPago = document.querySelector('#listado-estado').value;
+              actualizarSeleccionEstado();
+            }
+            pintarListadoGeneral();
+          });
+        });
+        document.querySelector('#listado-limpiar').addEventListener('click', () => {
+          ['tipo', 'cliente', 'ayudante', 'obra', 'desde', 'hasta'].forEach(nombre => {
+            document.querySelector(`#listado-${nombre}`).value = '';
+          });
+          filtroAyudanteGeneral = null;
+          marcarAyudante(null);
+          filtroEstadoPago = 'Todos';
+          document.querySelector('#listado-estado').value = 'Todos';
+          actualizarSeleccionEstado();
+          pintarListadoGeneral();
+        });
+
+        function actualizarSeleccionEstado() {
+          document.querySelectorAll('[data-filtro-estado]').forEach(boton => {
+            boton.classList.toggle('seleccionado', boton.dataset.filtroEstado === filtroEstadoPago);
+          });
+        }
+
         function actualizarContadores() {
           const estados = { Pagado: 0, Parcial: 0, 'No pagado': 0 };
           registrosGenerales.forEach(fichaje => estados[fichaje.estadoPago] = (estados[fichaje.estadoPago] || 0) + 1);
@@ -510,20 +565,33 @@
         }
 
         function pintarListadoGeneral() {
-          const registrosAyudante = filtroAyudanteGeneral === null
-            ? registrosGenerales
-            : registrosGenerales.filter(fichaje => Number(fichaje.ayudante_id) === filtroAyudanteGeneral);
-          const registros = filtroEstadoPago === 'Todos'
-            ? registrosAyudante
-            : registrosAyudante.filter(fichaje => fichaje.estadoPago === filtroEstadoPago);
           const cuerpo = document.querySelector('#lista-general');
+          const contador = document.querySelector('#listado-dias');
           cuerpo.textContent = '';
-          if (!registros.length) { cuerpo.innerHTML = '<tr><td colspan="8">No hay fichajes registrados.</td></tr>'; return; }
+          let registros;
+          try {
+            if (!registrosDiasCargados) {
+              throw new Error('Los fichajes aún no están disponibles. Recarga la página para volver a intentarlo.');
+            }
+            registros = AlucarpinJornadas.filtrar(registrosGenerales, {
+              ...leerFiltrosDias('listado'),
+              ayudante: String(filtroAyudanteGeneral ?? ''),
+              estado: filtroEstadoPago === 'Todos' ? '' : filtroEstadoPago,
+            });
+            contador.textContent = `${registros.length} fichajes. ${textoResumenDias(AlucarpinJornadas.resumir(registros))}`;
+            contador.className = 'mensaje';
+          } catch (error) {
+            contador.textContent = error.message;
+            contador.className = 'mensaje error';
+            cuerpo.innerHTML = '<tr><td colspan="8">No se puede mostrar el listado.</td></tr>';
+            return;
+          }
+          if (!registros.length) { cuerpo.innerHTML = '<tr><td colspan="8">No hay fichajes con estos filtros.</td></tr>'; return; }
           registros.forEach(fichaje => {
             const fila = document.createElement('tr');
             fila.dataset.ayudanteId = fichaje.ayudante_id;
             fila.className = fichaje.estadoPago === 'Pagado' ? 'pagado' : fichaje.estadoPago === 'Parcial' ? 'parcial' : 'pendiente';
-            const tipo = fichaje.tipo_destino === 'presupuesto' ? 'Presupuesto Alucarpin' : fichaje.tipo_destino === 'reparacion' ? 'Reparación' : 'Faena a 3º';
+            const tipo = AlucarpinJornadas.mostrarTipo(fichaje.tipo_destino || 'faena');
             fila.innerHTML = `<td>${fichaje.nombreAyudante}</td><td>${tipo}</td><td>${mostrarFecha(fichaje.fecha)}</td><td>${fichaje.cliente || ''}</td><td>${fichaje.obra}</td><td>${fichaje.ubicacion || ''}</td><td>${fichaje.poblacion || ''}</td><td class="acciones"><button type="button">Modificar</button><button type="button" class="validar" ${fichaje.estado_revision === 'Validado' ? 'disabled' : ''}>${fichaje.estado_revision === 'Validado' ? 'Validado' : 'Validar'}</button><button type="button" class="borrar">Borrar</button></td>`;
             fila.onclick = () => seleccionarFichajeGeneral(fichaje, fila);
             fila.querySelector('.acciones button:first-child').onclick = event => { event.stopPropagation(); seleccionarFichajeGeneral(fichaje, fila); };
@@ -776,6 +844,7 @@
       botonTodos.textContent = 'TODOS LOS TRABAJOS';
       botonTodos.onclick = () => {
         filtroAyudanteGeneral = null;
+        document.querySelector('#listado-ayudante').value = '';
         marcarAyudante(null);
         pintarListadoGeneral();
       };
@@ -812,7 +881,8 @@
     }
     document.querySelectorAll('[data-filtro-estado]').forEach(boton => boton.addEventListener('click', () => {
       filtroEstadoPago = boton.dataset.filtroEstado;
-      document.querySelectorAll('[data-filtro-estado]').forEach(item => item.classList.toggle('seleccionado', item === boton));
+      document.querySelector('#listado-estado').value = filtroEstadoPago;
+      actualizarSeleccionEstado();
       pintarListadoGeneral();
     }));
     document.querySelector('#formulario-ayudante').addEventListener('submit', async event => {
@@ -837,7 +907,7 @@
     let filtroEstadoPago = 'Todos';
 
     function marcarAyudante(id) {
-      ayudanteId = Number(id);
+      ayudanteId = id === null ? null : Number(id);
       document.querySelectorAll('.ayudante').forEach(item => {
         item.classList.toggle('seleccionado', Number(item.dataset.ayudanteId) === ayudanteId);
       });
@@ -845,6 +915,7 @@
     async function seleccionar(id, boton) {
       marcarAyudante(id);
       filtroAyudanteGeneral = Number(id);
+      document.querySelector('#listado-ayudante').value = String(id);
       pintarListadoGeneral();
       await cargarFichajes();
       await cargarLiquidaciones();
@@ -1203,6 +1274,9 @@
     });
     cargarListadoGeneral().catch(error => {
       document.querySelector('#lista-general').innerHTML = `<tr><td colspan="8">${error.message}</td></tr>`;
+      const contador = document.querySelector('#listado-dias');
+      contador.textContent = `No se pudieron cargar los días trabajados: ${error.message}`;
+      contador.className = 'mensaje error';
       const resumen = document.querySelector('#resumen-dias');
       resumen.textContent = `No se pudieron cargar los días trabajados: ${error.message}`;
       resumen.className = 'mensaje error';

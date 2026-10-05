@@ -8,18 +8,23 @@
     pendiente: 'Pendiente de vincular',
   }[tipo] || tipo);
 
-  function resumir(registros, filtros = {}) {
+  function filtrar(registros, filtros = {}) {
     if (filtros.desde && filtros.hasta && filtros.desde > filtros.hasta) {
       throw new Error('La fecha desde no puede ser posterior a la fecha hasta.');
     }
-    const filtrados = registros.filter(fichaje =>
+    return registros.filter(fichaje =>
       (!filtros.tipo || tipoDe(fichaje) === filtros.tipo)
       && (!filtros.cliente || normalizar(fichaje.cliente) === filtros.cliente)
       && (!filtros.ayudante || String(fichaje.ayudante_id) === filtros.ayudante)
       && (!filtros.obra || normalizar(fichaje.obra).includes(normalizar(filtros.obra)))
       && (!filtros.desde || fichaje.fecha >= filtros.desde)
       && (!filtros.hasta || fichaje.fecha <= filtros.hasta)
+      && (!filtros.estado || fichaje.estadoPago === filtros.estado)
     );
+  }
+
+  function resumir(registros, filtros = {}) {
+    const filtrados = filtrar(registros, filtros);
     const jornadas = new Set();
     const fechas = new Set();
     const grupos = new Map();
@@ -61,5 +66,5 @@
     };
   }
 
-  window.AlucarpinJornadas = { normalizar, resumir };
+  window.AlucarpinJornadas = { normalizar, mostrarTipo, filtrar, resumir };
 })();
