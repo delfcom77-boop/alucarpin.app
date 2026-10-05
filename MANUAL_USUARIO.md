@@ -109,7 +109,9 @@ Esta mejora no modifica importes, pagos ni liquidaciones.
 
 En **Pagos** aparece una fila por ayudante y fecha, con todas las obras realizadas ese dia. Se incluyen sabados y domingos; varios fichajes del mismo ayudante en una fecha no generan varias jornadas. El estado se calcula a partir del importe y lo realmente pagado; los pagos parciales reducen el pendiente.
 
-Los pagos ya registrados no se renumeran, suman ni borran. Si hay varios pagos en una fecha, aparece **Revision necesaria**, se muestran sus importes y el dia queda bloqueado para evitar sobrescribirlos. Esos dias quedan excluidos de los totales automaticos, que no representan el periodo completo hasta revisar los casos. Un pago historico procedente de Gastos se muestra sin permitir crear otro pago desde Pagos; se modifica en **Gastos y dias**.
+Se paga cada dia trabajado contigo, independientemente de la obra, aunque se abonen todos los dias juntos al final de la semana. **El pago diario es la referencia**: si ese dia tiene ademas gastos asociados a obras, estos se conservan como desglose y no se suman como otro pago al ayudante ni generan una alerta de duplicado.
+
+Los pagos ya registrados no se renumeran, suman ni borran. Solo si hay varios pagos diarios en una misma fecha aparece **Revision necesaria**, se muestran sus importes y el dia queda bloqueado para evitar sobrescribirlos. Esos dias quedan excluidos de los totales automaticos, que no representan el periodo completo hasta revisar los casos. Si no existe pago diario, se mantiene la consulta historica de Gastos: se modifica en **Gastos y dias**, sin crear otro pago desde Pagos.
 
 Las liquidaciones cuentan las fechas distintas confirmadas por el ayudante, tambien en fin de semana. Las liquidaciones antiguas conservan sus importes pagados, pero sus dias, total y pendiente se recalculan con este criterio. Las liquidaciones y los pagos diarios siguen siendo registros independientes: no deben usarse para registrar dos veces el mismo pago.
 

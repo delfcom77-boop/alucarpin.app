@@ -199,6 +199,50 @@ class PagosDiariosTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             api.PagoJornadaUpdate(importe=float("inf"))
 
+    def test_pago_diario_es_referencia_y_gastos_son_desglose(self):
+        self.db.executescript("""
+            INSERT INTO pagos_jornadas VALUES (2,50,50,'Transferencia','Pagado','2020-01-01',NULL);
+            CREATE TABLE gastos_faenas_extras (
+                id INTEGER, faena_id INTEGER, proveedor TEXT, fecha TEXT, categoria TEXT,
+                importe REAL, importe_pagado REAL, pagado REAL, forma_pago TEXT, estado_pago TEXT
+            );
+            INSERT INTO gastos_faenas_extras VALUES
+                (10,25,'DANI','2026-10-03','Ayudantes',50,0,0,'Efectivo','No pagado'),
+                (11,26,'DANI','2026-10-03','Ayudantes',75,20,0,'Efectivo','Parcial');
+        """)
+        anteriores = [tuple(f) for f in self.db.execute("SELECT * FROM gastos_faenas_extras")]
+        grupo = self.lista()[0]
+        self.assertFalse(grupo["revision"])
+        self.assertEqual(grupo["id"], 2)
+        self.assertEqual(grupo["pago"]["importe"], 50)
+        self.assertEqual(grupo["pago"]["estado_pago"], "Pagado")
+        self.assertEqual(len(grupo["pagos_existentes"]), 1)
+        self.assertEqual(len(grupo["gastos_obra"]), 2)
+        self.assertEqual(api.consultar_pago_jornada(1, {})["estado_pago"], "Pagado")
+        fichajes = api.listar_fichajes(1, None, None, {"rol": "administrador"})
+        self.assertTrue(all(f["pagado"] for f in fichajes if f["fecha"] == "2026-10-03"))
+        self.pago(1, 25)
+        self.assertEqual(self.lista()[0]["pago"]["estado_pago"], "Parcial")
+        self.assertEqual(api.consultar_pago_jornada(2, {})["importe_pagado"], 25)
+        self.assertEqual(self.db.execute("SELECT fecha_pago FROM pagos_jornadas").fetchone()[0], "2020-01-01")
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM pagos_jornadas").fetchone()[0], 1)
+        self.assertEqual(anteriores, [tuple(f) for f in self.db.execute("SELECT * FROM gastos_faenas_extras")])
+
+    def test_varios_pagos_diarios_se_siguen_bloqueando_aunque_haya_gastos(self):
+        pagos = {
+            1: [{"fichaje_id": 1, "origen": "jornada", "importe": 50, "importe_pagado": 50},
+                {"fichaje_id": 1, "tabla_gasto": "gastos_faenas_extras", "gasto_id": 10, "importe": 50}],
+            2: [{"fichaje_id": 2, "origen": "jornada", "importe": 75, "importe_pagado": 20}],
+        }
+        grupo = api.agrupar_pagos_dia(self.db, [
+            {"id": 1, "fecha": "2026-10-03", "obra": "Obra A"},
+            {"id": 2, "fecha": "2026-10-03", "obra": "Obra B"},
+        ], pagos)
+        self.assertTrue(grupo["revision"])
+        self.assertEqual(len(grupo["pagos_existentes"]), 2)
+        self.assertEqual(len(grupo["gastos_obra"]), 1)
+        self.assertIsNone(grupo["pago"]["importe"])
+
 
 class AlarmasTrabajoTests(unittest.TestCase):
     def setUp(self):

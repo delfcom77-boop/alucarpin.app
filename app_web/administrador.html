@@ -164,7 +164,7 @@
     </section>
     <section id="apartado-pagos" data-contenido="pagos" hidden>
       <h2>Preparar pago por jornadas</h2>
-      <p>Una jornada por ayudante y fecha, incluidos sábados y domingos. Todas las obras de ese día se muestran juntas. Los pagos históricos se conservan; los días con varios pagos necesitan revisión y no se guardan automáticamente.</p>
+      <p>Pagas los días que el ayudante trabaja contigo, aunque los abones juntos al final de la semana. Una jornada por ayudante y fecha, incluidos sábados y domingos, independientemente de la obra. El pago diario es la referencia; los gastos de las obras no se suman como otro pago. Solo varios pagos diarios en una misma fecha necesitan revisión. Los registros antiguos solo en Gastos se consultan allí.</p>
       <div class="fila">
         <label>Desde <input id="desde" type="date" required></label>
         <label>Hasta <input id="hasta" type="date" required></label>
@@ -1094,6 +1094,11 @@
         fila.className = estadoCalculado === 'Pagado' ? 'pagado' : estadoCalculado === 'Parcial' ? 'parcial' : 'pendiente';
         fila.innerHTML = `<td>${jornada.fecha}</td><td></td><td><input data-campo="importe" type="number" min="0" step="0.01" value="${importe}"></td><td><input data-campo="importe_pagado" type="number" min="0" step="0.01" value="${importePagado}"></td><td><select data-campo="forma"></select></td><td><select data-campo="estado" disabled></select></td>`;
         fila.children[1].textContent = jornada.obra;
+        if (jornada.gastos_obra && jornada.gastos_obra.length) {
+          const aviso = document.createElement('small');
+          aviso.textContent = ' Gastos de obra conservados como desglose; no suman otro pago al ayudante.';
+          fila.children[1].appendChild(aviso);
+        }
         const forma = fila.querySelector('[data-campo="forma"]');
         Array.from(new Set(['Efectivo', 'Transferencia', jornada.pago.forma_pago || 'Efectivo'])).forEach(valor => forma.add(new Option(valor, valor)));
         forma.value = jornada.pago.forma_pago || 'Efectivo';

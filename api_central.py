@@ -2299,7 +2299,9 @@ def agrupar_pagos_dia(db, fichajes, pagos_por_fichaje=None):
         for pago in pagos_por_fichaje[fichaje["id"]]:
             clave = ("jornada", fichaje["id"]) if pago.get("origen") == "jornada" else (pago["tabla_gasto"], pago["gasto_id"])
             pagos[clave] = pago
-    existentes = list(pagos.values())
+    directos = [pago for pago in pagos.values() if pago.get("origen") == "jornada"]
+    gastos = [pago for pago in pagos.values() if pago.get("origen") != "jornada"]
+    existentes = directos or gastos
     elegido = existentes[0] if len(existentes) == 1 else None
     revision = len(existentes) > 1
     return {
@@ -2311,6 +2313,7 @@ def agrupar_pagos_dia(db, fichajes, pagos_por_fichaje=None):
                            "forma_pago": "Efectivo", "estado_pago": "Revisar" if revision else "No pagado", "creado": revision},
         "revision": revision,
         "pagos_existentes": existentes,
+        "gastos_obra": gastos,
     }
 
 

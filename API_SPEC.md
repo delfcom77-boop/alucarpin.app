@@ -412,7 +412,9 @@ Al crear un fichaje como ayudante, debe seleccionarse un destino existente media
 
 El pago corresponde a una fecha y ayudante, incluidos fines de semana. El endpoint de jornadas devuelve una fila por fecha con `id` representativo, `fecha`, `obra`, `fichajes_ids`, `pago`, `revision` y `pagos_existentes`. Consultar o modificar el pago desde cualquier fichaje de esa fecha resuelve el mismo pago. Se conserva el identificador y la fecha del pago existente.
 
-Varios pagos historicos generan `revision: true`, estado `Revisar` e importes agregados `null` (no se suman automaticamente). PATCH devuelve 409 sin modificar ninguno. Un pago historico de gastos tambien bloquea PATCH con 409 para evitar duplicarlo. Los rangos invertidos devuelven 400 en jornadas y 422 al crear/modificar una liquidacion. Las liquidaciones cuentan fechas distintas confirmadas, incluyendo sabados y domingos.
+Los registros de `pagos_jornadas` son la referencia por ayudante/fecha. Si existen, `pago` y `pagos_existentes` se resuelven exclusivamente con ellos, mientras `gastos_obra` conserva los gastos asociados como desglose sin sumarlos ni tratarlos como pagos diarios duplicados. Sin pagos diarios se mantiene la consulta historica de gastos.
+
+Varios pagos de la fuente de referencia generan `revision: true`, estado `Revisar` e importes agregados `null` (no se suman automaticamente). PATCH devuelve 409 sin modificar ninguno. Sin pago diario, un pago historico de gastos tambien bloquea PATCH con 409 para evitar duplicarlo. Los rangos invertidos devuelven 400 en jornadas y 422 al crear/modificar una liquidacion. Las liquidaciones cuentan fechas distintas confirmadas, incluyendo sabados y domingos.
 
 ### Ejecucion y cobro de obras
 
