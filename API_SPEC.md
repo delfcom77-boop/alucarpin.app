@@ -407,7 +407,7 @@ GET    /fichajes/{id}/pago
 PATCH  /fichajes/{id}/validacion
 ```
 
-Al crear un fichaje, la aplicacion genera automaticamente el destino provisional segun `tipo_destino`: `faena`, `presupuesto` o `reparacion`. El pago de la jornada se guarda en `pagos_jornadas` y no depende de la validacion contable.
+Al crear un fichaje como ayudante, debe seleccionarse un destino existente mediante `obra_catalogo`: no se generan faenas, presupuestos ni reparaciones nuevos. El administrador mantiene la creacion de destinos provisionales cuando registra sin referencia. El pago de la jornada se guarda en `pagos_jornadas` y no depende de la validacion contable.
 
 ---
 
@@ -530,3 +530,10 @@ curl -X DELETE \
 - Endpoints CRUD: 6 nuevos (POST/PATCH/DELETE faenas + presupuestos)
 - Validación: Python py_compile sin errores
 - Documentación: Completa
+## Catalogo compartido de clientes y obras
+
+`GET /catalogo-obras` requiere una sesion autenticada y esta disponible para administradores y ayudantes. Devuelve una lista de objetos con `referencia`, `tipo`, `id`, `cliente`, `obra`, `ubicacion`, `poblacion` y `num_presupuesto`, sin importes. El catalogo se obtiene de las faenas con obra, los presupuestos y las reparaciones existentes; no requiere una tabla ni migracion nueva.
+
+En `POST /fichajes`, los ayudantes deben enviar `obra_catalogo` (por ejemplo `faena:25`, `presupuesto:10` o `reparacion:20`). El servidor toma los nombres, la ubicacion, el tipo y los vinculos del registro existente, no del texto enviado. Una referencia inexistente o incompatible con el tipo devuelve HTTP 400. El tipo `pendiente` acepta cualquier entrada y se resuelve al tipo del catalogo.
+
+En `PATCH /fichajes/{id}`, `obra_catalogo` permite seleccionar otra obra y actualiza todos los vinculos, sin tocar pagos ni otros fichajes. Cambiar el destino reinicia la revision a `Pendiente de revisar`. Un ayudante sin referencia solo puede conservar los datos del destino existente y cambiar la fecha. El administrador mantiene la capacidad de crear nombres mediante los endpoints administrativos existentes.

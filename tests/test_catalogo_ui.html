@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<title>Pruebas del catálogo compartido</title>
+<input id="cliente">
+<input id="obra">
+<p id="mensaje"></p>
+<input id="cliente-error">
+<p id="error"></p>
+<pre id="resultado">Ejecutando...</pre>
+<script src="../app_web/catalogo.js"></script>
+<script>
+  (async () => {
+    const registros = [
+      { cliente: 'Decoradora', obra: 'Santjoanistes nº 4' },
+      { cliente: 'Decoradora', obra: 'Otra obra' },
+      { cliente: 'José', obra: 'Puerta' },
+    ];
+    const cliente = document.querySelector('#cliente');
+    const obra = document.querySelector('#obra');
+    const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+    let pruebas = 0;
+    const comprobar = (valor, mensaje) => {
+      if (!valor) throw new Error(mensaje);
+      pruebas++;
+    };
+    AlucarpinCatalogo.sugerencias({
+      cliente, obra, mensaje: document.querySelector('#mensaje'),
+      apiFetch: async () => ({ ok: true, json: async () => registros }),
+    });
+    await tick();
+    comprobar(cliente.list.options.length === 2, 'Clientes únicos');
+    cliente.value = ' DECORADORA ';
+    cliente.dispatchEvent(new Event('blur'));
+    comprobar(cliente.value === 'Decoradora', 'Nombre canónico del cliente');
+    comprobar(obra.list.options.length === 2, 'Obras del cliente seleccionado');
+    obra.value = 'santjoanistes nº 4';
+    obra.dispatchEvent(new Event('blur'));
+    comprobar(obra.value === 'Santjoanistes nº 4', 'Nombre canónico de la obra');
+    cliente.value = 'jose';
+    cliente.dispatchEvent(new Event('blur'));
+    comprobar(cliente.value === 'José' && obra.list.options.length === 1, 'Acentos y cambio de cliente');
+    cliente.value = 'Cliente nuevo';
+    cliente.dispatchEvent(new Event('blur'));
+    comprobar(cliente.value === 'Cliente nuevo', 'El administrador puede introducir nombres nuevos');
+    AlucarpinCatalogo.sugerencias({
+      cliente: document.querySelector('#cliente-error'), obra: null,
+      mensaje: document.querySelector('#error'), apiFetch: async () => ({ ok: false }),
+    });
+    await tick();
+    comprobar(document.querySelector('#error').textContent.includes('No se pudo cargar'), 'Error de catálogo visible');
+    document.querySelector('#resultado').textContent = `${pruebas} pruebas correctas.`;
+    document.body.dataset.estado = 'correcto';
+  })().catch(error => {
+    document.querySelector('#resultado').textContent = `ERROR: ${error.message}`;
+    document.body.dataset.estado = 'error';
+    throw error;
+  });
+</script>
+</html>

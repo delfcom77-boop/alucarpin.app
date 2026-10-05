@@ -122,6 +122,7 @@
       <div class="lista"><table><thead><tr><th>Cliente</th><th>Obra</th><th>Pieza</th><th>Tipo faena</th><th>Lacado / color</th><th>Remate</th><th>Medidas</th><th>Largura / cantidad</th><th></th></tr></thead><tbody id="lista"><tr><td colspan="9">Cargando...</td></tr></tbody></table></div>
     </section>
   </main>
+  <script src="/app/catalogo.js"></script>
   <script>
     const token = localStorage.getItem('alucarpin_token');
     if (!token) location.replace('/app/login.html');
@@ -412,6 +413,9 @@
     };
     actualizarEtiquetas();
     actualizarPosicionMedidas();
+    AlucarpinCatalogo.sugerencias({
+      cliente: document.querySelector('#cliente'), obra: document.querySelector('#obra'), mensaje, apiFetch,
+    });
     cargarClientes().catch(error => mostrarError(error.message));
   </script>
 </body>

@@ -41,6 +41,7 @@
     <nav><a href="/app/inicio.html">Volver al menú</a></nav>
     <section>
       <h2>Registrar trabajo</h2>
+      <p>Reutiliza los clientes y obras sugeridos para evitar nombres duplicados. Solo el administrador puede crear nombres nuevos. Las faenas para fichajes de ayudantes se dan de alta en Ayudantes → Faenas.</p>
       <form id="formulario">
         <div class="fila"><label>Tipo <select id="tipo"><option value="faena">Faena</option><option value="presupuesto">Presupuesto</option><option value="reparacion">Reparación</option></select></label><label>Fecha de inicio <input id="fecha-inicio" type="date" required></label></div>
         <div class="fila"><label>Fecha final <input id="fecha-fin" type="date"></label><label>Cliente <input id="cliente" required></label></div>
@@ -80,6 +81,7 @@
       </form>
     </dialog>
   </main>
+  <script src="/app/catalogo.js"></script>
   <script>
     const token = localStorage.getItem('alucarpin_token');
     if (!token) location.replace('/app/login.html');
@@ -88,6 +90,18 @@
     const tipo = document.querySelector('#tipo');
     const presupuesto = document.querySelector('#presupuesto');
     const mensaje = document.querySelector('#mensaje');
+    AlucarpinCatalogo.sugerencias({
+      cliente: document.querySelector('#cliente'),
+      obra: document.querySelector('#obra'),
+      mensaje,
+      apiFetch,
+    });
+    AlucarpinCatalogo.sugerencias({
+      cliente: document.querySelector('#editar-cliente'),
+      obra: document.querySelector('#editar-obra'),
+      mensaje: document.querySelector('#mensaje-edicion-trabajo'),
+      apiFetch,
+    });
     const filtroTipoTrabajos = document.querySelector('#filtro-tipo-trabajos');
     const filtroClienteTrabajos = document.querySelector('#filtro-cliente-trabajos');
     const filtroObraTrabajos = document.querySelector('#filtro-obra-trabajos');

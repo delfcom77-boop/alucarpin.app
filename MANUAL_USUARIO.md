@@ -93,6 +93,18 @@ En el movil, los formularios y los botones se ajustan al ancho de la pantalla. L
 
 Esta reorganizacion no modifica los datos ni las reglas de pago y liquidacion.
 
+### Catalogo de clientes y obras de la app
+
+Solo el administrador puede crear clientes y obras nuevos. En **Ayudantes -> Faenas** se dan de alta las faenas con cliente y obra; en **Mi control** se crean las reparaciones, y en **Presupuestos** se crean los presupuestos. Los formularios administrativos sugieren clientes existentes y las obras de cada cliente. Escribir un nombre nuevo sigue estando permitido al administrador. Las sugerencias corrigen diferencias de mayusculas, espacios y acentos al salir del campo.
+
+El ayudante selecciona el tipo de trabajo, un cliente y una obra del catalogo. La ubicacion y la poblacion se rellenan automaticamente. Si falta una obra, debe solicitar su alta al administrador. Un presupuesto se identifica por su numero (o por su identificador si es provisional). La opcion Todos los tipos permite buscar en todos los tipos; al seleccionar una obra, el dia se guarda con su tipo real y su vinculo.
+
+Despues de que el administrador cree una obra, el ayudante puede pulsar **Actualizar clientes y obras** para verla sin salir de la pantalla.
+
+Las jornadas nuevas se vinculan a la faena, reparacion o presupuesto existente, sin crear otra obra por cada fecha. El servidor impide que un ayudante introduzca nombres nuevos, incluso desde una version antigua de la app. Los fichajes antiguos no se renombran automaticamente: para editarlos, se selecciona la obra correcta del catalogo; el administrador puede seguir revisando los casos antiguos.
+
+Esta mejora no modifica importes, pagos ni liquidaciones.
+
 ## 3. Programa de escritorio
 
 ### Abrir el programa

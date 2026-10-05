@@ -3,6 +3,7 @@ const ARCHIVOS = [
   '/app/login.html',
   '/app/administrador.html',
   '/app/jornadas.js',
+  '/app/catalogo.js',
   '/app/ayudante.html',
   '/app/manifest.json',
   '/app/icon.svg',

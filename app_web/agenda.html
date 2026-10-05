@@ -233,6 +233,7 @@
       <div class="lista"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Tipo</th><th>Cliente</th><th>Teléfono</th><th>Dirección</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista"><tr><td colspan="8">Cargando...</td></tr></tbody></table></div>
     </section>
   </main>
+  <script src="/app/catalogo.js"></script>
   <script>
     const token = localStorage.getItem('alucarpin_token');
     if (!token) location.replace('/app/login.html');
@@ -242,6 +243,9 @@
     const mensajeCitas = document.querySelector('#mensaje-citas');
     const formularioSeguimiento = document.querySelector('#formulario-seguimiento');
     const mensajeSeguimiento = document.querySelector('#mensaje-seguimiento');
+    [['#cliente', mensaje], ['#seguimiento-cliente', mensajeSeguimiento]].forEach(([selector, aviso]) => {
+      AlucarpinCatalogo.sugerencias({ cliente: document.querySelector(selector), obra: null, mensaje: aviso, apiFetch });
+    });
     const aplicarBusqueda = (selector, tablaSelector) => document.querySelector(selector).addEventListener('input', event => { const texto = event.target.value.trim().toLowerCase(); document.querySelectorAll(`${tablaSelector} tr`).forEach(fila => { fila.hidden = Boolean(texto) && !fila.textContent.toLowerCase().includes(texto); }); });
     aplicarBusqueda('#buscar-citas', '#lista');
     aplicarBusqueda('#buscar-notas', '#lista-seguimientos');

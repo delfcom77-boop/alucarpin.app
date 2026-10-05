@@ -240,11 +240,12 @@
     </section>
     <section id="apartado-faenas" data-contenido="faenas" hidden>
       <h2>Gestión de Faenas</h2>
+      <p>Este listado alimenta el catálogo de los ayudantes. Para dar de alta una obra, selecciona un cliente sugerido o escribe uno nuevo y completa el nombre de la obra. Las reparaciones se crean en Mi control y los presupuestos en su apartado.</p>
       <form id="formulario-faena">
         <input id="faena-id" type="hidden">
         <div class="fila">
           <label>Cliente <input id="faena-cliente" required></label>
-          <label>Obra <input id="faena-obra"></label>
+          <label>Obra <input id="faena-obra" required></label>
         </div>
         <div class="fila">
           <label>Fecha <input id="faena-fecha" type="date"></label>
@@ -319,6 +320,7 @@
     <section id="apartado-configuracion" data-contenido="configuracion" hidden><h2>Usuarios y contraseñas</h2><div class="lista-general"><table><thead><tr><th>Usuario</th><th>Rol</th><th>Ayudante</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="usuarios"><tr><td colspan="5">Cargando...</td></tr></tbody></table></div><div id="mensaje-usuarios" class="mensaje"></div></section>
   </main>
   <script src="/app/jornadas.js"></script>
+  <script src="/app/catalogo.js"></script>
   <script>
     const api = '';
     function mostrarApartado(nombre) {
@@ -1349,6 +1351,16 @@
       await cargarPresupuestosLista();
     });
 
+    [
+      ['#faena-cliente', '#faena-obra', '#mensaje-faena'],
+      ['#cliente-general', '#obra-general', '#mensaje-general'],
+      ['#presupuesto-cliente', null, '#mensaje-presupuesto'],
+    ].forEach(([cliente, obra, mensaje]) => AlucarpinCatalogo.sugerencias({
+      cliente: document.querySelector(cliente),
+      obra: obra ? document.querySelector(obra) : null,
+      mensaje: document.querySelector(mensaje),
+      apiFetch,
+    }));
     cargarAyudantes().catch(error => {
       contenedorAyudantes.textContent = error.message;
       contenedorAyudantes.className = 'mensaje error';

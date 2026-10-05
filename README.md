@@ -105,8 +105,8 @@ sincronizar_datos_app()
 ### Flujo 2: Procesamiento Local
 
 ```
-1. El ayudante registra el tipo de trabajo y sus datos.
-2. La app crea automaticamente una faena, presupuesto provisional o reparacion.
+1. El administrador da de alta clientes y obras en faenas, presupuestos o reparaciones.
+2. El ayudante selecciona cliente y obra del catalogo compartido; el fichaje reutiliza el destino existente y sus nombres, sin crear una obra por cada fecha.
 3. El administrador revisa y valida el trabajo desde la app o el programa.
 4. El pago de la jornada se registra independientemente (PATCH /fichajes/{id}/pago).
 ```

@@ -54,6 +54,7 @@ class FichajeCreate(BaseModel):
     ubicacion: str = ""
     poblacion: str = ""
     num_presupuesto: Optional[str] = None
+    obra_catalogo: Optional[str] = None
 
 
 class FichajeUpdate(BaseModel):
@@ -64,6 +65,7 @@ class FichajeUpdate(BaseModel):
     ubicacion: Optional[str] = None
     poblacion: Optional[str] = None
     num_presupuesto: Optional[str] = None
+    obra_catalogo: Optional[str] = None
 
 
 class FichajeVinculacion(BaseModel):
@@ -1258,6 +1260,67 @@ def borrar_presupuesto(presupuesto_id: int, usuario=Depends(administrador)):
     return {"eliminado": True, "id": presupuesto_id}
 
 
+def catalogo_obras(db):
+    obras = []
+    fuentes = (
+        ("faena", "SELECT id, cliente, obra, ubicacion, poblacion FROM faenas"),
+        ("reparacion", "SELECT id, cliente, obra, ubicacion, poblacion FROM trabajos_propios WHERE tipo = 'reparacion'"),
+        ("presupuesto", "SELECT id, cliente, num_presupuesto FROM presupuestos"),
+    )
+    for tipo, consulta in fuentes:
+        for fila in db.execute(consulta).fetchall():
+            datos = dict(fila)
+            obra = (datos.get("obra") or "").strip()
+            if tipo == "presupuesto":
+                numero = datos.get("num_presupuesto")
+                obra = f"Presupuesto nº {numero}" if numero else f"Presupuesto provisional #{datos['id']}"
+            cliente = (datos["cliente"] or "").strip()
+            if not cliente or not obra:
+                continue
+            obras.append({
+                "referencia": f"{tipo}:{datos['id']}",
+                "tipo": tipo,
+                "id": datos["id"],
+                "cliente": cliente,
+                "obra": obra,
+                "ubicacion": datos.get("ubicacion") or "",
+                "poblacion": datos.get("poblacion") or "",
+                "num_presupuesto": datos.get("num_presupuesto"),
+            })
+    return sorted(obras, key=lambda obra: (obra["cliente"].casefold(), obra["obra"].casefold(), obra["referencia"]))
+
+
+@app.get("/catalogo-obras")
+def listar_catalogo_obras(usuario=Depends(usuario_actual)):
+    with conexion() as db:
+        return catalogo_obras(db)
+
+
+def resolver_obra_catalogo(db, referencia, tipo):
+    if not referencia:
+        raise HTTPException(status_code=400, detail="Selecciona una obra del catálogo. Solo el administrador puede crear clientes y obras.")
+    obra = next((obra for obra in catalogo_obras(db) if obra["referencia"] == referencia), None)
+    if obra is None:
+        raise HTTPException(status_code=400, detail="La obra seleccionada ya no está disponible. Actualiza el catálogo.")
+    if tipo not in ("pendiente", obra["tipo"]):
+        raise HTTPException(status_code=400, detail="El tipo de trabajo no coincide con la obra seleccionada.")
+    return obra
+
+
+def datos_obra_catalogo(obra):
+    return {
+        "tipo_destino": obra["tipo"],
+        "cliente": obra["cliente"],
+        "obra": obra["obra"],
+        "ubicacion": obra["ubicacion"],
+        "poblacion": obra["poblacion"],
+        "num_presupuesto": obra["num_presupuesto"],
+        "faena_id_vinculada": obra["id"] if obra["tipo"] == "faena" else None,
+        "presupuesto_id": obra["id"] if obra["tipo"] == "presupuesto" else None,
+        "trabajo_propio_id": obra["id"] if obra["tipo"] == "reparacion" else None,
+    }
+
+
 @app.get("/faenas")
 def listar_faenas(usuario=Depends(administrador)):
     try:
@@ -1778,7 +1841,20 @@ def crear_fichaje(fichaje: FichajeCreate, usuario=Depends(usuario_actual)):
             trabajo_propio_id = None
             presupuesto_id = None
             estado_revision = "Pendiente de revisar"
-            if fichaje.tipo_destino == "faena":
+            tipo_destino = fichaje.tipo_destino
+            if usuario["rol"] == "ayudante" or fichaje.obra_catalogo:
+                obra_catalogo = resolver_obra_catalogo(db, fichaje.obra_catalogo, tipo_destino)
+                canonicos = datos_obra_catalogo(obra_catalogo)
+                tipo_destino = canonicos["tipo_destino"]
+                cliente, obra = canonicos["cliente"], canonicos["obra"]
+                ubicacion, poblacion = canonicos["ubicacion"], canonicos["poblacion"]
+                num_presupuesto = canonicos["num_presupuesto"]
+                faena_id = canonicos["faena_id_vinculada"]
+                presupuesto_id = canonicos["presupuesto_id"]
+                trabajo_propio_id = canonicos["trabajo_propio_id"]
+                if tipo_destino == "presupuesto" and num_presupuesto:
+                    estado_revision = "Validado"
+            elif fichaje.tipo_destino == "faena":
                 existente = db.execute(
                     """
                     SELECT id FROM faenas
@@ -1850,7 +1926,7 @@ def crear_fichaje(fichaje: FichajeCreate, usuario=Depends(usuario_actual)):
                         (fichaje.fecha.isoformat(), cliente, obra, ubicacion, poblacion, estado_revision),
                     )
                     trabajo_propio_id = db.execute("SELECT id FROM trabajos_propios WHERE id = last_insert_rowid()").fetchone()["id"]
-            parametros = (fichaje.ayudante_id, fecha_trabajo, fichaje.tipo_destino, cliente, obra, ubicacion, poblacion, num_presupuesto, faena_id, presupuesto_id, trabajo_propio_id, estado_revision)
+            parametros = (fichaje.ayudante_id, fecha_trabajo, tipo_destino, cliente, obra, ubicacion, poblacion, num_presupuesto, faena_id, presupuesto_id, trabajo_propio_id, estado_revision)
             if DATABASE_URL:
                 fila = db.execute(
                     "INSERT INTO fichajes_ayudantes (ayudante_id, fecha, tipo_destino, cliente, obra, ubicacion, poblacion, num_presupuesto, faena_id_vinculada, presupuesto_id, trabajo_propio_id, estado_revision, confirmado_ayudante, sincronizado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1) RETURNING *",
@@ -1870,7 +1946,8 @@ def crear_fichaje(fichaje: FichajeCreate, usuario=Depends(usuario_actual)):
 @app.patch("/fichajes/{fichaje_id}")
 def modificar_fichaje(fichaje_id: int, cambios: FichajeUpdate, usuario=Depends(usuario_actual)):
     datos = cambios.model_dump(exclude_unset=True)
-    if datos.get("num_presupuesto"):
+    referencia = datos.pop("obra_catalogo", None)
+    if datos.get("num_presupuesto") and not referencia:
         datos["num_presupuesto"] = datos["num_presupuesto"].strip()
         with conexion() as db:
             presupuesto = db.execute(
@@ -1882,15 +1959,27 @@ def modificar_fichaje(fichaje_id: int, cambios: FichajeUpdate, usuario=Depends(u
     if "fecha" in datos:
         datos["fecha"] = datos["fecha"].isoformat()
     datos = {clave: valor.strip() if isinstance(valor, str) else valor for clave, valor in datos.items()}
-    if not datos:
+    if not datos and not referencia:
         raise HTTPException(status_code=400, detail="No hay datos para modificar")
     datos["actualizado_en"] = datetime.utcnow().isoformat(timespec="seconds")
-    columnas = ", ".join(f"{clave} = ?" for clave in datos)
     with conexion() as db:
+        existente = db.execute("SELECT * FROM fichajes_ayudantes WHERE id = ?", (fichaje_id,)).fetchone()
+        if not existente:
+            raise HTTPException(status_code=404, detail="Fichaje no encontrado")
         if usuario["rol"] == "ayudante":
             permitido = db.execute("SELECT 1 FROM fichajes_ayudantes WHERE id = ? AND ayudante_id = ?", (fichaje_id, usuario["ayudante_id"])).fetchone()
             if not permitido:
                 raise HTTPException(status_code=403, detail="No puedes modificar este fichaje")
+            if not referencia and any(clave in datos and datos[clave] != existente[clave] for clave in (
+                "cliente", "obra", "tipo_destino", "ubicacion", "poblacion", "num_presupuesto"
+            )):
+                raise HTTPException(status_code=400, detail="Selecciona una obra del catálogo. Solo el administrador puede crear clientes y obras.")
+        if referencia:
+            canonicos = datos_obra_catalogo(resolver_obra_catalogo(db, referencia, datos.get("tipo_destino", "pendiente")))
+            if any(canonicos[clave] != existente[clave] for clave in canonicos):
+                datos["estado_revision"] = "Pendiente de revisar"
+            datos.update(canonicos)
+        columnas = ", ".join(f"{clave} = ?" for clave in datos)
         cursor = db.execute(
             f"UPDATE fichajes_ayudantes SET {columnas} WHERE id = ?",
             [*datos.values(), fichaje_id],
