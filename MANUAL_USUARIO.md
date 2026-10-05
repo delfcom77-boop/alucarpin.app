@@ -137,6 +137,16 @@ Los cobros pendientes utilizan los mismos datos que Alarmas y Mi control; termin
 
 La agenda muestra notas y citas pendientes vencidas y las previstas hasta dentro de siete dias, ambos extremos incluidos. Se muestran los primeros ocho avisos, pero el contador incluye todos. Los enlaces de trabajos, cobros y avisos abren Alarmas con el tipo seleccionado. El panel no modifica registros ni genera pagos.
 
+### Tus dias trabajados en Google Calendar
+
+En Mi control, usa **Registrar dia** en la faena de terceros, el presupuesto propio o la reparacion. Registra solo las fechas que has trabajado tu; no se copian fichajes de ayudantes ni se usa la fecha general del presupuesto. Los dias propios nuevos no registran pagos, cobros ni gastos. Los dias de terceros existentes se conservan.
+
+En Agenda, descarga **Mis faenas propias** o **Mis faenas a terceros**. Cada archivo contiene un evento de dia completo por obra y fecha registrada, incluidos fines de semana. Una obra sin dias no genera eventos; si no hay dias para exportar, se muestra un aviso.
+
+En Google Calendar, crea dos calendarios llamados Faenas propias y Faenas a terceros. En Configuracion -> Importar y exportar, importa cada archivo en el calendario correspondiente. Asigna un color diferente a cada calendario desde su menu de tres puntos. El archivo no puede forzar los colores de Google. La importacion es manual: no es una suscripcion ni borra o actualiza automaticamente eventos antiguos. Evita reimportar en calendarios diferentes; si necesitas reemplazar una importacion completa, hazlo en calendarios dedicados sin mezclar otros eventos.
+
+Las citas y recordatorios tienen una descarga aparte y no se incluyen en los dos calendarios de jornadas. Ya no se descargan eventos por la fecha general al dar de alta un trabajo. Tus dias aparecen tambien en la ficha de obra.
+
 ### Ficha de obra y exportaciones
 
 Al editar un presupuesto desde **Mi control**, cambiar cliente, fecha o estado conserva todos los importes. El campo Importe cambia solo el total final si lo modificas expresamente; no recalcula ni sobrescribe bruto, IVA, efectivo ni el desglose fiscal. El numero de presupuesto tampoco se modifica desde este editor.

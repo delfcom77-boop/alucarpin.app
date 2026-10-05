@@ -412,9 +412,12 @@
     const mostrarTipoTrabajo = tipo => ({ faena: 'Faena', presupuesto: 'Presupuesto', reparacion: 'Reparación' }[tipo] || tipo);
     const mostrarFechaTrabajo = fecha => String(fecha || '').split('-').reverse().join('/');
 
-    const descargarCalendario = async id => {
-      const respuesta = await apiFetch(`${api}/trabajos/${id}/calendario`);
-      if (!respuesta.ok) throw new Error('El trabajo se guardó, pero no se pudo generar el calendario.');
+    const descargarCalendario = async (id, origen) => {
+      const respuesta = await apiFetch(`${api}/trabajos/${id}/calendario?origen=${encodeURIComponent(origen)}`);
+      if (!respuesta.ok) {
+        const error = await respuesta.json().catch(() => null);
+        throw new Error(error?.detail || 'No se pudo generar el calendario de días trabajados.');
+      }
       const archivo = await respuesta.blob();
       const enlace = document.createElement('a');
       enlace.href = URL.createObjectURL(archivo);
@@ -446,7 +449,7 @@
       lista.forEach(trabajo => {
         const fila = document.createElement('tr');
         fila.innerHTML = `<td>${mostrarFechaTrabajo(trabajo.fecha_inicio)}${trabajo.fecha_fin ? ` - ${mostrarFechaTrabajo(trabajo.fecha_fin)}` : ''}</td><td>${mostrarTipoTrabajo(trabajo.tipo)}</td><td>${trabajo.cliente}</td><td>${trabajo.obra}</td><td>${trabajo.num_presupuesto || '-'}</td><td>${Number(trabajo.importe || 0).toFixed(2)} €</td><td>${trabajo.estado_cobro}</td><td class="agenda-acciones"><button type="button" class="calendario-trabajo">Calendario</button><button type="button" class="borrar-trabajo">Borrar</button></td>`;
-        fila.querySelector('.calendario-trabajo').onclick = () => descargarCalendario(trabajo.id).catch(error => { mensajeTrabajo.textContent = error.message; mensajeTrabajo.className = 'mensaje error'; });
+        fila.querySelector('.calendario-trabajo').onclick = () => descargarCalendario(trabajo.origen_id, trabajo.origen).catch(error => { mensajeTrabajo.textContent = error.message; mensajeTrabajo.className = 'mensaje error'; });
         fila.querySelector('.borrar-trabajo').onclick = async () => {
           if (!confirm(`¿Borrar el trabajo de ${trabajo.cliente}?`)) return;
           const borrado = await apiFetch(`/trabajos/${trabajo.id}`, { method: 'DELETE' });
@@ -482,8 +485,7 @@
       const respuesta = await apiFetch('/trabajos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) });
       const resultado = await respuesta.json();
       if (!respuesta.ok) { mensajeTrabajo.textContent = resultado.detail || 'No se pudo guardar el trabajo.'; mensajeTrabajo.className = 'mensaje error'; return; }
-      try { await descargarCalendario(resultado.id); } catch (error) { mensajeTrabajo.textContent = error.message; mensajeTrabajo.className = 'mensaje error'; }
-      mensajeTrabajo.textContent = 'Trabajo guardado y calendario generado.';
+      mensajeTrabajo.textContent = 'Trabajo guardado. Registra tus días en Mi control para exportarlos al calendario.';
       mensajeTrabajo.className = 'mensaje exito';
       formularioTrabajo.reset();
       document.querySelector('#trabajo-fecha-inicio').valueAsDate = new Date();

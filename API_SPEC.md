@@ -442,6 +442,12 @@ Varios pagos de la fuente de referencia generan `revision: true`, estado `Revisa
 
 `POST /seguimientos/{id}/cita` recibe el mismo cuerpo que `POST /citas` y devuelve la cita creada con HTTP 201. Crea la cita y archiva la nota en una sola transaccion, sin modificar sus demas campos. Devuelve 404 si no existe la nota y 409 si ya esta archivada; el cambio de estado condicional impide duplicar la conversion incluso con peticiones simultaneas. Si falla la insercion, el archivo se revierte. Requiere administrador.
 
+### Calendarios de dias trabajados
+
+`GET /jornadas-propias` lista los dias del administrador con `id`, `fecha`, `origen` (propio o presupuesto), `origen_id`, cliente, obra y ubicacion. `POST /obras/{origen}/{id}/jornadas` recibe `{"fecha":"2026-10-05"}` y crea un dia propio (201); 404 si no existe el destino y 409 si ya se registro esa obra/fecha. No modifica importes ni pagos. Startup crea `jornadas_propias` idempotentemente para SQLite/PostgreSQL. Los destinos con dias quedan protegidos contra borrado (409).
+
+`GET /calendario-trabajos.ics?tipo=propias|terceros` exporta exclusivamente dias registrados: jornadas_propias para propias y jornadas_faenas para terceros. No utiliza fichajes ni fechas generales. Devuelve 409 si no hay dias, eventos de dia completo con fin exclusivo y UID estable por origen/obra/fecha. `GET /trabajos/{id}/calendario?origen=propio|faena|presupuesto` exporta solo las jornadas de esa obra; origen por defecto propio. `GET /calendario.ics` queda reservado a citas y recordatorios, sin trabajos. Todos requieren administrador. Los dos archivos se importan manualmente en calendarios separados de Google para asignar colores; no hay sincronizacion automatica ni colores forzados.
+
 ---
 
 ## Códigos de Respuesta HTTP

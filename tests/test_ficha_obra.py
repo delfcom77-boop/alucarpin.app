@@ -14,6 +14,7 @@ class FichaObraTests(unittest.TestCase):
             ALTER TABLE fichajes_ayudantes ADD COLUMN presupuesto_id INTEGER;
             ALTER TABLE fichajes_ayudantes ADD COLUMN trabajo_propio_id INTEGER;
             CREATE TABLE jornadas_faenas (faena_id INTEGER, fecha TEXT);
+            CREATE TABLE jornadas_propias (presupuesto_id INTEGER, trabajo_id INTEGER, fecha TEXT);
             INSERT INTO jornadas_faenas VALUES (25,'2026-10-03');
             CREATE TABLE pagos_faenas (
                 id INTEGER, faena_id INTEGER, fecha TEXT, importe_iva REAL,
@@ -90,6 +91,16 @@ class FichaObraTests(unittest.TestCase):
         self.assertEqual(ficha["resumen"]["gastos"], 20)
         self.assertEqual(ficha["resumen"]["gastos_pagados"], 10)
         self.assertEqual(len(ficha["gastos"]), 1)
+
+    def test_dias_propios_presupuesto_no_se_confunden_con_reparacion(self):
+        self.preparar()
+        self.db.executescript("""
+            INSERT INTO jornadas_propias VALUES (25, NULL, '2026-10-04');
+            INSERT INTO jornadas_propias VALUES (NULL, 25, '2026-10-05');
+        """)
+        ficha = self.consultar("presupuesto")
+        self.assertEqual(ficha["dias_obra"], [{"fecha": "2026-10-04"}])
+        self.assertEqual(ficha["resumen"]["dias_obra_registrados"], 1)
 
     def test_presupuesto_sin_numero_no_recibe_cobros_ajenos(self):
         self.preparar()

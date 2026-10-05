@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Pruebas de calendario diario</title></head>
+<body>
+  <pre id="resultado">Ejecutando...</pre><iframe id="app" title="Calendario de prueba"></iframe>
+  <script>
+    function preparar() {
+      localStorage.setItem('alucarpin_token', 'prueba');
+      window.dias = [];
+      window.peticiones = [];
+      window.falloCalendario = false;
+      URL.createObjectURL = blob => { window.archivo = blob; return 'blob:prueba'; };
+      HTMLAnchorElement.prototype.click = function () { window.nombreArchivo = this.download; };
+      window.fetch = async (url, opciones = {}) => {
+        peticiones.push({ url, metodo: opciones.method || 'GET', cuerpo: opciones.body });
+        const trabajos = ['presupuesto', 'propio', 'faena'].map(origen => ({
+          origen, origen_id: 1, tipo: origen === 'propio' ? 'reparacion' : origen,
+          cliente: 'Cliente ' + origen, obra: 'Obra ' + origen, fecha_inicio: '2026-09-01', importe: 0,
+        }));
+        if (url === '/trabajos') return new Response(JSON.stringify(trabajos));
+        if (url === '/jornadas-propias') return new Response(JSON.stringify(dias.filter(d => d.origen !== 'faena')));
+        if (url === '/jornadas-faenas') return new Response(JSON.stringify(dias.filter(d => d.origen === 'faena').map(d => ({ ...d, faena_id: d.origen_id }))));
+        if (opciones.method === 'POST') {
+          const origen = url.includes('/faenas/') ? 'faena' : url.split('/')[2];
+          dias.push({ origen, origen_id: 1, fecha: JSON.parse(opciones.body).fecha });
+          return new Response('{}', { status: 201 });
+        }
+        if (url.startsWith('/calendario-trabajos.ics')) {
+          if (falloCalendario) return new Response('{"detail":"No hay días registrados"}', { status: 409 });
+          return new Response('BEGIN:VCALENDAR\r\nX-WR-CALNAME:' + url.split('=')[1] + '\r\nEND:VCALENDAR');
+        }
+        return new Response('[]');
+      };
+    }
+    (async () => {
+      const marco = document.querySelector('#app');
+      const esperar = async condicion => {
+        for (let i = 0; i < 150; i++) {
+          if (condicion()) return;
+          await new Promise(resolve => setTimeout(resolve, 20));
+        }
+        throw new Error('Tiempo agotado');
+      };
+      const comprobar = (ok, mensaje) => { if (!ok) throw new Error(mensaje); };
+      const cargar = async nombre => {
+        const html = (await fetch('../app_web/' + nombre + '.html').then(r => r.text()))
+          .replaceAll('/app/', '/app_web/').replace('<script src="/app_web/pwa.js"><\/script>', '');
+        marco.srcdoc = html.replace('<head>', `<head><script>(${preparar.toString()})();<\/script>`);
+        await new Promise(resolve => marco.onload = resolve);
+      };
+      await cargar('mi_control');
+      let w = marco.contentWindow;
+      let d = marco.contentDocument;
+      await esperar(() => d.querySelectorAll('#lista tr[data-origen]').length === 3);
+      for (const origen of ['presupuesto', 'propio', 'faena']) {
+        const fila = d.querySelector(`#lista tr[data-origen="${origen}"]`);
+        Array.from(fila.querySelectorAll('button')).find(b => b.textContent === 'Registrar día').click();
+        d.querySelector('#fecha-jornada').value = '2026-10-04';
+        d.querySelector('#formulario-jornada').requestSubmit();
+        await esperar(() => d.querySelector('#mensaje-jornada').textContent === 'Día trabajado guardado.');
+        comprobar(d.querySelector('#lista-jornadas-faena').children.length === 1, 'Mezcla obras con mismo ID');
+        d.querySelector('#cerrar-dialogo-jornada').click();
+      }
+      comprobar(w.dias.length === 3 && w.dias.every(d => d.fecha === '2026-10-04'), 'Registro diario incorrecto');
+      comprobar(w.peticiones.some(p => p.url === '/obras/presupuesto/1/jornadas') && w.peticiones.some(p => p.url === '/obras/propio/1/jornadas') && w.peticiones.some(p => p.url === '/faenas/1/jornadas'), 'Destino incorrecto');
+      await cargar('agenda');
+      w = marco.contentWindow; d = marco.contentDocument;
+      for (const tipo of ['propias', 'terceros']) {
+        d.querySelector(`[data-calendario-trabajos="${tipo}"]`).click();
+        await esperar(() => w.nombreArchivo === `alucarpin-faenas-${tipo}.ics`);
+        comprobar((await w.archivo.text()).includes('X-WR-CALNAME:' + tipo), 'Archivo mezclado');
+      }
+      w.falloCalendario = true;
+      d.querySelector('[data-calendario-trabajos="propias"]').click();
+      await esperar(() => d.querySelector('#mensaje-calendario-trabajos').textContent === 'No hay días registrados');
+      document.querySelector('#resultado').textContent = 'OK: Registrar días propios, reparaciones y terceros sin mezclar IDs\nOK: Solo fechas explícitas, no fechas generales ni ayudantes\nOK: Descargas separadas y errores sin éxito falso';
+    })().catch(error => { document.querySelector('#resultado').textContent = 'ERROR: ' + error.message; throw error; });
+  </script>
+</body>
+</html>

@@ -74,6 +74,7 @@
       <form id="formulario-jornada">
         <h2>Registrar día trabajado</h2>
         <p id="contexto-jornada"></p>
+        <p>Registra un día que has trabajado tú. No se copian los fichajes de ayudantes. Los días propios no generan pagos ni cobros.</p>
         <label>Fecha trabajada <input id="fecha-jornada" type="date" required></label>
         <button type="submit">Guardar día</button>
         <div id="mensaje-jornada" class="mensaje" aria-live="polite"></div>
@@ -128,6 +129,7 @@
     let trabajoEnEdicion = null;
     let faenaEnJornada = null;
     let jornadasFaenas = [];
+    let jornadasPropias = [];
     const parametrosAlarma = new URLSearchParams(location.search);
     let obraDesdeAlarma = parametrosAlarma.has('origen') && parametrosAlarma.has('obra')
       ? { origen: parametrosAlarma.get('origen'), id: parametrosAlarma.get('obra') } : null;
@@ -154,11 +156,6 @@
       const lista = await respuesta.json();
       presupuesto.innerHTML = '<option value="">Sin vincular</option>';
       lista.forEach(item => { const opcion = document.createElement('option'); opcion.value = item.num_presupuesto; opcion.textContent = `Nº ${item.num_presupuesto} | ${item.cliente} | ${item.estado || ''}`; presupuesto.appendChild(opcion); });
-    }
-    async function calendario(id) {
-      const respuesta = await apiFetch(`/trabajos/${id}/calendario`);
-      if (!respuesta.ok) throw new Error('No se pudo generar el calendario.');
-      const enlace = document.createElement('a'); enlace.href = URL.createObjectURL(await respuesta.blob()); enlace.download = `alucarpin-trabajo-${id}.ics`; enlace.click(); URL.revokeObjectURL(enlace.href);
     }
     function abrirEdicion(trabajo) {
       trabajoEnEdicion = trabajo;
@@ -215,23 +212,30 @@
     };
     async function borrarTrabajo(trabajo) { if (!confirm(`¿Borrar ${tipos[trabajo.tipo] || 'este trabajo'} de ${trabajo.cliente}?`)) return; const rutas = { propio: `/trabajos/${trabajo.origen_id}`, faena: `/faenas/${trabajo.origen_id}`, presupuesto: `/presupuestos/${trabajo.origen_id}` }; const respuesta = await apiFetch(rutas[trabajo.origen], { method: 'DELETE' }); if (!respuesta.ok) { const resultado = await respuesta.json().catch(() => null); mensaje.textContent = resultado?.detail || 'No se pudo borrar el registro.'; mensaje.className = 'mensaje error'; return; } await cargarTrabajos(); }
     async function cargarTrabajos() {
-      const [respuesta, respuestaJornadas] = await Promise.all([
+      const [respuesta, respuestaJornadas, respuestaPropias] = await Promise.all([
         apiFetch('/trabajos'),
-        apiFetch('/jornadas-faenas')
+        apiFetch('/jornadas-faenas'),
+        apiFetch('/jornadas-propias')
       ]);
       if (!respuesta.ok) throw new Error('No se pudieron cargar tus trabajos.');
       const trabajos = await respuesta.json();
       const cuerpo = document.querySelector('#lista');
       cuerpo.textContent = '';
       jornadasFaenas = [];
+      jornadasPropias = [];
       mensajeTrabajos.textContent = '';
       mensajeTrabajos.className = 'mensaje';
       if (respuestaJornadas.ok) {
         jornadasFaenas = await respuestaJornadas.json();
       } else {
         const errorJornadas = await respuestaJornadas.json().catch(() => ({}));
-        mensajeTrabajos.textContent = errorJornadas.detail || 'No se pudieron cargar los días trabajados.';
-        mensajeTrabajos.className = 'mensaje error';
+        throw new Error(errorJornadas.detail || 'No se pudieron cargar los días trabajados.');
+      }
+      if (respuestaPropias.ok) {
+        jornadasPropias = await respuestaPropias.json();
+      } else {
+        const error = await respuestaPropias.json().catch(() => null);
+        throw new Error(error?.detail || 'No se pudieron cargar tus días propios.');
       }
       if (!trabajos.length) {
         cuerpo.innerHTML = '<tr><td colspan="10">Todavía no hay trabajos.</td></tr>';
@@ -268,11 +272,9 @@
         });
         const dias = trabajo.origen === 'faena'
           ? jornadasPorFaena.get(trabajo.origen_id) || []
-          : [];
+          : jornadasPropias.filter(j => j.origen === trabajo.origen && j.origen_id === trabajo.origen_id).map(j => j.fecha);
         const celdaJornadas = document.createElement('td');
-        celdaJornadas.textContent = trabajo.origen === 'faena'
-          ? dias.length ? dias.map(fecha).join(', ') : 'Sin registrar'
-          : '-';
+        celdaJornadas.textContent = dias.length ? dias.map(fecha).join(', ') : 'Sin registrar';
         fila.appendChild(celdaJornadas);
         const celdaAcciones = document.createElement('td');
         celdaAcciones.className = 'acciones';
@@ -300,7 +302,7 @@
           };
           celdaAcciones.appendChild(botonEjecucion);
         }
-        if (trabajo.origen === 'faena') {
+        if (['faena', 'presupuesto', 'propio'].includes(trabajo.origen)) {
           const botonJornada = document.createElement('button');
           botonJornada.type = 'button';
           botonJornada.textContent = 'Registrar día';
@@ -355,9 +357,11 @@
     filtroTipoTrabajos.onchange = filtrarTrabajos;
     filtroClienteTrabajos.oninput = filtrarTrabajos;
     filtroObraTrabajos.oninput = filtrarTrabajos;
-    function mostrarJornadasFaena(faenaId) {
+    function mostrarJornadasFaena(trabajo) {
       listaJornadasFaena.textContent = '';
-      const dias = jornadasFaenas.filter(jornada => jornada.faena_id === faenaId);
+      const dias = trabajo.origen === 'faena'
+        ? jornadasFaenas.filter(j => j.faena_id === trabajo.origen_id)
+        : jornadasPropias.filter(j => j.origen === trabajo.origen && j.origen_id === trabajo.origen_id);
       if (!dias.length) {
         const item = document.createElement('li');
         item.textContent = 'Todavía no hay días registrados.';
@@ -372,11 +376,11 @@
     }
     function abrirRegistroJornada(trabajo) {
       faenaEnJornada = trabajo;
-      document.querySelector('#contexto-jornada').textContent = `${trabajo.cliente} — ${trabajo.obra || 'Sin nombre de obra'}`;
+      document.querySelector('#contexto-jornada').textContent = `${trabajo.cliente} — ${trabajo.obra || 'Sin nombre de obra'}${trabajo.num_presupuesto ? ` · Nº ${trabajo.num_presupuesto}` : ''}`;
       document.querySelector('#fecha-jornada').value = fechaLocalHoy();
       document.querySelector('#mensaje-jornada').textContent = '';
       document.querySelector('#mensaje-jornada').className = 'mensaje';
-      mostrarJornadasFaena(trabajo.origen_id);
+      mostrarJornadasFaena(trabajo);
       dialogoJornada.showModal();
     }
     document.querySelector('#cerrar-dialogo-jornada').onclick = () => dialogoJornada.close();
@@ -384,9 +388,15 @@
       event.preventDefault();
       if (!faenaEnJornada) return;
       const mensajeJornada = document.querySelector('#mensaje-jornada');
+      const guardar = formularioJornada.querySelector('button[type="submit"]');
+      if (guardar.disabled) return;
+      guardar.disabled = true;
       try {
         const fechaJornada = document.querySelector('#fecha-jornada').value;
-        const respuesta = await apiFetch(`/faenas/${faenaEnJornada.origen_id}/jornadas`, {
+        const url = faenaEnJornada.origen === 'faena'
+          ? `/faenas/${faenaEnJornada.origen_id}/jornadas`
+          : `/obras/${faenaEnJornada.origen}/${faenaEnJornada.origen_id}/jornadas`;
+        const respuesta = await apiFetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ fecha: fechaJornada })
@@ -398,13 +408,13 @@
           return;
         }
         await cargarTrabajos();
-        mostrarJornadasFaena(faenaEnJornada.origen_id);
+        mostrarJornadasFaena(faenaEnJornada);
         mensajeJornada.textContent = 'Día trabajado guardado.';
         mensajeJornada.className = 'mensaje exito';
       } catch (error) {
         mensajeJornada.textContent = error.message || 'No se pudo conectar con el servidor.';
         mensajeJornada.className = 'mensaje error';
-      }
+      } finally { guardar.disabled = false; }
     };
     async function cargarCitas() {
       const respuesta = await apiFetch('/citas');
@@ -430,7 +440,7 @@
       });
     }
     filtroTipoCitas.onchange = () => cargarCitas().catch(error => { mensaje.textContent = error.message; mensaje.className = 'mensaje error'; });
-    formulario.onsubmit = async event => { event.preventDefault(); const datos = { tipo: tipo.value, fecha_inicio: document.querySelector('#fecha-inicio').value, fecha_fin: document.querySelector('#fecha-fin').value || null, cliente: document.querySelector('#cliente').value, obra: document.querySelector('#obra').value, ubicacion: document.querySelector('#ubicacion').value, poblacion: document.querySelector('#poblacion').value, observaciones: document.querySelector('#observaciones').value, num_presupuesto: presupuesto.value || null, importe: Number(document.querySelector('#importe').value || 0), estado_cobro: document.querySelector('#estado').value, forma_pago: document.querySelector('#forma').value, fecha_cobro: null }; const respuesta = await apiFetch('/trabajos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) }); const resultado = await respuesta.json(); if (!respuesta.ok) { mensaje.textContent = resultado.detail || 'No se pudo guardar.'; mensaje.className = 'mensaje error'; return; } if (resultado.origen === 'propio') await calendario(resultado.id); mensaje.textContent = resultado.origen === 'propio' ? 'Reparación guardada y añadida al calendario.' : 'Trabajo creado en su sección correspondiente.'; mensaje.className = 'mensaje exito'; formulario.reset(); document.querySelector('#fecha-inicio').valueAsDate = new Date(); tipo.dispatchEvent(new Event('change')); await cargarTrabajos(); };
+    formulario.onsubmit = async event => { event.preventDefault(); const datos = { tipo: tipo.value, fecha_inicio: document.querySelector('#fecha-inicio').value, fecha_fin: document.querySelector('#fecha-fin').value || null, cliente: document.querySelector('#cliente').value, obra: document.querySelector('#obra').value, ubicacion: document.querySelector('#ubicacion').value, poblacion: document.querySelector('#poblacion').value, observaciones: document.querySelector('#observaciones').value, num_presupuesto: presupuesto.value || null, importe: Number(document.querySelector('#importe').value || 0), estado_cobro: document.querySelector('#estado').value, forma_pago: document.querySelector('#forma').value, fecha_cobro: null }; const respuesta = await apiFetch('/trabajos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) }); const resultado = await respuesta.json(); if (!respuesta.ok) { mensaje.textContent = resultado.detail || 'No se pudo guardar.'; mensaje.className = 'mensaje error'; return; } mensaje.textContent = 'Trabajo guardado. Usa Registrar día para llevar tus jornadas al calendario.'; mensaje.className = 'mensaje exito'; formulario.reset(); document.querySelector('#fecha-inicio').valueAsDate = new Date(); tipo.dispatchEvent(new Event('change')); await cargarTrabajos(); };
     document.querySelector('#fecha-inicio').valueAsDate = new Date(); tipo.dispatchEvent(new Event('change')); Promise.all([cargarPresupuestos(), cargarTrabajos(), cargarCitas()]).catch(error => { mensaje.textContent = error.message; mensaje.className = 'mensaje error'; });
   </script>
 </body>

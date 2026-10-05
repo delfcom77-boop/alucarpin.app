@@ -361,6 +361,15 @@ def startup():
             )
         identificador = "BIGSERIAL PRIMARY KEY" if DATABASE_URL else "INTEGER PRIMARY KEY AUTOINCREMENT"
         db.execute(
+            f"CREATE TABLE IF NOT EXISTS jornadas_propias (id {identificador}, "
+            "presupuesto_id BIGINT REFERENCES presupuestos(id) ON DELETE RESTRICT, "
+            "trabajo_id BIGINT REFERENCES trabajos_propios(id) ON DELETE RESTRICT, "
+            "fecha DATE NOT NULL, "
+            "CHECK ((presupuesto_id IS NOT NULL AND trabajo_id IS NULL) OR "
+            "(presupuesto_id IS NULL AND trabajo_id IS NOT NULL)), "
+            "UNIQUE (presupuesto_id, fecha), UNIQUE (trabajo_id, fecha))"
+        )
+        db.execute(
             f"CREATE TABLE IF NOT EXISTS pagos_faenas (id {identificador}, "
             "faena_id BIGINT NOT NULL REFERENCES faenas(id), fecha DATE, "
             "importe_iva DOUBLE PRECISION DEFAULT 0, importe_b DOUBLE PRECISION DEFAULT 0, "
@@ -1350,27 +1359,12 @@ def calendario_seguimiento(seguimiento_id: int, usuario=Depends(administrador)):
 def calendario_completo(usuario=Depends(administrador)):
     eventos = []
     with conexion() as db:
-        trabajos = db.execute("SELECT * FROM trabajos_propios ORDER BY fecha_inicio, id").fetchall()
         citas = db.execute("SELECT * FROM citas_agenda WHERE estado = 'Pendiente' ORDER BY fecha, hora, id").fetchall()
         seguimientos = db.execute("SELECT * FROM seguimientos_agenda WHERE estado = 'Pendiente' ORDER BY fecha_recordatorio, hora, id").fetchall()
         silencios = db.execute("SELECT fecha FROM calendario_silencios").fetchall()
     fechas_silenciadas = {fila["fecha"].isoformat() if hasattr(fila["fecha"], "isoformat") else str(fila["fecha"]) for fila in silencios}
 
     from datetime import timedelta
-    for trabajo in trabajos:
-        inicio = trabajo["fecha_inicio"]
-        fin = trabajo["fecha_fin"] or inicio
-        inicio_texto = inicio.strftime("%Y%m%d") if hasattr(inicio, "strftime") else str(inicio).replace("-", "")
-        if hasattr(fin, "strftime"):
-            fin_fecha = fin + timedelta(days=1)
-            fin_texto = fin_fecha.strftime("%Y%m%d")
-        else:
-            partes = str(fin).split("-")
-            fin_texto = (date(int(partes[0]), int(partes[1]), int(partes[2])) + timedelta(days=1)).strftime("%Y%m%d")
-        titulo = f"{trabajo['tipo'].capitalize()}: {trabajo['cliente']} - {trabajo['obra']}"
-        ubicacion = ", ".join(filter(None, [trabajo["ubicacion"], trabajo["poblacion"]]))
-        eventos.append([f"UID:alucarpin-trabajo-{trabajo['id']}@alucarpin.app", f"DTSTART;VALUE=DATE:{inicio_texto}", f"DTEND;VALUE=DATE:{fin_texto}", f"SUMMARY:{_ics_escape(titulo)}", f"LOCATION:{_ics_escape(ubicacion)}", f"DESCRIPTION:{_ics_escape(trabajo['observaciones'])}"])
-
     for cita in citas:
         fecha_texto = cita["fecha"].strftime("%Y%m%d") if hasattr(cita["fecha"], "strftime") else str(cita["fecha"]).replace("-", "")
         inicio = datetime.strptime(f"{fecha_texto} {cita['hora']}", "%Y%m%d %H:%M")
@@ -1499,6 +1493,8 @@ def modificar_presupuesto(presupuesto_id: int, datos: PresupuestoUpdate, usuario
 @app.delete("/presupuestos/{presupuesto_id}")
 def borrar_presupuesto(presupuesto_id: int, usuario=Depends(administrador)):
     with conexion() as db:
+        if db.execute("SELECT 1 FROM jornadas_propias WHERE presupuesto_id = ? LIMIT 1", (presupuesto_id,)).fetchone():
+            raise HTTPException(status_code=409, detail="El presupuesto tiene días propios registrados y no se puede borrar.")
         cursor = db.execute("DELETE FROM presupuestos WHERE id = ?", (presupuesto_id,))
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Presupuesto no encontrado")
@@ -1672,6 +1668,44 @@ def crear_faena(datos: FaenaCreate, usuario=Depends(administrador)):
             )
             fila = db.execute("SELECT * FROM faenas WHERE id = last_insert_rowid()").fetchone()
     return dict(fila)
+
+
+def consultar_jornadas_propias(db):
+    return [dict(fila) for fila in db.execute(
+        "SELECT j.id AS id, j.fecha AS fecha, 'presupuesto' AS origen, j.presupuesto_id AS origen_id, "
+        "p.cliente, 'Presupuesto ' || coalesce(p.num_presupuesto, '') AS obra, "
+        "'' AS ubicacion, '' AS poblacion FROM jornadas_propias j "
+        "JOIN presupuestos p ON p.id = j.presupuesto_id "
+        "UNION ALL SELECT j.id, j.fecha, 'propio' AS origen, j.trabajo_id AS origen_id, "
+        "t.cliente, t.obra, t.ubicacion, t.poblacion FROM jornadas_propias j "
+        "JOIN trabajos_propios t ON t.id = j.trabajo_id ORDER BY fecha, id"
+    ).fetchall()]
+
+
+@app.get("/jornadas-propias")
+def listar_jornadas_propias(usuario=Depends(administrador)):
+    with conexion() as db:
+        return consultar_jornadas_propias(db)
+
+
+@app.post("/obras/{origen}/{obra_id}/jornadas", status_code=201)
+def crear_jornada_propia(
+    origen: Literal["propio", "presupuesto"], obra_id: int,
+    datos: JornadaFaenaCreate, usuario=Depends(administrador),
+):
+    tabla, columna = ("presupuestos", "presupuesto_id") if origen == "presupuesto" else ("trabajos_propios", "trabajo_id")
+    with conexion() as db:
+        filtro = " AND tipo = 'reparacion'" if origen == "propio" else ""
+        if not db.execute(f"SELECT id FROM {tabla} WHERE id = ?{filtro}", (obra_id,)).fetchone():
+            raise HTTPException(status_code=404, detail="Obra no encontrada")
+        fila = db.execute(
+            f"INSERT INTO jornadas_propias ({columna}, fecha) VALUES (?, ?) "
+            f"ON CONFLICT ({columna}, fecha) DO NOTHING RETURNING id, fecha",
+            (obra_id, datos.fecha.isoformat()),
+        ).fetchone()
+        if not fila:
+            raise HTTPException(status_code=409, detail="Ya hay un día propio registrado para esta obra y fecha.")
+        return {**dict(fila), "origen": origen, "origen_id": obra_id}
 
 
 @app.patch("/faenas/{faena_id}")
@@ -1864,7 +1898,10 @@ def ficha_obra(
             })
         dias_obra = [dict(f) for f in db.execute(
             "SELECT fecha FROM jornadas_faenas WHERE faena_id = ? ORDER BY fecha", (obra_id,),
-        ).fetchall()] if origen == "faena" else []
+        ).fetchall()] if origen == "faena" else [dict(f) for f in db.execute(
+            f"SELECT fecha FROM jornadas_propias WHERE {'presupuesto_id' if origen == 'presupuesto' else 'trabajo_id'} = ? ORDER BY fecha",
+            (obra_id,),
+        ).fetchall()]
         if origen == "faena":
             cobros = [dict(f) for f in db.execute(
                 "SELECT id, fecha, importe_iva, importe_b, forma_pago, observaciones "
@@ -1963,6 +2000,8 @@ def modificar_trabajo(trabajo_id: int, datos: TrabajoUpdate, usuario=Depends(adm
 @app.delete("/trabajos/{trabajo_id}")
 def borrar_trabajo(trabajo_id: int, usuario=Depends(administrador)):
     with conexion() as db:
+        if db.execute("SELECT 1 FROM jornadas_propias WHERE trabajo_id = ? LIMIT 1", (trabajo_id,)).fetchone():
+            raise HTTPException(status_code=409, detail="La obra tiene días propios registrados y no se puede borrar.")
         cursor = db.execute("DELETE FROM trabajos_propios WHERE id = ?", (trabajo_id,))
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Trabajo no encontrado")
@@ -1973,37 +2012,72 @@ def _ics_escape(valor):
     return str(valor or "").replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
 
 
-@app.get("/trabajos/{trabajo_id}/calendario")
-def calendario_trabajo(trabajo_id: int, usuario=Depends(administrador)):
+def plegar_lineas_ics(lineas):
+    resultado = []
+    for linea in lineas:
+        parte = ""
+        longitud = 0
+        for caracter in linea:
+            tamano = len(caracter.encode("utf-8"))
+            if longitud + tamano > 75:
+                resultado.append(parte)
+                parte, longitud = " ", 1
+            parte += caracter
+            longitud += tamano
+        resultado.append(parte)
+    return "\r\n".join(resultado)
+
+
+def calendario_dias(tipo, usuario, origen=None, obra_id=None):
+    from datetime import timedelta
     with conexion() as db:
-        trabajo = db.execute("SELECT * FROM trabajos_propios WHERE id = ?", (trabajo_id,)).fetchone()
-    if not trabajo:
-        raise HTTPException(status_code=404, detail="Trabajo no encontrado")
-    inicio = trabajo["fecha_inicio"].strftime("%Y%m%d") if hasattr(trabajo["fecha_inicio"], "strftime") else str(trabajo["fecha_inicio"]).replace("-", "")
-    fecha_fin = trabajo["fecha_fin"] or trabajo["fecha_inicio"]
-    if hasattr(fecha_fin, "toordinal"):
-        from datetime import timedelta
-        fecha_fin = fecha_fin + timedelta(days=1)
-        fin = fecha_fin.strftime("%Y%m%d")
-    else:
-        partes = str(fecha_fin).split("-")
-        fecha_fin = date(int(partes[0]), int(partes[1]), int(partes[2]))
-        from datetime import timedelta
-        fin = (fecha_fin + timedelta(days=1)).strftime("%Y%m%d")
-    titulo = f"{trabajo['tipo'].capitalize()}: {trabajo['cliente']} - {trabajo['obra']}"
-    descripcion = " | ".join(filter(None, [trabajo["observaciones"], f"Presupuesto {trabajo['num_presupuesto']}" if trabajo["num_presupuesto"] else ""]))
-    ubicacion = ", ".join(filter(None, [trabajo["ubicacion"], trabajo["poblacion"]]))
-    contenido = "\r\n".join([
-        "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Alucarpin//Agenda//ES", "BEGIN:VEVENT",
-        f"UID:alucarpin-trabajo-{trabajo_id}@alucarpin.app", f"DTSTAMP:{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}",
-        f"DTSTART;VALUE=DATE:{inicio}", f"DTEND;VALUE=DATE:{fin}", f"SUMMARY:{_ics_escape(titulo)}",
-        f"LOCATION:{_ics_escape(ubicacion)}", f"DESCRIPTION:{_ics_escape(descripcion)}", "END:VEVENT", "END:VCALENDAR", "",
-    ])
-    return Response(
-        content=contenido,
-        media_type="text/calendar",
-        headers={"Content-Disposition": f'attachment; filename="alucarpin-trabajo-{trabajo_id}.ics"'},
-    )
+        if tipo == "terceros":
+            dias = [dict(f) for f in db.execute(
+                "SELECT j.fecha, 'faena' AS origen, f.id AS origen_id, "
+                "f.cliente, f.obra, f.ubicacion, f.poblacion FROM jornadas_faenas j "
+                "JOIN faenas f ON f.id = j.faena_id ORDER BY j.fecha, f.id"
+            ).fetchall()]
+        else:
+            dias = consultar_jornadas_propias(db)
+    if origen is not None:
+        obra = next((t for t in listar_trabajos(usuario) if t["origen"] == origen and t["origen_id"] == obra_id), None)
+        if not obra:
+            raise HTTPException(status_code=404, detail="Obra no encontrada")
+        dias = [d for d in dias if d["origen"] == origen and d["origen_id"] == obra_id]
+    if not dias:
+        raise HTTPException(status_code=409, detail="No hay días trabajados registrados para exportar. Usa Registrar día en Mi control.")
+    nombre = "Faenas a terceros" if tipo == "terceros" else "Faenas propias"
+    lineas = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Alucarpin//Jornadas//ES", f"X-WR-CALNAME:{nombre}"]
+    for dia in dias:
+        fecha = dia["fecha"] if isinstance(dia["fecha"], date) else date.fromisoformat(str(dia["fecha"]))
+        titulo = f"{nombre}: {dia['cliente']} - {dia['obra'] or 'Sin nombre de obra'}"
+        lineas.extend([
+            "BEGIN:VEVENT",
+            f"UID:alucarpin-dia-{dia['origen']}-{dia['origen_id']}-{fecha.isoformat()}@alucarpin.app",
+            f"DTSTAMP:{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}",
+            f"DTSTART;VALUE=DATE:{fecha.strftime('%Y%m%d')}",
+            f"DTEND;VALUE=DATE:{(fecha + timedelta(days=1)).strftime('%Y%m%d')}",
+            f"SUMMARY:{_ics_escape(titulo)}",
+            f"LOCATION:{_ics_escape(', '.join(filter(None, [dia['ubicacion'], dia['poblacion']])))}",
+            "DESCRIPTION:Día trabajado registrado por el administrador. No registra cobros ni pagos.",
+            "END:VEVENT",
+        ])
+    lineas.extend(["END:VCALENDAR", ""])
+    return Response(content=plegar_lineas_ics(lineas), media_type="text/calendar",
+                    headers={"Content-Disposition": f'attachment; filename="alucarpin-faenas-{tipo}.ics"'})
+
+
+@app.get("/calendario-trabajos.ics")
+def calendario_trabajos(tipo: Literal["propias", "terceros"], usuario=Depends(administrador)):
+    return calendario_dias(tipo, usuario)
+
+
+@app.get("/trabajos/{trabajo_id}/calendario")
+def calendario_trabajo(
+    trabajo_id: int, origen: Literal["propio", "faena", "presupuesto"] = "propio",
+    usuario=Depends(administrador),
+):
+    return calendario_dias("terceros" if origen == "faena" else "propias", usuario, origen, trabajo_id)
 
 
 @app.patch("/usuarios/{usuario_id}/password")

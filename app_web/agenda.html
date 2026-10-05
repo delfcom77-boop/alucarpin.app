@@ -175,7 +175,15 @@
   <main>
     <header><h1>Agenda y citas</h1><p>Visitas, reuniones, llamadas y reparaciones pendientes</p></header>
     <nav><a href="/app/inicio.html">Volver al menú</a></nav>
-    <button id="sincronizar-calendario" type="button">Sincronizar todo con el calendario</button>
+    <section>
+      <h2>Mis días trabajados en Google Calendar</h2>
+      <p>Registra tus días en Mi control con Registrar día. No se utilizan fichajes de ayudantes ni fechas generales de presupuestos.</p>
+      <button type="button" data-calendario-trabajos="propias">Descargar mis faenas propias</button>
+      <button type="button" data-calendario-trabajos="terceros">Descargar mis faenas a terceros</button>
+      <p>Crea dos calendarios en Google Calendar: Faenas propias y Faenas a terceros. En Configuración → Importar y exportar, importa cada archivo en su calendario. Asigna un color diferente a cada uno. Es una importación manual, no una sincronización automática; usa siempre el mismo calendario para cada tipo.</p>
+      <p id="mensaje-calendario-trabajos" class="mensaje" role="status" aria-live="polite"></p>
+    </section>
+    <button id="sincronizar-calendario" type="button">Descargar citas y recordatorios (aparte de mis faenas)</button>
       <div class="agenda-menu" aria-label="Secciones de agenda">
         <button type="button" class="seleccionado" data-seccion-agenda="citas">NUEVA CITA</button>
         <button type="button" data-seccion-agenda="notas">NUEVA NOTA</button>
@@ -261,7 +269,31 @@
     const fechaTexto = valor => String(valor || '').split('-').reverse().join('/');
     const valor = id => document.querySelector(`#${id}`).value;
     const sincronizarCalendario = async () => { const respuesta = await apiFetch('/calendario.ics'); if (!respuesta.ok) throw new Error('No se pudo sincronizar el calendario.'); const enlace = document.createElement('a'); enlace.href = URL.createObjectURL(await respuesta.blob()); enlace.download = 'alucarpin-calendario-completo.ics'; enlace.click(); URL.revokeObjectURL(enlace.href); };
-    document.querySelector('#sincronizar-calendario').onclick = () => sincronizarCalendario().then(() => { mensaje.textContent = 'Calendario sincronizado con todas tus citas, trabajos y recordatorios.'; mensaje.className = 'mensaje exito'; }).catch(error => mostrarError(error.message));
+    document.querySelector('#sincronizar-calendario').onclick = () => sincronizarCalendario().then(() => { mensaje.textContent = 'Archivo de citas y recordatorios descargado. Tus faenas se descargan por separado.'; mensaje.className = 'mensaje exito'; }).catch(error => mostrarError(error.message));
+    document.querySelectorAll('[data-calendario-trabajos]').forEach(boton => {
+      boton.onclick = async () => {
+        const aviso = document.querySelector('#mensaje-calendario-trabajos');
+        boton.disabled = true;
+        try {
+          const tipo = boton.dataset.calendarioTrabajos;
+          const respuesta = await apiFetch(`/calendario-trabajos.ics?tipo=${tipo}`);
+          if (!respuesta.ok) {
+            const error = await respuesta.json().catch(() => null);
+            throw new Error(textoDetalleError(error?.detail) || `No se pudo descargar el calendario (HTTP ${respuesta.status}).`);
+          }
+          const enlace = document.createElement('a');
+          enlace.href = URL.createObjectURL(await respuesta.blob());
+          enlace.download = `alucarpin-faenas-${tipo}.ics`;
+          enlace.click();
+          setTimeout(() => URL.revokeObjectURL(enlace.href), 1000);
+          aviso.textContent = 'Archivo descargado. Impórtalo en el calendario de Google correspondiente.';
+          aviso.className = 'mensaje exito';
+        } catch (error) {
+          aviso.textContent = error.message;
+          aviso.className = 'mensaje error';
+        } finally { boton.disabled = false; }
+      };
+    });
     document.querySelector('#fecha').valueAsDate = new Date();
     document.querySelector('#hora').value = '09:00';
     document.querySelector('#seguimiento-fecha-llamada').valueAsDate = new Date();
