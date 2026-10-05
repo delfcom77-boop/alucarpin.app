@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Pruebas del editor de presupuestos</title></head>
+<body>
+  <pre id="resultado">Ejecutando...</pre>
+  <iframe id="app" title="Mi control de prueba"></iframe>
+  <script>
+    function preparar() {
+      localStorage.setItem('alucarpin_token', 'prueba-local');
+      window.cambios = [];
+      window.fallar = false;
+      window.fetch = async (url, opciones = {}) => {
+        if (opciones.method === 'PATCH') {
+          cambios.push({ url, datos: JSON.parse(opciones.body) });
+          return new Response(JSON.stringify(fallar ? { detail: 'Cambio rechazado de prueba' } : {}), { status: fallar ? 409 : 200 });
+        }
+        const trabajo = { origen: 'presupuesto', origen_id: 27, tipo: 'presupuesto', cliente: 'Cliente prueba', obra: 'Presupuesto', fecha_inicio: '2026-10-05', num_presupuesto: 'P-27', importe: 19314.27, estado: 'Aceptado' };
+        return new Response(JSON.stringify(url === '/trabajos' ? [trabajo] : []));
+      };
+    }
+    (async () => {
+      const html = (await fetch('../app_web/mi_control.html').then(r => r.text()))
+        .replaceAll('/app/', '/app_web/')
+        .replace('<script src="/app_web/pwa.js"><\/script>', '');
+      const marco = document.querySelector('#app');
+      marco.srcdoc = html.replace('<head>', `<head><script>(${preparar.toString()})();<\/script>`);
+      await new Promise(resolve => marco.onload = resolve);
+      const w = marco.contentWindow;
+      const d = marco.contentDocument;
+      const esperar = async condicion => {
+        for (let i = 0; i < 100; i++) {
+          if (condicion()) return;
+          await new Promise(resolve => setTimeout(resolve, 30));
+        }
+        throw new Error('Tiempo agotado esperando al editor');
+      };
+      const abrir = async () => {
+        const boton = () => Array.from(d.querySelectorAll('#lista button')).find(b => b.textContent === 'Editar');
+        await esperar(boton);
+        boton().click();
+      };
+      const guardar = async () => {
+        const cantidad = w.cambios.length;
+        d.querySelector('#formulario-edicion-trabajo').requestSubmit();
+        await esperar(() => w.cambios.length > cantidad);
+        return w.cambios.at(-1);
+      };
+      const comprobar = (valor, mensaje) => { if (!valor) throw new Error(mensaje); };
+      const prohibidos = ['bruto', 'iva', 'total_iva', 'presupuesto_iva', 'efectivo', 'num_presupuesto'];
+      await abrir();
+      d.querySelector('#editar-cliente').value = 'Cliente cambiado';
+      d.querySelector('#editar-fecha').value = '2026-10-06';
+      d.querySelector('#editar-estado').value = 'Completado';
+      const primero = await guardar();
+      comprobar(primero.url === '/presupuestos/27', 'Destino incorrecto');
+      comprobar(primero.datos.cliente === 'Cliente cambiado' && primero.datos.fecha === '2026-10-06' && primero.datos.estado === 'Completado', 'Edicion incompleta');
+      comprobar(!('presupuesto_final' in primero.datos) && prohibidos.every(k => !(k in primero.datos)), 'Sobrescribe importes sin editarlos');
+      await esperar(() => !d.querySelector('dialog').open);
+      await abrir();
+      d.querySelector('#editar-importe').value = '0';
+      const segundo = await guardar();
+      comprobar(segundo.datos.presupuesto_final === 0 && prohibidos.every(k => !(k in segundo.datos)), 'No conserva desglose al cambiar total a cero');
+      await esperar(() => !d.querySelector('dialog').open);
+      await abrir();
+      w.fallar = true;
+      await guardar();
+      await esperar(() => d.querySelector('#mensaje-edicion-trabajo').textContent.includes('Cambio rechazado'));
+      comprobar(d.querySelector('dialog').open, 'Cierra el editor tras error');
+      document.querySelector('#resultado').textContent = 'OK: Cliente, fecha y estado sin modificar importes\nOK: Total explicito, incluido cero, sin modificar desglose\nOK: Error visible y editor permanece abierto';
+    })().catch(error => { document.querySelector('#resultado').textContent = 'ERROR: ' + error.message; throw error; });
+  </script>
+</body>
+</html>

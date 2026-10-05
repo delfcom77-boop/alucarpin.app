@@ -135,6 +135,8 @@ La agenda muestra notas y citas pendientes vencidas y las previstas hasta dentro
 
 ### Ficha de obra y exportaciones
 
+Al editar un presupuesto desde **Mi control**, cambiar cliente, fecha o estado conserva todos los importes. El campo Importe cambia solo el total final si lo modificas expresamente; no recalcula ni sobrescribe bruto, IVA, efectivo ni el desglose fiscal. El numero de presupuesto tampoco se modifica desde este editor.
+
 En **Mi control -> Mis trabajos**, **Ver ficha** abre una consulta de cliente, obra, ubicacion, ejecucion, cobro, dias de ayudantes, dias propios de faena, gastos y cobros vinculados. Se agrupan los fichajes por ayudante y fecha. El pago mostrado es el del dia completo contigo, aunque ese dia se trabaje en otras obras; no se suma como coste de cada obra ni se calcula un beneficio ficticio.
 
 Los datos se vinculan por identificadores, no por nombres similares. Los gastos y cobros de presupuestos se consultan por numero. Si falta un vinculo no se inventa: la ficha muestra Sin registros vinculados. Las reparaciones no tienen un vinculo directo a gastos en el modelo actual; su cobro es el estado registrado en Mi control. Un presupuesto historico Completado puede indicar cobrado sin tener movimientos independientes.
