@@ -90,6 +90,12 @@ CREATE INDEX IF NOT EXISTS idx_jornadas_faenas_faena_fecha
 CREATE INDEX IF NOT EXISTS idx_trabajos_propios_fecha
     ON trabajos_propios (fecha_inicio);
 
+CREATE TABLE IF NOT EXISTS estados_ejecucion_trabajos (
+    trabajo_id INTEGER PRIMARY KEY REFERENCES trabajos_propios(id) ON DELETE CASCADE,
+    estado TEXT NOT NULL CHECK (estado IN ('Pendiente', 'Terminado')),
+    actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
     CREATE TABLE IF NOT EXISTS remates (
         id BIGSERIAL PRIMARY KEY,
         origen TEXT NOT NULL,

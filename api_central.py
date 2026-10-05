@@ -9,7 +9,7 @@ import psycopg
 from psycopg.rows import dict_row
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from fastapi.staticfiles import StaticFiles
 from base_datos import ruta_base_datos
 from autenticacion import crear_token, inicializar_usuarios, password_valida, usuario_desde_token
@@ -150,6 +150,16 @@ class PagoCreate(BaseModel):
     importe_pagado: float = Field(default=0, ge=0)
     fecha_pago: Optional[date] = None
 
+    @model_validator(mode="after")
+    def validar_fechas(self):
+        if self.desde > self.hasta:
+            raise ValueError("El rango de fechas no es válido.")
+        return self
+
+
+class SeguimientoEstadoUpdate(BaseModel):
+    estado: Literal["Pendiente", "Realizado", "Archivado"]
+
 
 class GastoCreate(BaseModel):
     tipo: Literal["faena", "presupuesto"]
@@ -179,6 +189,9 @@ class PagoJornadaUpdate(BaseModel):
     importe_pagado: float = Field(default=0, ge=0)
     forma_pago: str = "Efectivo"
     estado_pago: Literal["No pagado", "Parcial", "Pagado"] = "No pagado"
+
+class EstadoEjecucionUpdate(BaseModel):
+    estado: Literal["Pendiente", "Terminado"]
 
 
 class LoginCreate(BaseModel):
@@ -329,6 +342,13 @@ def inicializar_usuarios(db):
 @app.on_event("startup")
 def startup():
     inicializar_base_datos()
+    with conexion() as db:
+        db.execute(
+            "CREATE TABLE IF NOT EXISTS estados_ejecucion_trabajos ("
+            "trabajo_id INTEGER PRIMARY KEY REFERENCES trabajos_propios(id) ON DELETE CASCADE, "
+            "estado TEXT NOT NULL CHECK (estado IN ('Pendiente', 'Terminado')), "
+            "actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+        )
 
 
 def usuario_actual(credenciales: HTTPAuthorizationCredentials = Depends(seguridad)):
@@ -868,15 +888,40 @@ def listar_alarmas(usuario=Depends(administrador)):
     with conexion() as db:
         notas = db.execute("SELECT id, fecha_recordatorio AS fecha, hora, cliente, ubicacion, poblacion, motivo AS detalle, estado FROM seguimientos_agenda WHERE estado IN ('Pendiente', 'Archivado')").fetchall()
         citas = db.execute("SELECT id, fecha, hora, cliente, ubicacion, poblacion, observaciones AS detalle, estado FROM citas_agenda WHERE estado IN ('Pendiente', 'Archivado')").fetchall()
-        trabajos = db.execute("SELECT id, fecha_inicio AS fecha, '' AS hora, cliente, ubicacion, poblacion, obra AS detalle, estado_cobro AS estado FROM trabajos_propios WHERE fecha_inicio >= CURRENT_DATE").fetchall()
+        trabajos = db.execute(
+            "SELECT t.id, t.fecha_inicio AS fecha, '' AS hora, t.cliente, t.ubicacion, "
+            "t.poblacion, t.obra AS detalle, t.estado_cobro, "
+            "COALESCE(e.estado, 'Pendiente') AS estado_ejecucion "
+            "FROM trabajos_propios t LEFT JOIN estados_ejecucion_trabajos e ON e.trabajo_id = t.id"
+        ).fetchall()
     alarmas = []
     for fila in notas:
         item = dict(fila); item.update(tipo="nota", referencia_id=item.pop("id")); alarmas.append(item)
     for fila in citas:
         item = dict(fila); item.update(tipo="cita", referencia_id=item.pop("id")); alarmas.append(item)
     for fila in trabajos:
-        item = dict(fila); item.update(tipo="trabajo", referencia_id=item.pop("id")); alarmas.append(item)
+        datos = dict(fila)
+        ident = datos.pop("id")
+        ejecucion = datos.pop("estado_ejecucion")
+        cobro = datos.pop("estado_cobro")
+        alarmas.append({**datos, "tipo": "trabajo", "referencia_id": ident,
+                        "estado": "Archivado" if ejecucion == "Terminado" else "Pendiente",
+                        "estado_ejecucion": ejecucion})
+        if cobro != "Cobrado":
+            alarmas.append({**datos, "tipo": "cobro", "referencia_id": ident, "estado": "No cobrado"})
     return sorted(alarmas, key=lambda item: (str(item.get("fecha") or ""), str(item.get("hora") or "")))
+
+@app.patch("/trabajos/{trabajo_id}/ejecucion")
+def actualizar_ejecucion_trabajo(trabajo_id: int, datos: EstadoEjecucionUpdate, usuario=Depends(administrador)):
+    with conexion() as db:
+        if not db.execute("SELECT id FROM trabajos_propios WHERE id = ?", (trabajo_id,)).fetchone():
+            raise HTTPException(status_code=404, detail="Trabajo no encontrado")
+        db.execute(
+            "INSERT INTO estados_ejecucion_trabajos (trabajo_id, estado) VALUES (?, ?) "
+            "ON CONFLICT (trabajo_id) DO UPDATE SET estado = excluded.estado, actualizado_en = CURRENT_TIMESTAMP",
+            (trabajo_id, datos.estado),
+        )
+    return {"trabajo_id": trabajo_id, "estado": datos.estado}
 
 
 @app.post("/calendario/silenciar")
@@ -1021,6 +1066,20 @@ def listar_seguimientos(usuario=Depends(administrador)):
             "SELECT * FROM seguimientos_agenda ORDER BY estado, fecha_recordatorio, hora, id"
         ).fetchall()
     return [dict(fila) for fila in filas]
+
+
+@app.patch("/seguimientos/{seguimiento_id}/estado")
+def actualizar_estado_seguimiento(
+    seguimiento_id: int, datos: SeguimientoEstadoUpdate, usuario=Depends(administrador),
+):
+    with conexion() as db:
+        cursor = db.execute(
+            "UPDATE seguimientos_agenda SET estado = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?",
+            (datos.estado, seguimiento_id),
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Seguimiento no encontrado")
+    return {"id": seguimiento_id, "estado": datos.estado}
 
 
 @app.post("/seguimientos", status_code=201)
@@ -1790,19 +1849,22 @@ def listar_fichajes(
             parametros,
         ).fetchall()
         registros = [dict(fila) for fila in filas]
-        pagos_jornadas = db.execute(
-            "SELECT fichaje_id, importe, importe_pagado FROM pagos_jornadas WHERE fichaje_id IN (SELECT id FROM fichajes_ayudantes WHERE ayudante_id = ?)",
-            (ayudante_id,),
-        ).fetchall()
-        pagos_por_fichaje = {pago["fichaje_id"]: pago for pago in pagos_jornadas}
+        por_fecha = {}
+        for registro in registros:
+            por_fecha.setdefault(registro["fecha"], []).append(registro)
+        pagos_por_fecha = {fecha: agrupar_pagos_dia(db, grupo) for fecha, grupo in por_fecha.items()}
         pagos = db.execute(
             "SELECT ayudante_id, desde, hasta, precio_dia, importe_pagado FROM liquidaciones WHERE ayudante_id = ?",
             (ayudante_id,),
         ).fetchall()
         for registro in registros:
             registro["pagado"] = False
-            pago_jornada = pagos_por_fichaje.get(registro["id"])
-            if pago_jornada:
+            pagos_fecha = pagos_por_fecha[registro["fecha"]]
+            if pagos_fecha["pagos_existentes"]:
+                if pagos_fecha["revision"]:
+                    registro["pago_revision"] = True
+                    continue
+                pago_jornada = pagos_fecha["pago"]
                 registro["pagado"] = (
                     pago_jornada["importe"] > 0
                     and pago_jornada["importe_pagado"] >= pago_jornada["importe"]
@@ -1812,9 +1874,8 @@ def listar_fichajes(
                 desde_pago = pago["desde"]
                 hasta_pago = pago["hasta"]
                 if desde_pago <= registro["fecha"] <= hasta_pago:
-                    dia_laborable = "strftime('%w', fecha) NOT IN ('0', '6')" if not DATABASE_URL else "EXTRACT(DOW FROM fecha) NOT IN (0, 6)"
                     cantidad = db.execute(
-                        f"SELECT COUNT(*) AS cantidad FROM fichajes_ayudantes WHERE ayudante_id = ? AND fecha BETWEEN ? AND ? AND confirmado_ayudante = 1 AND {dia_laborable}",
+                        "SELECT COUNT(DISTINCT fecha) AS cantidad FROM fichajes_ayudantes WHERE ayudante_id = ? AND fecha BETWEEN ? AND ? AND confirmado_ayudante = 1",
                         (ayudante_id, desde_pago, hasta_pago),
                     ).fetchone()["cantidad"]
                     total = round(cantidad * pago["precio_dia"], 2)
@@ -2063,45 +2124,129 @@ def validar_fichaje(
     return dict(fila)
 
 
+def obtener_pagos_fichaje(db, fichaje_id: int):
+    pagos = []
+    pago_jornada = db.execute(
+        "SELECT importe, importe_pagado, forma_pago, estado_pago, fecha_pago FROM pagos_jornadas WHERE fichaje_id = ?",
+        (fichaje_id,),
+    ).fetchone()
+    if pago_jornada:
+        importe = pago_jornada["importe"]
+        pagado = pago_jornada["importe_pagado"]
+        estado = "Pagado" if pagado >= importe and importe > 0 else "Parcial" if pagado > 0 else "No pagado"
+        pagos.append({"fichaje_id": fichaje_id, **dict(pago_jornada), "estado_pago": estado, "creado": True, "origen": "jornada"})
+    fichaje = db.execute(
+        "SELECT f.id, f.ayudante_id, f.fecha, f.obra, f.faena_id_vinculada, "
+        "a.nombre FROM fichajes_ayudantes f JOIN ayudantes a "
+        "ON a.id = f.ayudante_id WHERE f.id = ?",
+        (fichaje_id,),
+    ).fetchone()
+    if not fichaje:
+        raise HTTPException(status_code=404, detail="Fichaje no encontrado")
+    if not fichaje["faena_id_vinculada"]:
+        return pagos
+    for tabla in ("gastos_faenas_extras", "gasto_faenas"):
+        db.execute("SAVEPOINT consulta_pago_legacy")
+        try:
+            gastos = db.execute(
+                f"SELECT id, importe, COALESCE(importe_pagado, pagado, 0) AS importe_pagado, forma_pago, estado_pago FROM {tabla} "
+                "WHERE faena_id = ? AND proveedor = ? AND fecha = ? "
+                "AND categoria = 'Ayudantes' ORDER BY id",
+                (fichaje["faena_id_vinculada"], fichaje["nombre"], fichaje["fecha"]),
+            ).fetchall()
+        except (sqlite3.OperationalError, psycopg.errors.UndefinedTable) as error:
+            db.execute("ROLLBACK TO SAVEPOINT consulta_pago_legacy")
+            db.execute("RELEASE SAVEPOINT consulta_pago_legacy")
+            if isinstance(error, sqlite3.OperationalError) and "no such table" not in str(error).lower():
+                raise
+            continue
+        db.execute("RELEASE SAVEPOINT consulta_pago_legacy")
+        for gasto in gastos:
+            estado = "Pagado" if gasto["importe_pagado"] >= gasto["importe"] and gasto["importe"] > 0 else "Parcial" if gasto["importe_pagado"] > 0 else "No pagado"
+            pagos.append({"fichaje_id": fichaje_id, "gasto_id": gasto["id"], "tabla_gasto": tabla, "importe": gasto["importe"], "importe_pagado": gasto["importe_pagado"], "forma_pago": gasto["forma_pago"], "estado_pago": estado, "creado": True})
+    return pagos
+
+def agrupar_pagos_dia(db, fichajes):
+    pagos = {}
+    for fichaje in fichajes:
+        for pago in obtener_pagos_fichaje(db, fichaje["id"]):
+            clave = ("jornada", fichaje["id"]) if pago.get("origen") == "jornada" else (pago["tabla_gasto"], pago["gasto_id"])
+            pagos[clave] = pago
+    existentes = list(pagos.values())
+    elegido = existentes[0] if len(existentes) == 1 else None
+    revision = len(existentes) > 1
+    return {
+        "id": elegido["fichaje_id"] if elegido else min(f["id"] for f in fichajes),
+        "fecha": fichajes[0]["fecha"],
+        "obra": " | ".join(dict.fromkeys(f["obra"] or "Sin obra" for f in fichajes)),
+        "fichajes_ids": [f["id"] for f in fichajes],
+        "pago": elegido or {"importe": None if revision else 50, "importe_pagado": None if revision else 0,
+                           "forma_pago": "Efectivo", "estado_pago": "Revisar" if revision else "No pagado", "creado": revision},
+        "revision": revision,
+        "pagos_existentes": existentes,
+    }
+
+
+@app.get("/ayudantes/{ayudante_id}/jornadas-pago")
+def listar_jornadas_pago(ayudante_id: int, desde: date, hasta: date, usuario=Depends(administrador)):
+    if desde > hasta:
+        raise HTTPException(status_code=400, detail="El rango de fechas no es válido.")
+    with conexion() as db:
+        if not db.execute("SELECT id FROM ayudantes WHERE id = ?", (ayudante_id,)).fetchone():
+            raise HTTPException(status_code=404, detail="Ayudante no encontrado")
+        fichajes = db.execute(
+            "SELECT * FROM fichajes_ayudantes WHERE ayudante_id = ? AND fecha BETWEEN ? AND ? ORDER BY fecha, id",
+            (ayudante_id, desde.isoformat(), hasta.isoformat()),
+        ).fetchall()
+        grupos = {}
+        for fichaje in fichajes:
+            grupos.setdefault(fichaje["fecha"], []).append(dict(fichaje))
+        return [agrupar_pagos_dia(db, grupo) for grupo in grupos.values()]
+
+
 @app.get("/fichajes/{fichaje_id}/pago")
 def consultar_pago_jornada(fichaje_id: int, usuario=Depends(administrador)):
     with conexion() as db:
-        pago_jornada = db.execute(
-            "SELECT importe, importe_pagado, forma_pago, estado_pago, fecha_pago FROM pagos_jornadas WHERE fichaje_id = ?",
+        fichajes = db.execute(
+            "SELECT * FROM fichajes_ayudantes WHERE (ayudante_id, fecha) IN "
+            "(SELECT ayudante_id, fecha FROM fichajes_ayudantes WHERE id = ?) ORDER BY id",
             (fichaje_id,),
-        ).fetchone()
-        if pago_jornada:
-            return {"fichaje_id": fichaje_id, **dict(pago_jornada), "creado": True, "origen": "jornada"}
-        fichaje = db.execute(
-            "SELECT f.id, f.ayudante_id, f.fecha, f.obra, f.faena_id_vinculada, "
-            "a.nombre FROM fichajes_ayudantes f JOIN ayudantes a "
-            "ON a.id = f.ayudante_id WHERE f.id = ?",
-            (fichaje_id,),
-        ).fetchone()
-        if not fichaje:
+        ).fetchall()
+        if not fichajes:
             raise HTTPException(status_code=404, detail="Fichaje no encontrado")
-        if not fichaje["faena_id_vinculada"]:
-            return {"fichaje_id": fichaje_id, "importe": 50, "forma_pago": "Efectivo", "estado_pago": "No pagado", "creado": False}
-        for tabla in ("gastos_faenas_extras", "gasto_faenas"):
-            try:
-                gasto = db.execute(
-                    f"SELECT id, importe, COALESCE(importe_pagado, pagado, 0) AS importe_pagado, forma_pago, estado_pago FROM {tabla} "
-                    "WHERE faena_id = ? AND proveedor = ? AND fecha = ? "
-                    "AND categoria = 'Ayudantes' ORDER BY id DESC LIMIT 1",
-                    (fichaje["faena_id_vinculada"], fichaje["nombre"], fichaje["fecha"]),
-                ).fetchone()
-                if gasto:
-                    estado = "Pagado" if gasto["importe_pagado"] >= gasto["importe"] and gasto["importe"] > 0 else "Parcial" if gasto["importe_pagado"] > 0 else "No pagado"
-                    return {"fichaje_id": fichaje_id, "gasto_id": gasto["id"], "importe": gasto["importe"], "importe_pagado": gasto["importe_pagado"], "forma_pago": gasto["forma_pago"], "estado_pago": estado, "creado": True}
-            except Exception:
-                if DATABASE_URL:
-                    db.db.rollback()
-        return {"fichaje_id": fichaje_id, "importe": 50, "forma_pago": "Efectivo", "estado_pago": "No pagado", "creado": False}
+        grupo = agrupar_pagos_dia(db, [dict(f) for f in fichajes])
+    return {**grupo["pago"], "fichaje_id": fichaje_id, "revision": grupo["revision"],
+            "estado_pago": "Revisar" if grupo["revision"] else grupo["pago"]["estado_pago"]}
 
 
 @app.patch("/fichajes/{fichaje_id}/pago")
 def actualizar_pago_jornada(fichaje_id: int, cambios: PagoJornadaUpdate, usuario=Depends(administrador)):
     with conexion() as db:
+        fichajes = db.execute(
+            "SELECT * FROM fichajes_ayudantes WHERE (ayudante_id, fecha) IN "
+            "(SELECT ayudante_id, fecha FROM fichajes_ayudantes WHERE id = ?) ORDER BY id",
+            (fichaje_id,),
+        ).fetchall()
+    if not fichajes:
+        raise HTTPException(status_code=404, detail="Fichaje no encontrado")
+    with conexion() as db:
+        if DATABASE_URL:
+            db.execute("SELECT id FROM fichajes_ayudantes WHERE ayudante_id = ? AND fecha = ? ORDER BY id FOR UPDATE",
+                       (fichajes[0]["ayudante_id"], fichajes[0]["fecha"])).fetchall()
+        else:
+            db.execute("BEGIN IMMEDIATE")
+        actuales = db.execute(
+            "SELECT * FROM fichajes_ayudantes WHERE ayudante_id = ? AND fecha = ? ORDER BY id",
+            (fichajes[0]["ayudante_id"], fichajes[0]["fecha"]),
+        ).fetchall()
+        if not any(f["id"] == fichaje_id for f in actuales):
+            raise HTTPException(status_code=409, detail="El fichaje ha cambiado. Recarga las jornadas antes de guardar.")
+        grupo = agrupar_pagos_dia(db, [dict(f) for f in actuales])
+        if grupo["revision"]:
+            raise HTTPException(status_code=409, detail="Hay varios pagos registrados para este día. Deben revisarse antes de guardar; no se ha modificado ninguno.")
+        if grupo["pago"].get("gasto_id"):
+            raise HTTPException(status_code=409, detail="Este día tiene un pago histórico en gastos. Revísalo desde Gastos; no se crea otro pago.")
+        fichaje_id = grupo["id"]
         estado_calculado = (
             "Pagado" if cambios.importe_pagado >= cambios.importe and cambios.importe > 0
             else "Parcial" if cambios.importe_pagado > 0 else "No pagado"
@@ -2112,7 +2257,7 @@ def actualizar_pago_jornada(fichaje_id: int, cambios: PagoJornadaUpdate, usuario
         ).fetchone()
         if not fichaje:
             raise HTTPException(status_code=404, detail="Fichaje no encontrado")
-        fecha_pago = date.today().isoformat() if cambios.importe_pagado > 0 else None
+        fecha_pago = (grupo["pago"].get("fecha_pago") or date.today().isoformat()) if cambios.importe_pagado > 0 else None
         db.execute(
             """
             INSERT INTO pagos_jornadas
@@ -2151,19 +2296,14 @@ def listar_liquidaciones(
         condiciones.append("l.desde <= ?")
         parametros.append(hasta.isoformat())
     where = f"WHERE {' AND '.join(condiciones)}" if condiciones else ""
-    dia_laborable = (
-        "EXTRACT(DOW FROM f.fecha) NOT IN (0, 6)"
-        if DATABASE_URL
-        else "strftime('%w', f.fecha) NOT IN ('0', '6')"
-    )
     with conexion() as db:
         filas = db.execute(
             f"""
             SELECT l.id, l.ayudante_id, a.nombre AS ayudante,
                    l.desde, l.hasta, l.precio_dia, l.importe_pagado,
                    l.fecha_pago, l.creado_en, l.actualizado_en,
-                   COUNT(f.id) FILTER (WHERE {dia_laborable}) AS dias,
-                   COUNT(f.id) FILTER (WHERE {dia_laborable}) * l.precio_dia AS total
+                   COUNT(DISTINCT f.fecha) AS dias,
+                   COUNT(DISTINCT f.fecha) * l.precio_dia AS total
             FROM liquidaciones l
             JOIN ayudantes a ON a.id = l.ayudante_id
             LEFT JOIN fichajes_ayudantes f
@@ -2195,9 +2335,8 @@ def listar_liquidaciones(
 @app.post("/liquidaciones", status_code=201)
 def crear_liquidacion(pago: PagoCreate, usuario=Depends(administrador)):
     with conexion() as db:
-        dia_laborable = "EXTRACT(DOW FROM fecha) NOT IN (0, 6)" if DATABASE_URL else "strftime('%w', fecha) NOT IN ('0', '6')"
         dias = db.execute(
-            f"SELECT COUNT(*) AS cantidad FROM fichajes_ayudantes WHERE ayudante_id = ? AND fecha BETWEEN ? AND ? AND confirmado_ayudante = 1 AND {dia_laborable}",
+            "SELECT COUNT(DISTINCT fecha) AS cantidad FROM fichajes_ayudantes WHERE ayudante_id = ? AND fecha BETWEEN ? AND ? AND confirmado_ayudante = 1",
             (pago.ayudante_id, pago.desde.isoformat(), pago.hasta.isoformat()),
         ).fetchone()["cantidad"]
         total = round(dias * pago.precio_dia, 2)

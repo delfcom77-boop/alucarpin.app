@@ -404,10 +404,23 @@ PATCH  /fichajes/{id}
 DELETE /fichajes/{id}
 PATCH  /fichajes/{id}/pago
 GET    /fichajes/{id}/pago
+GET    /ayudantes/{id}/jornadas-pago?desde=YYYY-MM-DD&hasta=YYYY-MM-DD
 PATCH  /fichajes/{id}/validacion
 ```
 
 Al crear un fichaje como ayudante, debe seleccionarse un destino existente mediante `obra_catalogo`: no se generan faenas, presupuestos ni reparaciones nuevos. El administrador mantiene la creacion de destinos provisionales cuando registra sin referencia. El pago de la jornada se guarda en `pagos_jornadas` y no depende de la validacion contable.
+
+El pago corresponde a una fecha y ayudante, incluidos fines de semana. El endpoint de jornadas devuelve una fila por fecha con `id` representativo, `fecha`, `obra`, `fichajes_ids`, `pago`, `revision` y `pagos_existentes`. Consultar o modificar el pago desde cualquier fichaje de esa fecha resuelve el mismo pago. Se conserva el identificador y la fecha del pago existente.
+
+Varios pagos historicos generan `revision: true`, estado `Revisar` e importes agregados `null` (no se suman automaticamente). PATCH devuelve 409 sin modificar ninguno. Un pago historico de gastos tambien bloquea PATCH con 409 para evitar duplicarlo. Los rangos invertidos devuelven 400 en jornadas y 422 al crear/modificar una liquidacion. Las liquidaciones cuentan fechas distintas confirmadas, incluyendo sabados y domingos.
+
+### Ejecucion y cobro de trabajos propios
+
+`GET /alarmas` incluye trabajos propios de fechas pasadas y futuras. Emite `tipo: trabajo`, `estado_ejecucion: Pendiente|Terminado` y estado visible `Pendiente|Archivado`; si no esta cobrado emite tambien `tipo: cobro`. No incluye en estos recordatorios las tablas independientes de faenas y presupuestos.
+
+`PATCH /trabajos/{id}/ejecucion` recibe `{"estado":"Pendiente"}` o `{"estado":"Terminado"}` y no modifica el cobro. Se almacena en `estados_ejecucion_trabajos`, creada idempotentemente al arrancar y definida en `migracion_estado_ejecucion.sql`. Un id inexistente devuelve 404.
+
+`PATCH /seguimientos/{id}/estado` recibe `{"estado":"Realizado"}` (tambien admite Pendiente y Archivado) y modifica exclusivamente el estado, conservando el resto de la nota. Todos estos endpoints requieren administrador.
 
 ---
 

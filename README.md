@@ -64,6 +64,8 @@ id (INTEGER) | nombre (TEXT) | activo (INTEGER)
 ```
 
 #### `pagos_jornadas`
+
+La app resuelve los pagos por ayudante y fecha (una jornada, incluidos fines de semana), manteniendo los registros historicos vinculados a fichajes. Varios pagos del mismo dia requieren revision y no se sobrescriben ni suman automaticamente. Las liquidaciones cuentan fechas confirmadas distintas. Los estados de ejecucion de trabajos propios se almacenan por separado del cobro en `estados_ejecucion_trabajos`; la API crea la tabla al iniciar y su SQL esta en `migracion_estado_ejecucion.sql`.
 Registra el pago de cada jornada de forma independiente de su faena, presupuesto o reparacion. Una jornada puede estar `Pagado` y continuar `Pendiente de revisar` hasta que el administrador valide el trabajo.
 
 #### `faenas`

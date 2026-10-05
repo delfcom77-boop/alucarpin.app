@@ -84,7 +84,7 @@
   <main>
     <header><h1>Ayudantes</h1><p>Fichajes, jornadas y pagos</p></header>
     <nav><a href="/app/inicio.html" style="display:inline-block;background:#293f4a;color:#fff;border-radius:8px;padding:12px 16px;text-decoration:none;font-weight:700;">Volver al menú</a></nav>
-    <section><h2>Estado de pagos</h2><div class="estado-grid"><button class="estado-dato estado-pagado" data-filtro-estado="Pagado" type="button">Pagado<strong id="contador-pagado">0</strong></button><button class="estado-dato estado-parcial" data-filtro-estado="Parcial" type="button">Parcial<strong id="contador-parcial">0</strong></button><button class="estado-dato estado-pendiente" data-filtro-estado="No pagado" type="button">Pendiente<strong id="contador-pendiente">0</strong></button><button class="estado-dato estado-total" data-filtro-estado="Todos" type="button">Total jornadas<strong id="contador-total">0</strong></button></div></section>
+    <section><h2>Estado de pagos</h2><div class="estado-grid"><button class="estado-dato estado-pagado" data-filtro-estado="Pagado" type="button">Pagado<strong id="contador-pagado">0</strong></button><button class="estado-dato estado-parcial" data-filtro-estado="Parcial" type="button">Parcial<strong id="contador-parcial">0</strong></button><button class="estado-dato estado-pendiente" data-filtro-estado="No pagado" type="button">Pendiente<strong id="contador-pendiente">0</strong></button><button class="estado-dato estado-parcial" data-filtro-estado="Revisar" type="button">Revisión necesaria<strong id="contador-revision">0</strong></button><button class="estado-dato estado-total" data-filtro-estado="Todos" type="button">Total jornadas<strong id="contador-total">0</strong></button></div></section>
     <section hidden><h2>Mi control</h2><p>Registra tus trabajos sin mezclarlos con los pagos de ayudantes.</p>
       <form id="formulario-trabajo">
         <input id="trabajo-id" type="hidden">
@@ -131,7 +131,7 @@
         <label>Buscar faena / obra <input id="listado-obra" type="search" placeholder="Nombre de la obra"></label>
         <label>Desde <input id="listado-desde" type="date"></label>
         <label>Hasta <input id="listado-hasta" type="date"></label>
-        <label>Estado de pago <select id="listado-estado"><option value="Todos">Todos</option><option value="No pagado">No pagado</option><option value="Parcial">Parcial</option><option value="Pagado">Pagado</option></select></label>
+        <label>Estado de pago <select id="listado-estado"><option value="Todos">Todos</option><option value="No pagado">No pagado</option><option value="Parcial">Parcial</option><option value="Pagado">Pagado</option><option value="Revisar">Revisión necesaria</option></select></label>
       </div>
       <button id="listado-limpiar" type="button">Limpiar filtros de fichajes</button>
       <p>El recuento incluye los fines de semana registrados y cuenta cada fecha una vez por ayudante, aunque tenga varios fichajes ese día.</p>
@@ -164,6 +164,7 @@
     </section>
     <section id="apartado-pagos" data-contenido="pagos" hidden>
       <h2>Preparar pago por jornadas</h2>
+      <p>Una jornada por ayudante y fecha, incluidos sábados y domingos. Todas las obras de ese día se muestran juntas. Los pagos históricos se conservan; los días con varios pagos necesitan revisión y no se guardan automáticamente.</p>
       <div class="fila">
         <label>Desde <input id="desde" type="date" required></label>
         <label>Hasta <input id="hasta" type="date" required></label>
@@ -496,7 +497,8 @@
           }));
           registrosGenerales = await Promise.all(grupos.flat().sort((a, b) => b.fecha.localeCompare(a.fecha) || b.id - a.id).map(async fichaje => {
             const respuestaPago = await apiFetch(`${api}/fichajes/${fichaje.id}/pago`);
-            const pago = respuestaPago.ok ? await respuestaPago.json() : { estado_pago: 'No pagado' };
+            if (!respuestaPago.ok) throw new Error(`No se pudo consultar el pago del fichaje ${fichaje.id}.`);
+            const pago = await respuestaPago.json();
             return { ...fichaje, estadoPago: pago.estado_pago || 'No pagado' };
           }));
           registrosDiasCargados = true;
@@ -619,11 +621,13 @@
 
         function actualizarContadores() {
           const estados = { Pagado: 0, Parcial: 0, 'No pagado': 0 };
-          registrosGenerales.forEach(fichaje => estados[fichaje.estadoPago] = (estados[fichaje.estadoPago] || 0) + 1);
+          const dias = new Map(registrosGenerales.map(fichaje => [JSON.stringify([fichaje.ayudante_id, fichaje.fecha]), fichaje.estadoPago]));
+          dias.forEach(estado => estados[estado] = (estados[estado] || 0) + 1);
           document.querySelector('#contador-pagado').textContent = estados.Pagado;
           document.querySelector('#contador-parcial').textContent = estados.Parcial;
           document.querySelector('#contador-pendiente').textContent = estados['No pagado'];
-          document.querySelector('#contador-total').textContent = registrosGenerales.length;
+          document.querySelector('#contador-revision').textContent = estados.Revisar || 0;
+          document.querySelector('#contador-total').textContent = dias.size;
         }
 
         function pintarListadoGeneral() {
@@ -709,7 +713,7 @@
     const hasta = document.querySelector('#hasta');
     const fechaHoy = new Date();
     const fechaSemana = new Date(fechaHoy); fechaSemana.setDate(fechaHoy.getDate() - ((fechaHoy.getDay() + 6) % 7));
-    const ultimoDiaLaborable = new Date(fechaSemana); ultimoDiaLaborable.setDate(fechaSemana.getDate() + 4);
+    const ultimoDiaLaborable = new Date(fechaSemana); ultimoDiaLaborable.setDate(fechaSemana.getDate() + 6);
     desde.valueAsDate = fechaSemana; hasta.valueAsDate = ultimoDiaLaborable;
     liquidacionDesde.valueAsDate = fechaSemana;
     liquidacionHasta.valueAsDate = ultimoDiaLaborable;
@@ -1048,22 +1052,13 @@
         actualizarResumen(0);
         return;
       }
-      const respuesta = await apiFetch(`${api}/ayudantes/${ayudanteId}/fichajes?desde=${desde.value}&hasta=${hasta.value}`);
+      const respuesta = await apiFetch(`${api}/ayudantes/${ayudanteId}/jornadas-pago?desde=${desde.value}&hasta=${hasta.value}`);
       if (!respuesta.ok) throw new Error('No se pudieron cargar los fichajes.');
-      const lista = await respuesta.json();
-      const listaLaborable = lista.filter(item => {
-        const dia = new Date(`${item.fecha}T00:00:00`).getDay();
-        return dia !== 0 && dia !== 6;
-      });
-      jornadasPago = await Promise.all(listaLaborable.map(async item => {
-        const respuestaPago = await apiFetch(`${api}/fichajes/${item.id}/pago`);
-        const pago = respuestaPago.ok ? await respuestaPago.json() : { importe: 50, importe_pagado: 0, forma_pago: 'Efectivo', estado_pago: 'No pagado' };
-        return { ...item, pago };
-      }));
+      jornadasPago = await respuesta.json();
       pintarJornadasPago();
-      fichajes.textContent = listaLaborable.length ? `${listaLaborable.length} jornadas encontradas.` : 'No hay fichajes en este periodo.';
-      document.querySelector('#dias').textContent = listaLaborable.length;
-      actualizarResumen(listaLaborable.length);
+      fichajes.textContent = jornadasPago.length ? `${jornadasPago.length} jornadas encontradas.` : 'No hay fichajes en este periodo.';
+      document.querySelector('#dias').textContent = jornadasPago.length;
+      actualizarResumen(jornadasPago.length);
     }
     function pintarJornadasPago() {
       const cuerpo = document.querySelector('#jornadas-pago');
@@ -1071,14 +1066,43 @@
       if (!jornadasPago.length) { cuerpo.innerHTML = '<tr><td colspan="6">No hay jornadas en este rango.</td></tr>'; return; }
       jornadasPago.forEach((jornada, indice) => {
         const fila = document.createElement('tr');
-        const vinculada = Boolean(jornada.faena_id_vinculada);
+        if (jornada.revision || jornada.pago.gasto_id) {
+          fila.className = 'parcial';
+          [mostrarFecha(jornada.fecha), jornada.obra, 'Revisión necesaria'].forEach(texto => {
+            const celda = document.createElement('td');
+            celda.textContent = texto;
+            fila.appendChild(celda);
+          });
+          const detalle = document.createElement('td');
+          detalle.colSpan = 3;
+          detalle.textContent = jornada.pagos_existentes.map(pago =>
+            `${pago.origen === 'jornada' ? 'Jornada' : 'Gasto histórico'} #${pago.fichaje_id}: importe ${Number(pago.importe).toFixed(2)} €, pagado ${Number(pago.importe_pagado || 0).toFixed(2)} €`
+          ).join(' | ');
+          fila.appendChild(detalle);
+          cuerpo.appendChild(fila);
+          return;
+        }
         const importe = Number(jornada.pago.importe ?? 50);
         const importePagado = Number(jornada.pago.importe_pagado ?? 0);
         const estadoCalculado = importePagado >= importe && importe > 0 ? 'Pagado' : importePagado > 0 ? 'Parcial' : 'No pagado';
         fila.className = estadoCalculado === 'Pagado' ? 'pagado' : estadoCalculado === 'Parcial' ? 'parcial' : 'pendiente';
-        fila.innerHTML = `<td>${jornada.fecha}</td><td>${jornada.obra || ''}${vinculada ? '' : ' <strong>(sin asignar)</strong>'}</td><td><input data-campo="importe" type="number" min="0" step="0.01" value="${importe}"></td><td><input data-campo="importe_pagado" type="number" min="0" step="0.01" value="${importePagado}"></td><td><select data-campo="forma"><option ${jornada.pago.forma_pago === 'Efectivo' ? 'selected' : ''}>Efectivo</option><option ${jornada.pago.forma_pago === 'Transferencia' ? 'selected' : ''}>Transferencia</option></select></td><td><select data-campo="estado"><option ${estadoCalculado === 'No pagado' ? 'selected' : ''}>No pagado</option><option ${estadoCalculado === 'Parcial' ? 'selected' : ''}>Parcial</option><option ${estadoCalculado === 'Pagado' ? 'selected' : ''}>Pagado</option></select></td>`;
-        fila.querySelector('[data-campo="importe"]').oninput = event => jornada.pago.importe = Number(event.target.value);
-        fila.querySelector('[data-campo="importe_pagado"]').oninput = event => { jornada.pago.importe_pagado = Number(event.target.value); jornada.pago.estado_pago = jornada.pago.importe_pagado >= jornada.pago.importe && jornada.pago.importe > 0 ? 'Pagado' : jornada.pago.importe_pagado > 0 ? 'Parcial' : 'No pagado'; fila.querySelector('[data-campo="estado"]').value = jornada.pago.estado_pago; };
+        fila.innerHTML = `<td>${jornada.fecha}</td><td></td><td><input data-campo="importe" type="number" min="0" step="0.01" value="${importe}"></td><td><input data-campo="importe_pagado" type="number" min="0" step="0.01" value="${importePagado}"></td><td><select data-campo="forma"></select></td><td><select data-campo="estado" disabled></select></td>`;
+        fila.children[1].textContent = jornada.obra;
+        const forma = fila.querySelector('[data-campo="forma"]');
+        Array.from(new Set(['Efectivo', 'Transferencia', jornada.pago.forma_pago || 'Efectivo'])).forEach(valor => forma.add(new Option(valor, valor)));
+        forma.value = jornada.pago.forma_pago || 'Efectivo';
+        const estado = fila.querySelector('[data-campo="estado"]');
+        ['No pagado', 'Parcial', 'Pagado'].forEach(valor => estado.add(new Option(valor, valor)));
+        estado.value = estadoCalculado;
+        const recalcular = () => {
+          jornada.pago.importe = Number(fila.querySelector('[data-campo="importe"]').value);
+          jornada.pago.importe_pagado = Number(fila.querySelector('[data-campo="importe_pagado"]').value);
+          jornada.pago.estado_pago = jornada.pago.importe_pagado >= jornada.pago.importe && jornada.pago.importe > 0 ? 'Pagado' : jornada.pago.importe_pagado > 0 ? 'Parcial' : 'No pagado';
+          estado.value = jornada.pago.estado_pago;
+          actualizarResumen(jornadasPago.length);
+        };
+        fila.querySelector('[data-campo="importe"]').oninput = recalcular;
+        fila.querySelector('[data-campo="importe_pagado"]').oninput = recalcular;
         fila.querySelector('[data-campo="forma"]').onchange = event => jornada.pago.forma_pago = event.target.value;
         fila.querySelector('[data-campo="estado"]').onchange = event => jornada.pago.estado_pago = event.target.value;
         cuerpo.appendChild(fila);
@@ -1087,8 +1111,19 @@
     document.querySelector('#guardar-pagos-jornadas').onclick = async () => {
       const mensajePago = document.querySelector('#mensaje-pago-jornada');
       if (!jornadasPago.length) { mensajePago.textContent = 'No hay jornadas para guardar.'; return; }
+      const boton = document.querySelector('#guardar-pagos-jornadas');
+      boton.disabled = true;
+      try {
       const errores = [];
       for (const jornada of jornadasPago) {
+        if (jornada.revision || jornada.pago.gasto_id) {
+          errores.push(`${mostrarFecha(jornada.fecha)}: pago histórico o varios pagos; conservados sin cambios.`);
+          continue;
+        }
+        if (![jornada.pago.importe, jornada.pago.importe_pagado].every(valor => Number.isFinite(Number(valor)) && Number(valor) >= 0)) {
+          errores.push(`${mostrarFecha(jornada.fecha)}: los importes no son válidos.`);
+          continue;
+        }
         const respuesta = await apiFetch(`${api}/fichajes/${jornada.id}/pago`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(jornada.pago) });
         if (!respuesta.ok) {
           let detalle = `HTTP ${respuesta.status}`;
@@ -1114,14 +1149,21 @@
       await cargarFichajes();
       await cargarListadoGeneral();
       await cargarGastos();
+      } catch (error) {
+        mensajePago.textContent = `Guardado interrumpido: ${error.message}. Recarga las jornadas para comprobar lo que se guardó.`;
+        mensajePago.className = 'mensaje error';
+      } finally {
+        boton.disabled = false;
+      }
     };
     function actualizarResumen(dias) {
-      const total = jornadasPago.reduce((suma, jornada) => suma + Number(jornada.pago.importe || 0), 0);
-      const pagado = jornadasPago.filter(jornada => jornada.pago.estado_pago === 'Pagado')
-        .reduce((suma, jornada) => suma + Number(jornada.pago.importe || 0), 0);
+      document.querySelector('#dias').textContent = dias;
+      const validas = jornadasPago.filter(jornada => !jornada.revision);
+      const total = validas.reduce((suma, jornada) => suma + Number(jornada.pago.importe || 0), 0);
+      const pagado = validas.reduce((suma, jornada) => suma + Math.min(Number(jornada.pago.importe || 0), Number(jornada.pago.importe_pagado || 0)), 0);
       document.querySelector('#total').textContent = `${total.toFixed(2)} €`;
       document.querySelector('#pendiente').textContent = `${Math.max(total - pagado, 0).toFixed(2)} €`;
-      document.querySelector('#estado').textContent = total > 0 && pagado >= total ? 'Pagado' : 'Pendiente';
+      document.querySelector('#estado').textContent = jornadasPago.some(j => j.revision) ? 'Revisión necesaria (excluidos del total)' : total > 0 && pagado >= total ? 'Pagado' : 'Pendiente';
       document.querySelector('#resumen').hidden = false;
     }
     [desde, hasta].forEach(item => item.addEventListener('change', () => cargarFichajes().catch(mostrarError)));
