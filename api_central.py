@@ -1090,23 +1090,27 @@ def silenciar_dia(datos: SilencioCalendarioCreate, usuario=Depends(administrador
     return {"fecha": fecha, "silenciado": True}
 
 
-@app.post("/citas", status_code=201)
-def crear_cita(datos: CitaCreate, usuario=Depends(administrador)):
+def insertar_cita(db, datos: CitaCreate):
     valores = datos.model_dump()
     valores["fecha"] = valores["fecha"].isoformat()
     valores = {clave: valor.strip() if isinstance(valor, str) else valor for clave, valor in valores.items()}
     columnas = ", ".join(valores)
     marcadores = ", ".join("?" for _ in valores)
-    with conexion() as db:
-        if DATABASE_URL:
-            fila = db.execute(
-                f"INSERT INTO citas_agenda ({columnas}) VALUES ({marcadores}) RETURNING *",
-                tuple(valores.values()),
-            ).fetchone()
-        else:
-            db.execute(f"INSERT INTO citas_agenda ({columnas}) VALUES ({marcadores})", tuple(valores.values()))
-            fila = db.execute("SELECT * FROM citas_agenda WHERE id = last_insert_rowid()").fetchone()
+    if DATABASE_URL:
+        fila = db.execute(
+            f"INSERT INTO citas_agenda ({columnas}) VALUES ({marcadores}) RETURNING *",
+            tuple(valores.values()),
+        ).fetchone()
+    else:
+        db.execute(f"INSERT INTO citas_agenda ({columnas}) VALUES ({marcadores})", tuple(valores.values()))
+        fila = db.execute("SELECT * FROM citas_agenda WHERE id = last_insert_rowid()").fetchone()
     return dict(fila)
+
+
+@app.post("/citas", status_code=201)
+def crear_cita(datos: CitaCreate, usuario=Depends(administrador)):
+    with conexion() as db:
+        return insertar_cita(db, datos)
 
 
 @app.patch("/citas/{cita_id}")
@@ -1255,6 +1259,26 @@ def crear_seguimiento(datos: SeguimientoCreate, usuario=Depends(administrador)):
             db.execute(f"INSERT INTO seguimientos_agenda ({columnas}) VALUES ({marcadores})", tuple(valores.values()))
             fila = db.execute("SELECT * FROM seguimientos_agenda WHERE id = last_insert_rowid()").fetchone()
     return dict(fila)
+
+
+@app.post("/seguimientos/{seguimiento_id}/cita", status_code=201)
+def convertir_seguimiento_en_cita(
+    seguimiento_id: int, datos: CitaCreate, usuario=Depends(administrador),
+):
+    with conexion() as db:
+        cursor = db.execute(
+            "UPDATE seguimientos_agenda SET estado = 'Archivado', actualizado_en = CURRENT_TIMESTAMP "
+            "WHERE id = ? AND estado <> 'Archivado'",
+            (seguimiento_id,),
+        )
+        if cursor.rowcount == 0:
+            existente = db.execute(
+                "SELECT 1 FROM seguimientos_agenda WHERE id = ?", (seguimiento_id,),
+            ).fetchone()
+            if not existente:
+                raise HTTPException(status_code=404, detail="Seguimiento no encontrado")
+            raise HTTPException(status_code=409, detail="La nota ya está archivada. Revisa las citas antes de crear otra.")
+        return insertar_cita(db, datos)
 
 
 @app.patch("/seguimientos/{seguimiento_id}")

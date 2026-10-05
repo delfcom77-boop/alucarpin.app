@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Pruebas de notas y citas</title></head>
+<body>
+  <pre id="resultado">Ejecutando...</pre>
+  <iframe id="app" title="Agenda de prueba"></iframe>
+  <script>
+    function preparar() {
+      localStorage.setItem('alucarpin_token', 'prueba-local');
+      window.nota = { id: 1, fecha_llamada: '2026-10-05', fecha_recordatorio: '2026-10-07', hora: '10:00', cliente: 'Cliente', telefono: '600111222', motivo: 'Medir', observaciones: 'Llamar antes', estado: 'Pendiente' };
+      window.citas = [];
+      window.peticiones = [];
+      window.fallar = false;
+      window.fallarCalendario = false;
+      window.confirm = () => true;
+      URL.createObjectURL = () => 'blob:prueba';
+      HTMLAnchorElement.prototype.click = function () {};
+      window.fetch = async (url, opciones = {}) => {
+        const metodo = opciones.method || 'GET';
+        const datos = opciones.body ? JSON.parse(opciones.body) : null;
+        peticiones.push({ url, metodo, datos });
+        if (url === '/seguimientos') return new Response(JSON.stringify([nota]));
+        if (url === '/citas' && metodo === 'GET') return new Response(JSON.stringify(citas));
+        if (url === '/seguimientos/1/estado') {
+          if (fallar) return new Response('{"detail":"Rechazado de prueba"}', { status: 409 });
+          nota.estado = datos.estado;
+          return new Response(JSON.stringify({ id: 1, estado: nota.estado }));
+        }
+        if (url === '/seguimientos/1/cita') {
+          await new Promise(resolve => setTimeout(resolve, 50));
+          if (fallar) return new Response('{"detail":"No se pudo convertir de prueba"}', { status: 409 });
+          nota.estado = 'Archivado';
+          const cita = { id: citas.length + 1, ...datos };
+          citas.push(cita);
+          return new Response(JSON.stringify(cita), { status: 201 });
+        }
+        if (url === '/citas' && metodo === 'POST') {
+          const cita = { id: citas.length + 1, ...datos };
+          citas.push(cita);
+          return new Response(JSON.stringify(cita), { status: 201 });
+        }
+        if (url.includes('/calendario')) return new Response('Calendario', { status: fallarCalendario ? 503 : 200 });
+        if (url === '/seguimientos/1') throw new Error('Consulta inexistente GET/PATCH de nota');
+        return new Response('[]');
+      };
+    }
+    (async () => {
+      const html = (await fetch('../app_web/agenda.html').then(r => r.text()))
+        .replaceAll('/app/', '/app_web/').replace('<script src="/app_web/pwa.js"><\/script>', '');
+      const marco = document.querySelector('#app');
+      marco.srcdoc = html.replace('<head>', `<head><script>(${preparar.toString()})();<\/script>`);
+      await new Promise(resolve => marco.onload = resolve);
+      const w = marco.contentWindow;
+      const d = marco.contentDocument;
+      const esperar = async condicion => {
+        for (let i = 0; i < 150; i++) {
+          if (condicion()) return;
+          await new Promise(resolve => setTimeout(resolve, 20));
+        }
+        throw new Error('Tiempo agotado');
+      };
+      const comprobar = (valor, mensaje) => { if (!valor) throw new Error(mensaje); };
+      const notaOriginal = { ...w.nota };
+      await esperar(() => d.querySelector('.borrar-seguimiento'));
+      w.fallar = true;
+      d.querySelector('.borrar-seguimiento').click();
+      await esperar(() => d.querySelector('#mensaje-seguimiento').textContent.includes('Rechazado'));
+      comprobar(w.nota.estado === 'Pendiente' && !d.querySelector('.borrar-seguimiento').disabled, 'Fallo de archivo sin aviso o sin reintento');
+      w.fallar = false;
+      d.querySelector('.realizado-seguimiento').click();
+      await esperar(() => w.nota.estado === 'Realizado' && !d.querySelector('.realizado-seguimiento'));
+      d.querySelector('#filtro-notas').value = 'todas';
+      d.querySelector('#filtro-notas').dispatchEvent(new w.Event('change'));
+      await esperar(() => d.querySelector('.borrar-seguimiento'));
+      d.querySelector('.borrar-seguimiento').click();
+      await esperar(() => w.nota.estado === 'Archivado' && !d.querySelector('.borrar-seguimiento'));
+      comprobar(w.peticiones.filter(p => p.url === '/seguimientos/1/estado').every(p => Object.keys(p.datos).join() === 'estado'), 'Estado sobrescribe datos');
+      comprobar(w.nota.telefono === notaOriginal.telefono && w.nota.observaciones === notaOriginal.observaciones, 'Datos perdidos');
+      w.nota.estado = 'Pendiente';
+      d.querySelector('#filtro-notas').dispatchEvent(new w.Event('change'));
+      await esperar(() => d.querySelector('.crear-cita-seguimiento'));
+      d.querySelector('.crear-cita-seguimiento').click();
+      comprobar(d.querySelector('#telefono').value === '600111222' && d.querySelector('#observaciones').value === 'Medir | Llamar antes', 'Preparacion pierde datos');
+      comprobar(w.nota.estado === 'Pendiente', 'Archiva antes de guardar');
+      d.querySelector('#cancelar-edicion-cita').click();
+      comprobar(!d.querySelector('#formulario').dataset.seguimientoId, 'Cancelar deja vinculo');
+      d.querySelector('#formulario').dataset.id = '99';
+      d.querySelector('.crear-cita-seguimiento').click();
+      comprobar(!d.querySelector('#formulario').dataset.id, 'Conversion edita cita anterior');
+      w.fallar = true;
+      d.querySelector('#formulario').requestSubmit();
+      await esperar(() => d.querySelector('#mensaje').textContent.includes('No se pudo convertir'));
+      comprobar(w.citas.length === 0 && w.nota.estado === 'Pendiente', 'Fallo crea cita o archiva nota');
+      w.fallar = false;
+      w.fallarCalendario = true;
+      d.querySelector('#formulario').requestSubmit();
+      d.querySelector('#formulario').requestSubmit();
+      await esperar(() => d.querySelector('#mensaje').textContent.includes('no se pudo descargar'));
+      comprobar(w.citas.length === 1 && w.nota.estado === 'Archivado', 'Conversion duplicada o incompleta');
+      comprobar(!d.querySelector('#formulario').dataset.seguimientoId, 'Conversion guardada sigue pendiente');
+      comprobar(w.peticiones.filter(p => p.url === '/seguimientos/1/cita').length === 2, 'Doble envio');
+      document.querySelector('#resultado').textContent = 'OK: Archivo y realizado conservan datos y muestran errores\nOK: Preparar y cancelar no archivan ni editan otra cita\nOK: Fallo de conversion no crea cita ni archiva\nOK: Conversion unica y fallo de calendario no invita a duplicar';
+    })().catch(error => { document.querySelector('#resultado').textContent = 'ERROR: ' + error.message; throw error; });
+  </script>
+</body>
+</html>

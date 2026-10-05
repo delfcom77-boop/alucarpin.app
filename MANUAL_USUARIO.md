@@ -125,6 +125,10 @@ Los pendientes de faenas se calculan con su precio registrado menos sus pagos si
 
 Los presupuestos en estado Presupuesto o Rechazado no generan estos recordatorios. Los antiguos Completado se respetan como terminados y cobrados; su importe de cobros registrado no se modifica. Si desde la app se cambia el estado comercial de un presupuesto, su ejecucion previa se conserva. Completar una nota mantiene su telefono y observaciones.
 
+### Notas y conversion a citas
+
+En Agenda, **Archivar** y **Marcar realizada** cambian solo el estado de la nota y conservan telefono, fechas, motivo y observaciones. **Crear cita** prepara el formulario; puedes cancelar sin archivar la nota. Al guardar, la cita y el archivo de la nota se realizan juntos: si falla, no se guarda solo una parte. Una nota ya archivada no se convierte otra vez. Si falla la descarga del calendario despues de guardar, utiliza Calendario en la cita, sin crear otra.
+
 ### Panel resumen al entrar
 
 El menu principal muestra al administrador un **Resumen de gestion** con accesos a trabajos por terminar, cobros pendientes, pagos de ayudantes y agenda. **Actualizar resumen** consulta de nuevo los registros; si falla, se muestra el error y se ocultan las cifras anteriores.

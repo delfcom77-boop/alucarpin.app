@@ -440,6 +440,8 @@ Varios pagos de la fuente de referencia generan `revision: true`, estado `Revisa
 
 `PATCH /seguimientos/{id}/estado` recibe `{"estado":"Realizado"}` (tambien admite Pendiente y Archivado) y modifica exclusivamente el estado, conservando el resto de la nota. Todos estos endpoints requieren administrador.
 
+`POST /seguimientos/{id}/cita` recibe el mismo cuerpo que `POST /citas` y devuelve la cita creada con HTTP 201. Crea la cita y archiva la nota en una sola transaccion, sin modificar sus demas campos. Devuelve 404 si no existe la nota y 409 si ya esta archivada; el cambio de estado condicional impide duplicar la conversion incluso con peticiones simultaneas. Si falla la insercion, el archivo se revierte. Requiere administrador.
+
 ---
 
 ## Códigos de Respuesta HTTP
