@@ -10,6 +10,16 @@
 
 El inicio crea `remates_vinculos` con claves foraneas y exactamente un destino por remate. No interpreta ni migra automaticamente el antiguo `origen_id`, que no distingue presupuestos y reparaciones.
 
+## Copias de seguridad (administrador)
+
+`GET /copias-seguridad` devuelve `application/zip`, `Content-Disposition: attachment`, `Cache-Control: no-store` y `X-Alucarpin-Motor` (`sqlite` o `postgresql`). Incluye `base.sqlite` o `base.dump` y `manifiesto.json` version 1 con SHA-256 del archivo, tamano, fecha UTC y huellas del contenido por tabla. Usa la base configurada, sin fallback. Es una descarga manual, no una copia almacenada ni un servicio de copias automaticas.
+
+SQLite se respalda con `Connection.backup`; PostgreSQL con `pg_dump --format=custom` y un snapshot de transaccion `REPEATABLE READ READ ONLY` compartido con el inventario. Fallos de acceso, herramientas ausentes, incompatibilidad o limites: 503 con detalle sin credenciales. Limite web: 256 MB de archivo nativo. El ZIP contiene datos privados y hashes de usuarios: debe almacenarse fuera del repositorio, en ubicacion privada cifrada.
+
+No hay ruta de restauracion. `respaldo.py` restaura copias confiables solo en destinos separados y compara inventarios; no sustituye automaticamente produccion. PostgreSQL no incluye roles globales ni secretos del servidor; la comprobacion restaura sin propietarios ni ACL originales.
+
+Si `DATABASE_URL` esta configurada, una conexion PostgreSQL fallida produce 503 y el inicio falla explicitamente. Nunca se abre SQLite como sustituto. Sin `DATABASE_URL`, se mantiene el modo SQLite explicito.
+
 ## Base URL
 ```
 https://alucarpin-app.onrender.com

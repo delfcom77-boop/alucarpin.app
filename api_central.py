@@ -1,4 +1,5 @@
 from datetime import date, datetime
+import logging
 import os
 from pathlib import Path
 import sqlite3
@@ -13,11 +14,13 @@ from pydantic import BaseModel, Field, model_validator
 from fastapi.staticfiles import StaticFiles
 from base_datos import ruta_base_datos
 from autenticacion import crear_token, inicializar_usuarios, password_valida, usuario_desde_token
+from respaldo import ErrorRespaldo, crear_respaldo
 
 
 BASE_PATH = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 DATABASE_PATH = ruta_base_datos()
 DATABASE_URL = os.getenv("DATABASE_URL")
+logger = logging.getLogger(__name__)
 app = FastAPI(title="API AlucarpinSamitier", version="0.1.0")
 app.mount("/app", StaticFiles(directory=str(BASE_PATH / "app_web"), html=True), name="app")
 seguridad = HTTPBearer(auto_error=False)
@@ -26,7 +29,7 @@ SECRETO_SESION = os.getenv("ALUCARPIN_SESSION_SECRET", "cambiar-secreto-local-al
 
 class ConexionPostgres:
     def __init__(self, url):
-        self.db = psycopg.connect(url, row_factory=dict_row)
+        self.db = psycopg.connect(url, row_factory=dict_row, connect_timeout=15)
 
     def __enter__(self):
         return self
@@ -286,12 +289,12 @@ class PresupuestoUpdate(BaseModel):
 
 
 def conexion():
-    url = os.getenv("DATABASE_URL")
-    if url:
+    if DATABASE_URL:
         try:
-            return ConexionPostgres(url)
-        except Exception:
-            pass
+            return ConexionPostgres(DATABASE_URL)
+        except psycopg.Error as error:
+            logger.error("No se pudo conectar a PostgreSQL. No se usara una base local alternativa.")
+            raise HTTPException(status_code=503, detail="La base de datos central no está disponible. No se ha cambiado a otra base. Inténtalo más tarde.") from error
     db = sqlite3.connect(str(DATABASE_PATH), timeout=30)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA foreign_keys = ON")
@@ -299,15 +302,11 @@ def conexion():
 
 
 def inicializar_base_datos():
-    url = os.getenv("DATABASE_URL")
-    if url:
-        try:
-            with ConexionPostgres(url) as db:
-                db.execute("SELECT 1")
-                inicializar_usuarios(db)
-                return
-        except Exception:
-            pass
+    if DATABASE_URL:
+        with conexion() as db:
+            db.execute("SELECT 1")
+            inicializar_usuarios(db)
+        return
 
     db = sqlite3.connect(str(DATABASE_PATH), timeout=30)
     db.row_factory = sqlite3.Row
@@ -332,16 +331,13 @@ def inicializar_base_datos():
 
 
 def inicializar_usuarios(db):
-    try:
-        if db.execute("SELECT COUNT(*) FROM usuarios").fetchone()[0] == 0:
-            from autenticacion import hash_password
-            salt, hash_ = hash_password("AluCarpin2024")
-            db.execute(
-                "INSERT INTO usuarios (usuario, password_salt, password_hash, rol, activo) VALUES (?, ?, ?, ?, ?)",
-                ("administrador", salt, hash_, "administrador", 1),
-            )
-    except Exception:
-        return
+    if db.execute("SELECT COUNT(*) AS cantidad FROM usuarios").fetchone()["cantidad"] == 0:
+        from autenticacion import hash_password
+        salt, hash_ = hash_password("AluCarpin2024")
+        db.execute(
+            "INSERT INTO usuarios (usuario, password_salt, password_hash, rol, activo) VALUES (?, ?, ?, ?, ?)",
+            ("administrador", salt, hash_, "administrador", 1),
+        )
 
 
 @app.on_event("startup")
@@ -418,6 +414,22 @@ def administrador(usuario=Depends(usuario_actual)):
     if usuario["rol"] != "administrador":
         raise HTTPException(status_code=403, detail="Solo el administrador puede realizar esta acción")
     return usuario
+
+
+@app.get("/copias-seguridad")
+def descargar_copia_seguridad(usuario=Depends(administrador)):
+    try:
+        contenido, manifiesto = crear_respaldo(DATABASE_URL, DATABASE_PATH)
+    except ErrorRespaldo as error:
+        logger.error("No se pudo generar la copia de seguridad: %s", error)
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    nombre = f"alucarpin-{manifiesto['motor']}-{datetime.now().strftime('%Y%m%d-%H%M%S')}.zip"
+    return Response(contenido, media_type="application/zip", headers={
+        "Content-Disposition": f'attachment; filename="{nombre}"',
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
+        "X-Alucarpin-Motor": manifiesto["motor"],
+    })
 
 
 @app.get("/salud")

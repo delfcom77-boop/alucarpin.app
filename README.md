@@ -22,6 +22,12 @@ Sistema profesional de gestión empresarial con sincronización bidireccional en
 
 La web vincula los nuevos remates al catalogo de faenas, presupuestos y reparaciones por referencia exacta. Los antiguos se conservan sin asignacion automatica y pueden vincularse manualmente. Filtros, PDF, WhatsApp y ficha de obra separan destinos aunque tengan nombres iguales. La ficha permite imprimir o exportar sus remates a CSV. `remates_vinculos` se crea al iniciar la API y protege las obras vinculadas contra borrado.
 
+### Respaldo manual verificable
+
+Administracion → Configuracion permite descargar una copia nativa completa de la base, con manifiesto SHA-256 e inventario. `respaldo.py` prueba su restauracion en una base nueva y separada y compara los datos; nunca restaura desde la web. Consulta [el procedimiento](MANUAL_USUARIO.md). No incluye archivos externos, configuracion ni roles globales PostgreSQL, ni configura copias automaticas. Los ZIP no estan cifrados: guardalos en almacenamiento privado cifrado fuera del repositorio y de Render.
+
+Docker instala el cliente PostgreSQL para `pg_dump`; las herramientas deben ser compatibles con la version del servidor. Si `DATABASE_URL` falla, la API devuelve un error y no cambia silenciosamente a SQLite. Sin esa variable sigue disponible el modo SQLite explicito.
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     SUPABASE (PostgreSQL)                   │
@@ -436,7 +442,7 @@ EmpresaPython/
 2. **Validaciones:** Añadir más controles de integridad de datos
 3. **Reportes:** Dashboard con gráficos en web
 4. **Móvil:** App nativa con React Native o Flutter
-5. **Backup automático:** Script de respaldo diario a S3
+5. **Backup automatico pendiente:** Elegir almacenamiento privado externo y programacion; actualmente existe descarga manual y comprobacion de restauracion aislada.
 
 ---
 

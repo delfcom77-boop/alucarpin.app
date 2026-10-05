@@ -322,7 +322,13 @@
       </div>
     </section>
     <section id="apartado-periodo" data-contenido="pagos" hidden><h2>Fichajes del periodo</h2><div id="fichajes">Selecciona un ayudante y un rango de fechas.</div></section>
-    <section id="apartado-configuracion" data-contenido="configuracion" hidden><h2>Usuarios y contraseñas</h2><div class="lista-general"><table><thead><tr><th>Usuario</th><th>Rol</th><th>Ayudante</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="usuarios"><tr><td colspan="5">Cargando...</td></tr></tbody></table></div><div id="mensaje-usuarios" class="mensaje"></div></section>
+    <section id="apartado-configuracion" data-contenido="configuracion" hidden><h2>Usuarios y contraseñas</h2><div class="lista-general"><table><thead><tr><th>Usuario</th><th>Rol</th><th>Ayudante</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="usuarios"><tr><td colspan="5">Cargando...</td></tr></tbody></table></div><div id="mensaje-usuarios" class="mensaje"></div>
+      <h3>Copias de seguridad</h3>
+      <p>Descarga la base de datos completa con un inventario y una huella de comprobación. Incluye datos personales, importes y usuarios: guárdala en un lugar privado, fuera de Render y del repositorio.</p>
+      <p>Esta descarga es manual, no una copia automática. La restauración se comprueba con la herramienta del programa sobre una base nueva y separada; no se restaura desde la web. No incluye archivos externos ni la configuración del servidor.</p>
+      <button id="descargar-respaldo" type="button">Descargar copia de seguridad</button>
+      <p id="mensaje-respaldo" class="mensaje" role="status" aria-live="polite"></p>
+    </section>
   </main>
   <script src="/app/exportar.js"></script>
   <script src="/app/jornadas.js"></script>
@@ -367,6 +373,42 @@
       const metodo = (options.method || 'GET').toUpperCase();
       return fetch(url, { ...options, cache: metodo === 'GET' ? 'no-store' : options.cache, signal: controller.signal, headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` } })
         .finally(() => clearTimeout(temporizador));
+    };
+    document.querySelector('#descargar-respaldo').onclick = async () => {
+      const boton = document.querySelector('#descargar-respaldo');
+      const aviso = document.querySelector('#mensaje-respaldo');
+      if (boton.disabled) return;
+      if (!confirm('La copia contiene datos privados y usuarios. ¿Descargarla para guardarla en un lugar seguro?')) return;
+      boton.disabled = true;
+      aviso.className = 'mensaje'; aviso.textContent = 'Preparando copia completa. No cierres esta página…';
+      let url;
+      try {
+        const respuesta = await fetch('/copias-seguridad', {
+          headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
+          signal: AbortSignal.timeout(180000),
+        });
+        if (!respuesta.ok) {
+          const error = await respuesta.json().catch(() => null);
+          throw new Error(typeof error?.detail === 'string' ? error.detail : `No se pudo generar la copia (HTTP ${respuesta.status}).`);
+        }
+        if (!respuesta.headers.get('Content-Type')?.includes('application/zip')) throw new Error('La respuesta no contiene un archivo de respaldo válido.');
+        const archivo = await respuesta.blob();
+        if (!archivo.size) throw new Error('La copia está vacía. No se considera un respaldo válido.');
+        url = URL.createObjectURL(archivo);
+        const enlace = document.createElement('a');
+        enlace.href = url;
+        const nombre = respuesta.headers.get('Content-Disposition')?.match(/filename="([a-zA-Z0-9.-]+)"/)?.[1];
+        enlace.download = nombre || 'alucarpin-respaldo.zip';
+        document.body.appendChild(enlace); enlace.click(); enlace.remove();
+        aviso.className = 'mensaje exito';
+        aviso.textContent = 'Archivo enviado al navegador. Comprueba que se ha descargado y guárdalo en un lugar privado. Todavía falta verificar su restauración en una base separada.';
+      } catch (error) {
+        aviso.className = 'mensaje error';
+        aviso.textContent = error.name === 'TimeoutError' ? 'La descarga ha superado el tiempo límite. No hay una copia descargada verificada; vuelve a intentarlo.' : error.message;
+      } finally {
+        boton.disabled = false;
+        if (url) setTimeout(() => URL.revokeObjectURL(url), 30000);
+      }
     };
       const mostrarFecha = fecha => { const partes = String(fecha || '').split('-'); return partes.length === 3 ? `${partes[2]}/${partes[1]}/${partes[0]}` : fecha; };
     const cerrarSesion = () => { localStorage.removeItem('alucarpin_token'); location.replace('/app/login.html'); };

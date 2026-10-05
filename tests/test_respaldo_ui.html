@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Pruebas de descarga de respaldo</title></head>
+<body>
+  <pre id="resultado">Ejecutando...</pre>
+  <iframe id="app" title="Administracion de prueba" style="width:390px;height:800px"></iframe>
+  <script>
+    function preparar() {
+      localStorage.setItem('alucarpin_token', 'prueba-local');
+      window.confirmar = true; window.fallar = false; window.tipoInvalido = false;
+      window.solicitudes = []; window.descargas = []; window.archivo = null;
+      window.confirm = () => confirmar;
+      URL.createObjectURL = blob => { window.archivo = blob; return 'blob:prueba'; };
+      HTMLAnchorElement.prototype.click = function () { descargas.push(this.download); };
+      window.fetch = async (url, opciones = {}) => {
+        if (url === '/copias-seguridad') {
+          solicitudes.push({ url, opciones });
+          await new Promise(r => setTimeout(r, 40));
+          if (fallar) return new Response(JSON.stringify({ detail: 'La base central no esta disponible' }), { status: 503 });
+          return new Response('ZIP-de-prueba', { headers: {
+            'Content-Type': tipoInvalido ? 'text/html' : 'application/zip',
+            'Content-Disposition': 'attachment; filename="alucarpin-sqlite-20261005-210000.zip"',
+          } });
+        }
+        return new Response(JSON.stringify([]));
+      };
+    }
+    (async () => {
+      const html = (await fetch('../app_web/administrador.html').then(r => r.text())).replaceAll('/app/', '/app_web/');
+      const marco = document.querySelector('#app');
+      marco.srcdoc = html.replace('<head>', `<head><script>(${preparar.toString()})();<\/script>`);
+      await new Promise(resolve => marco.onload = resolve);
+      const w = marco.contentWindow, d = marco.contentDocument;
+      const comprobar = (valor, texto) => { if (!valor) throw new Error(texto); };
+      const esperar = async condicion => {
+        for (let i = 0; i < 100; i++) { if (condicion()) return; await new Promise(r => setTimeout(r, 30)); }
+        throw new Error('Tiempo agotado');
+      };
+      d.querySelector('[data-apartado="configuracion"]').click();
+      const boton = d.querySelector('#descargar-respaldo'), mensaje = d.querySelector('#mensaje-respaldo');
+      comprobar(!d.querySelector('#apartado-configuracion').hidden, 'Respaldo fuera de configuracion');
+      w.confirmar = false; boton.click();
+      comprobar(w.solicitudes.length === 0, 'Descarga sin confirmacion');
+      w.confirmar = true; boton.click(); boton.click();
+      comprobar(boton.disabled, 'Permite doble descarga');
+      await esperar(() => !boton.disabled);
+      comprobar(w.solicitudes.length === 1 && w.descargas.length === 1, 'Duplica copia');
+      comprobar(w.solicitudes[0].opciones.cache === 'no-store', 'Respuesta puede almacenarse en cache');
+      comprobar(w.descargas[0] === 'alucarpin-sqlite-20261005-210000.zip' && w.archivo.size > 0, 'Nombre o archivo incorrecto');
+      comprobar(mensaje.textContent.includes('Todavía falta verificar') && mensaje.classList.contains('exito'), 'Confunde descarga con restauracion verificada');
+      w.fallar = true; boton.click(); await esperar(() => !boton.disabled);
+      comprobar(mensaje.textContent.includes('base central') && mensaje.classList.contains('error'), 'Error de servidor oculto');
+      comprobar(w.descargas.length === 1, 'Descarga error como si fuera ZIP');
+      w.fallar = false; w.tipoInvalido = true; boton.click(); await esperar(() => !boton.disabled);
+      comprobar(mensaje.textContent.includes('no contiene') && w.descargas.length === 1, 'Descarga HTML como respaldo');
+      comprobar(d.documentElement.scrollWidth <= d.documentElement.clientWidth, 'Desbordamiento movil');
+      document.querySelector('#resultado').textContent = 'OK: Respaldo en Configuracion y confirmacion de privacidad\nOK: Una descarga con nombre y sin cache\nOK: Errores explicitos sin falso ZIP\nOK: No afirma restauracion verificada y sin desbordamiento movil';
+    })().catch(error => { document.querySelector('#resultado').textContent = 'ERROR: ' + error.message; throw error; });
+  </script>
+</body>
+</html>

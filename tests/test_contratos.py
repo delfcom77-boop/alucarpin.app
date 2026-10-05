@@ -1,6 +1,6 @@
-import os
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,17 +31,14 @@ class ContratosTests(unittest.TestCase):
         self.assertIn("pagos_jornadas", readme)
         self.assertIn("Pendiente de revisar", readme)
 
-    def test_conexion_fallback_a_sqlite_si_database_url_es_invalida(self):
+    def test_conexion_no_cambia_a_sqlite_si_database_url_es_invalida(self):
         import importlib
         api = importlib.import_module("api_central")
-        valor_anterior = os.environ.get("DATABASE_URL")
-        os.environ["DATABASE_URL"] = "postgresql://bad"
-        try:
-            with api.conexion() as db:
-                fila = db.execute("SELECT 1 AS ok").fetchone()
-                self.assertEqual(fila["ok"], 1)
-        finally:
-            if valor_anterior is None:
-                os.environ.pop("DATABASE_URL", None)
-            else:
-                os.environ["DATABASE_URL"] = valor_anterior
+        with (patch.object(api, "DATABASE_URL", "postgresql://bad"),
+              patch.object(api, "ConexionPostgres", side_effect=api.psycopg.OperationalError("Prueba")),
+              patch.object(api.sqlite3, "connect") as local,
+              self.assertLogs(api.logger, level="ERROR")):
+            with self.assertRaises(api.HTTPException) as error:
+                api.conexion()
+        self.assertEqual(error.exception.status_code, 503)
+        local.assert_not_called()

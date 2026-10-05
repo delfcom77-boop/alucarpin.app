@@ -1,5 +1,4 @@
 import contextlib
-import os
 import sqlite3
 import tempfile
 import unittest
@@ -106,7 +105,7 @@ class JornadasFaenasTests(unittest.TestCase):
     def test_inicio_sqlite_crea_la_tabla_de_jornadas(self):
         with tempfile.TemporaryDirectory() as directorio:
             ruta = Path(directorio) / "empresa.db"
-            with patch.dict(os.environ, {"DATABASE_URL": ""}):
+            with patch.object(api_central, "DATABASE_URL", None):
                 with patch.object(api_central, "DATABASE_PATH", ruta):
                     api_central.inicializar_base_datos()
 
