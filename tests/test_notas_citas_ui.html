@@ -84,6 +84,7 @@
       comprobar(w.nota.estado === 'Pendiente', 'Archiva antes de guardar');
       d.querySelector('#cancelar-edicion-cita').click();
       comprobar(!d.querySelector('#formulario').dataset.seguimientoId, 'Cancelar deja vinculo');
+      comprobar(d.querySelector('#mensaje').textContent.includes('cancelada'), 'Cancelar deja aviso de preparacion');
       d.querySelector('#formulario').dataset.id = '99';
       d.querySelector('.crear-cita-seguimiento').click();
       comprobar(!d.querySelector('#formulario').dataset.id, 'Conversion edita cita anterior');

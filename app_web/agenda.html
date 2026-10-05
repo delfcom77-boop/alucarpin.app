@@ -428,7 +428,14 @@
     function editarNota(nota) { formularioSeguimiento.dataset.id = nota.id; document.querySelector('#seguimiento-fecha-llamada').value = nota.fecha_llamada || ''; document.querySelector('#seguimiento-hora').value = nota.hora || '10:00'; document.querySelector('#seguimiento-cliente').value = nota.cliente || ''; document.querySelector('#seguimiento-telefono').value = nota.telefono || ''; document.querySelector('#seguimiento-ubicacion').value = nota.ubicacion || ''; document.querySelector('#seguimiento-poblacion').value = nota.poblacion || ''; document.querySelector('#seguimiento-motivo').value = nota.motivo || ''; document.querySelector('#seguimiento-observaciones').value = nota.observaciones || ''; document.querySelector('#guardar-nota').textContent = 'Actualizar nota'; document.querySelector('#cancelar-edicion-nota').hidden = false; document.querySelector('[data-seccion-agenda="notas"]').click(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
     const limpiarEdicionCita = () => { delete formulario.dataset.id; delete formulario.dataset.seguimientoId; document.querySelector('#guardar-cita').textContent = 'Guardar y añadir al calendario'; document.querySelector('#cancelar-edicion-cita').hidden = true; formulario.reset(); document.querySelector('#fecha').valueAsDate = new Date(); document.querySelector('#hora').value = '09:00'; };
     const limpiarEdicionNota = () => { delete formularioSeguimiento.dataset.id; document.querySelector('#guardar-nota').textContent = 'Guardar nota y añadir recordatorio diario'; document.querySelector('#cancelar-edicion-nota').hidden = true; formularioSeguimiento.reset(); document.querySelector('#seguimiento-fecha-llamada').valueAsDate = new Date(); document.querySelector('#seguimiento-hora').value = '10:00'; };
-    document.querySelector('#cancelar-edicion-cita').onclick = limpiarEdicionCita;
+    document.querySelector('#cancelar-edicion-cita').onclick = () => {
+      const desdeNota = Boolean(formulario.dataset.seguimientoId);
+      limpiarEdicionCita();
+      if (desdeNota) {
+        mensaje.textContent = 'Preparación cancelada. La nota no se ha archivado.';
+        mensaje.className = 'mensaje';
+      }
+    };
     document.querySelector('#cancelar-edicion-nota').onclick = limpiarEdicionNota;
     function prepararCitaDesdeSeguimiento(seguimiento) {
       limpiarEdicionCita();
