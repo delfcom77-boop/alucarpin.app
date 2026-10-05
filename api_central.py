@@ -146,8 +146,8 @@ class PagoCreate(BaseModel):
     ayudante_id: int
     desde: date
     hasta: date
-    precio_dia: float = Field(ge=0)
-    importe_pagado: float = Field(default=0, ge=0)
+    precio_dia: float = Field(ge=0, allow_inf_nan=False)
+    importe_pagado: float = Field(default=0, ge=0, allow_inf_nan=False)
     fecha_pago: Optional[date] = None
 
     @model_validator(mode="after")
@@ -185,8 +185,8 @@ class PagoGastoCreate(BaseModel):
 
 
 class PagoJornadaUpdate(BaseModel):
-    importe: float = Field(default=0, ge=0)
-    importe_pagado: float = Field(default=0, ge=0)
+    importe: float = Field(default=0, ge=0, allow_inf_nan=False)
+    importe_pagado: float = Field(default=0, ge=0, allow_inf_nan=False)
     forma_pago: str = "Efectivo"
     estado_pago: Literal["No pagado", "Parcial", "Pagado"] = "No pagado"
 
@@ -1967,7 +1967,8 @@ def listar_fichajes(
         por_fecha = {}
         for registro in registros:
             por_fecha.setdefault(registro["fecha"], []).append(registro)
-        pagos_por_fecha = {fecha: agrupar_pagos_dia(db, grupo) for fecha, grupo in por_fecha.items()}
+        pagos_fichajes = obtener_pagos_fichajes(db, registros)
+        pagos_por_fecha = {fecha: agrupar_pagos_dia(db, grupo, pagos_fichajes) for fecha, grupo in por_fecha.items()}
         pagos = db.execute(
             "SELECT ayudante_id, desde, hasta, precio_dia, importe_pagado FROM liquidaciones WHERE ayudante_id = ?",
             (ayudante_id,),
@@ -2239,52 +2240,63 @@ def validar_fichaje(
     return dict(fila)
 
 
-def obtener_pagos_fichaje(db, fichaje_id: int):
-    pagos = []
-    pago_jornada = db.execute(
-        "SELECT importe, importe_pagado, forma_pago, estado_pago, fecha_pago FROM pagos_jornadas WHERE fichaje_id = ?",
-        (fichaje_id,),
-    ).fetchone()
-    if pago_jornada:
-        importe = pago_jornada["importe"]
-        pagado = pago_jornada["importe_pagado"]
-        estado = "Pagado" if pagado >= importe and importe > 0 else "Parcial" if pagado > 0 else "No pagado"
-        pagos.append({"fichaje_id": fichaje_id, **dict(pago_jornada), "estado_pago": estado, "creado": True, "origen": "jornada"})
-    fichaje = db.execute(
-        "SELECT f.id, f.ayudante_id, f.fecha, f.obra, f.faena_id_vinculada, "
-        "a.nombre FROM fichajes_ayudantes f JOIN ayudantes a "
-        "ON a.id = f.ayudante_id WHERE f.id = ?",
-        (fichaje_id,),
-    ).fetchone()
-    if not fichaje:
-        raise HTTPException(status_code=404, detail="Fichaje no encontrado")
-    if not fichaje["faena_id_vinculada"]:
-        return pagos
-    for tabla in ("gastos_faenas_extras", "gasto_faenas"):
-        db.execute("SAVEPOINT consulta_pago_legacy")
-        try:
-            gastos = db.execute(
-                f"SELECT id, importe, COALESCE(importe_pagado, pagado, 0) AS importe_pagado, forma_pago, estado_pago FROM {tabla} "
-                "WHERE faena_id = ? AND proveedor = ? AND fecha = ? "
-                "AND categoria = 'Ayudantes' ORDER BY id",
-                (fichaje["faena_id_vinculada"], fichaje["nombre"], fichaje["fecha"]),
-            ).fetchall()
-        except (sqlite3.OperationalError, psycopg.errors.UndefinedTable) as error:
-            db.execute("ROLLBACK TO SAVEPOINT consulta_pago_legacy")
-            db.execute("RELEASE SAVEPOINT consulta_pago_legacy")
-            if isinstance(error, sqlite3.OperationalError) and "no such table" not in str(error).lower():
-                raise
+def obtener_pagos_fichajes(db, fichajes):
+    por_fichaje = {f["id"]: [] for f in fichajes}
+    ids = list(por_fichaje)
+    for inicio in range(0, len(ids), 900):
+        lote = ids[inicio:inicio + 900]
+        marcadores = ", ".join("?" for _ in lote)
+        directos = db.execute(
+            "SELECT fichaje_id, importe, importe_pagado, forma_pago, estado_pago, fecha_pago "
+            f"FROM pagos_jornadas WHERE fichaje_id IN ({marcadores})",
+            lote,
+        ).fetchall()
+        for fila in directos:
+            pago = dict(fila)
+            importe, pagado = pago["importe"], pago["importe_pagado"]
+            pago.update(creado=True, origen="jornada", estado_pago=(
+                "Pagado" if pagado >= importe and importe > 0 else "Parcial" if pagado > 0 else "No pagado"
+            ))
+            por_fichaje[pago["fichaje_id"]].append(pago)
+        vinculados = [f["id"] for f in fichajes if f["id"] in lote and f["faena_id_vinculada"]]
+        if not vinculados:
             continue
-        db.execute("RELEASE SAVEPOINT consulta_pago_legacy")
-        for gasto in gastos:
-            estado = "Pagado" if gasto["importe_pagado"] >= gasto["importe"] and gasto["importe"] > 0 else "Parcial" if gasto["importe_pagado"] > 0 else "No pagado"
-            pagos.append({"fichaje_id": fichaje_id, "gasto_id": gasto["id"], "tabla_gasto": tabla, "importe": gasto["importe"], "importe_pagado": gasto["importe_pagado"], "forma_pago": gasto["forma_pago"], "estado_pago": estado, "creado": True})
-    return pagos
+        marcadores_legacy = ", ".join("?" for _ in vinculados)
+        for tabla in ("gastos_faenas_extras", "gasto_faenas"):
+            db.execute("SAVEPOINT consulta_pago_legacy")
+            try:
+                gastos = db.execute(
+                    "SELECT f.id AS fichaje_id, g.id AS gasto_id, g.importe, "
+                    "COALESCE(g.importe_pagado, g.pagado, 0) AS importe_pagado, g.forma_pago "
+                    f"FROM {tabla} g JOIN fichajes_ayudantes f "
+                    "ON g.faena_id = f.faena_id_vinculada AND g.fecha = f.fecha "
+                    "JOIN ayudantes a ON a.id = f.ayudante_id AND g.proveedor = a.nombre "
+                    f"WHERE f.id IN ({marcadores_legacy}) AND g.categoria = 'Ayudantes' ORDER BY f.id, g.id",
+                    vinculados,
+                ).fetchall()
+            except (sqlite3.OperationalError, psycopg.errors.UndefinedTable) as error:
+                db.execute("ROLLBACK TO SAVEPOINT consulta_pago_legacy")
+                db.execute("RELEASE SAVEPOINT consulta_pago_legacy")
+                if isinstance(error, sqlite3.OperationalError) and "no such table" not in str(error).lower():
+                    raise
+                continue
+            db.execute("RELEASE SAVEPOINT consulta_pago_legacy")
+            for fila in gastos:
+                pago = dict(fila)
+                importe, pagado = pago["importe"], pago["importe_pagado"]
+                pago.update(tabla_gasto=tabla, creado=True, estado_pago=(
+                    "Pagado" if pagado >= importe and importe > 0 else "Parcial" if pagado > 0 else "No pagado"
+                ))
+                por_fichaje[pago["fichaje_id"]].append(pago)
+    return por_fichaje
 
-def agrupar_pagos_dia(db, fichajes):
+
+def agrupar_pagos_dia(db, fichajes, pagos_por_fichaje=None):
+    if pagos_por_fichaje is None:
+        pagos_por_fichaje = obtener_pagos_fichajes(db, fichajes)
     pagos = {}
     for fichaje in fichajes:
-        for pago in obtener_pagos_fichaje(db, fichaje["id"]):
+        for pago in pagos_por_fichaje[fichaje["id"]]:
             clave = ("jornada", fichaje["id"]) if pago.get("origen") == "jornada" else (pago["tabla_gasto"], pago["gasto_id"])
             pagos[clave] = pago
     existentes = list(pagos.values())
@@ -2316,7 +2328,8 @@ def listar_jornadas_pago(ayudante_id: int, desde: date, hasta: date, usuario=Dep
         grupos = {}
         for fichaje in fichajes:
             grupos.setdefault(fichaje["fecha"], []).append(dict(fichaje))
-        return [agrupar_pagos_dia(db, grupo) for grupo in grupos.values()]
+        pagos = obtener_pagos_fichajes(db, fichajes)
+        return [agrupar_pagos_dia(db, grupo, pagos) for grupo in grupos.values()]
 
 
 @app.get("/fichajes/{fichaje_id}/pago")

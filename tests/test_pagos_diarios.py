@@ -1,7 +1,7 @@
 import contextlib
 import sqlite3
 import unittest
-from datetime import date
+from datetime import date, timedelta
 from unittest.mock import patch
 
 import api_central as api
@@ -179,6 +179,25 @@ class PagosDiariosTests(unittest.TestCase):
         from pydantic import ValidationError
         with self.assertRaises(ValidationError):
             api.PagoCreate(ayudante_id=1, desde=date(2026, 10, 4), hasta=date(2026, 10, 3), precio_dia=50)
+
+    def test_consultas_no_crecen_por_cada_fecha_o_fichaje(self):
+        self.db.executemany(
+            "INSERT INTO fichajes_ayudantes VALUES (?,1,?,'Obra',25,1)",
+            [(100 + i, (date(2025, 1, 1) + timedelta(days=i // 2)).isoformat()) for i in range(120)],
+        )
+        self.db.commit()
+        consultas = []
+        self.db.set_trace_callback(consultas.append)
+        jornadas = api.listar_jornadas_pago(1, date(2025, 1, 1), date(2026, 10, 4), {})
+        self.db.set_trace_callback(None)
+        self.assertEqual(len(jornadas), 62)
+        selects = [sql for sql in consultas if sql.lstrip().upper().startswith("SELECT")]
+        self.assertLessEqual(len(selects), 6)
+
+    def test_rechaza_importes_no_finitos(self):
+        from pydantic import ValidationError
+        with self.assertRaises(ValidationError):
+            api.PagoJornadaUpdate(importe=float("inf"))
 
 
 class AlarmasTrabajoTests(unittest.TestCase):
