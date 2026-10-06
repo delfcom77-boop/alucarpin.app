@@ -2,6 +2,8 @@ import contextlib
 import sqlite3
 import unittest
 from datetime import date
+from pathlib import Path
+import shlex
 from unittest.mock import patch
 
 import api_central as api
@@ -60,6 +62,13 @@ class ResumenEconomicoTests(unittest.TestCase):
 
     def test_mes_actual_y_febrero_bisiesto(self):
         self.assertEqual(periodo_actual(date(2024, 2, 3)), (date(2024, 2, 1), date(2024, 2, 29)))
+
+    def test_imagen_render_incluye_calculo_y_script_economico(self):
+        docker = (Path(__file__).resolve().parents[1] / "Dockerfile").read_text(encoding="utf-8")
+        fuentes = [fuente for linea in docker.splitlines() if linea.startswith("COPY ")
+                   for fuente in shlex.split(linea)[1:-1]]
+        self.assertIn("resumen_economico.py", fuentes)
+        self.assertIn("app_web/economia.js", fuentes)
 
     def test_periodo_no_oculta_pendientes_anteriores_y_no_usa_futuro(self):
         resultado = self.resumen()
