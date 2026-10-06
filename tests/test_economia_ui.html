@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Prueba de control económico</title></head>
+<body>
+  <pre id="resultado">Ejecutando...</pre>
+  <iframe id="app" title="Control económico de prueba" style="width:390px;height:850px"></iframe>
+  <script>
+    function preparar() {
+      window.peticiones = [];
+      window.fallar = false;
+      window.fetch = async url => {
+        peticiones.push(url);
+        if (url === '/yo') return new Response(JSON.stringify({rol: 'administrador'}));
+        if (url === '/panel-resumen') return new Response(JSON.stringify({
+          fecha: '2026-10-06', trabajos: {pendientes: 2, vencidos: 1},
+          cobros: {importe_pendiente: 400, pendientes: 1, sin_importe: 0},
+          ayudantes: {importe_pendiente_registrado: 30, pagadas: 0, parciales: 1, pendientes: 0, sin_registro: 1, revision: 0},
+          agenda: {total: 0, vencidos: 0, hasta: '2026-10-13', avisos: []},
+        }));
+        if (url.startsWith('/resumen-economico?')) {
+          if (fallar) return new Response('{}', {status: 503});
+          const parametros = new URLSearchParams(url.split('?')[1]);
+          return new Response(JSON.stringify({
+            fecha: '2026-10-06', desde: parametros.get('desde'), hasta: parametros.get('hasta'),
+            periodo: {cobros_recibidos: parametros.get('desde') === '2026-09-01' ? 100 : 200,
+              gastos_registrados: 50, abonado_gastos: 20, pendiente_gastos: 30,
+              jornadas_estimadas: 1, coste_estimado: 50},
+            acumulado: {cobros_pendientes: 400, pagos_pendientes: 30,
+              jornadas_estimadas: 1, coste_estimado: 50, cobros_sin_importe: 1},
+            cobros: [{tipo: 'faena', referencia: 1, fecha: '2026-09-01', cliente: '<script>alert(1)<\/script>', concepto: 'Obra antigua', pendiente: 400}],
+            pagos: [{tipo: 'jornada', referencia: 1, fecha: '2026-10-03', proveedor: 'Dani', concepto: 'Jornada', pendiente: 30}],
+            revision: 1, avisos: ['Un cobro sin fecha, fuera del periodo.'],
+          }));
+        }
+        throw new Error(`Peticion no prevista: ${url}`);
+      };
+    }
+    (async () => {
+      const anterior = localStorage.getItem('alucarpin_token');
+      localStorage.setItem('alucarpin_token', 'prueba-economia-local');
+      try {
+        const html = (await fetch('../app_web/inicio.html').then(r => r.text()))
+          .replaceAll('/app/', '/app_web/').replace('<script src="/app_web/pwa.js"><\/script>', '');
+        const marco = document.querySelector('#app');
+        marco.srcdoc = html.replace('<head>', `<head><script>(${preparar.toString()})();<\/script>`);
+        await new Promise(resolve => marco.onload = resolve);
+        const d = marco.contentDocument, w = marco.contentWindow;
+        const comprobar = (valor, texto) => { if (!valor) throw new Error(texto); };
+        const esperar = async condicion => {
+          for (let i = 0; i < 150; i++) {
+            if (condicion()) return;
+            await new Promise(r => setTimeout(r, 20));
+          }
+          throw new Error('Tiempo agotado');
+        };
+        await esperar(() => !d.querySelector('#economia-datos').hidden);
+        const hoy = new Date();
+        const mes = `${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,'0')}-01`;
+        comprobar(d.querySelector('#economia-desde').value === mes, 'No abre en el mes actual local');
+        comprobar(d.querySelector('#economia-abonado').textContent.includes('20'), 'Abonado incorrecto');
+        comprobar(d.querySelector('#economia-lista-cobros').textContent.includes('<script>'), 'No conserva texto seguro');
+        comprobar(!d.querySelector('#economia-lista-cobros script'), 'Interpreta datos como HTML');
+        d.querySelector('#economia-desde').value = '2026-09-01';
+        d.querySelector('#economia-hasta').value = '2026-09-30';
+        d.querySelector('#economia-consultar').click();
+        await esperar(() => !d.querySelector('#economia-consultar').disabled);
+        comprobar(d.querySelector('#economia-cobrado').textContent.includes('100'), 'No consulta septiembre');
+        comprobar(d.querySelector('#economia-cobros-pendientes').textContent.includes('400'), 'Filtro oculta pendiente antiguo');
+        w.fallar = true;
+        d.querySelector('#economia-consultar').click();
+        await esperar(() => !d.querySelector('#economia-consultar').disabled);
+        comprobar(d.querySelector('#economia-datos').hidden, 'Muestra cifras antiguas tras un error');
+        comprobar(d.querySelector('#economia-mensaje').textContent.includes('503'), 'Oculta el error de servidor');
+        w.fallar = false;
+        d.querySelector('#economia-mes').click();
+        await esperar(() => !d.querySelector('#economia-datos').hidden);
+        comprobar(d.querySelector('#economia-desde').value === mes, 'No restablece el mes');
+        comprobar(d.documentElement.scrollWidth <= d.documentElement.clientWidth, 'Desborda la pantalla movil');
+        document.querySelector('#resultado').textContent = 'OK: mes actual; filtros; pendientes antiguos; avisos; error sin cifras antiguas; texto seguro; pantalla movil.';
+      } finally {
+        if (anterior === null) localStorage.removeItem('alucarpin_token');
+        else localStorage.setItem('alucarpin_token', anterior);
+      }
+    })().catch(error => {
+      document.querySelector('#resultado').textContent = 'ERROR: ' + error.message;
+      throw error;
+    });
+  </script>
+</body>
+</html>

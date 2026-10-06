@@ -598,6 +598,22 @@ def panel_resumen(usuario=Depends(administrador)):
     }
 
 
+@app.get("/resumen-economico")
+def resumen_economico(
+    desde: Optional[date] = None, hasta: Optional[date] = None,
+    usuario=Depends(administrador),
+):
+    from resumen_economico import calcular_resumen, periodo_actual
+
+    hoy = date.today()
+    inicio, fin = periodo_actual(hoy)
+    desde, hasta = desde or inicio, hasta or fin
+    if desde > hasta:
+        raise HTTPException(status_code=400, detail="La fecha inicial no puede ser posterior a la final.")
+    with conexion() as db:
+        return calcular_resumen(db, desde, hasta, hoy, bool(DATABASE_URL))
+
+
 @app.get("/gastos")
 def listar_gastos(
     tipo: Optional[Literal["faena", "presupuesto", "jornada"]] = None,

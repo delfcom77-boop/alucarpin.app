@@ -139,6 +139,38 @@ Los cobros pendientes utilizan los mismos datos que Alarmas y Mi control; termin
 
 La agenda muestra notas y citas pendientes vencidas y las previstas hasta dentro de siete dias, ambos extremos incluidos. Se muestran los primeros ocho avisos, pero el contador incluye todos. Los enlaces de trabajos, cobros y avisos abren Alarmas con el tipo seleccionado. El panel no modifica registros ni genera pagos.
 
+### Control economico: mes actual y pendientes
+
+El inicio web y la primera pestana de Contabilidad de Windows muestran
+**Control economico**, con el mes actual por defecto, fechas Desde/Hasta y
+**Mes actual** para restablecerlas. Los extremos del periodo son inclusivos.
+Las fechas posteriores a hoy no se consideran actividad realizada ni pendientes actuales.
+
+- **Actividad del periodo:** cobros recibidos con fecha, gastos registrados
+  por fecha del coste, abonado acumulado de esos gastos y su pendiente actual.
+  El abonado no significa dinero salido durante el mes: algunos registros
+  antiguos no conservan la fecha de cada abono. No se calcula beneficio ni saldo bancario.
+- **Pendientes acumulados:** importes por cobrar y por pagar hasta hoy,
+  incluidos meses anteriores, sin limitarse al periodo elegido. Incluye detalle
+  por cliente/proveedor y referencia, ordenado desde la fecha mas antigua.
+  La web muestra los primeros 20 de cada listado; los totales incluyen todos.
+- **Por revisar:** jornadas duplicadas excluidas, trabajos sin importe,
+  referencias ambiguas, fechas ausentes o invalidas y fuentes no disponibles.
+  En Windows tambien se cuentan los pagos diarios pendientes de comprobar/enviar.
+
+Una jornada sin pago registrado se muestra separada como estimacion de 50 euros,
+no como otro pago confirmado. Varias obras no multiplican la jornada.
+Los historicos vinculados no se suman otra vez si existe pago diario.
+Las liquidaciones no se suman. Los presupuestos no aceptados no generan deuda;
+los antiguos Completados conservan el criterio historico de no reclamar cobro.
+Los trabajos vinculados a un presupuesto del resumen no duplican su importe.
+
+La fuente se identifica expresamente: base central en la app y base local en
+Windows. Consultar el resumen no sincroniza ni modifica registros; si falla,
+se muestra el error y se ocultan las cifras anteriores. Para igualar los datos,
+utiliza los botones de recibir/enviar del programa; no se presupone que todos
+los cambios locales ya estan publicados.
+
 ### Tus dias trabajados en Google Calendar
 
 En Mi control, usa **Registrar dia** en la faena de terceros, el presupuesto propio o la reparacion. Registra solo las fechas que has trabajado tu; no se copian fichajes de ayudantes ni se usa la fecha general del presupuesto. Los dias propios nuevos no registran pagos, cobros ni gastos. Los dias de terceros existentes se conservan.
@@ -172,6 +204,31 @@ Usa siempre esta copia actualizada:
 `C:\Users\AlucarpinSamitier\Desktop\EmpresaPython\dist\AlucarpinSamitier.exe`
 
 No abras copias antiguas ni accesos directos que apunten a otra carpeta.
+
+### Jornadas y pagos de ayudantes
+
+En el registro diario puedes consultar todos los sitios visitados, pero se cuenta
+**una sola jornada por ayudante y fecha**, de 50 euros por defecto. Los pagos y
+gastos historicos existentes conservan su importe. No se reparte ni multiplica
+el coste por cada faena.
+
+Selecciona el dia para guardar su pago. El campo **Total abonado del dia**
+es el total ya pagado: si habias abonado 20 euros y completas la jornada,
+introduce 50, no 30 ni otro pago de 50 a sumar. El pendiente se calcula sobre
+ese dia. El resumen del ayudante no crea un segundo pago por sus jornadas.
+
+Con conexion configurada, guardar un pago diario comprueba el valor de la app
+y actualiza ambos lados. Sin conexion configurada, se guarda solo en el PC
+y se avisa de que falta enviarlo con **ENVIAR DATOS LOCALES A LA APP**.
+Los errores de conexion no se presentan como pagos sincronizados.
+
+Un pago editado sin conexion conserva su valor anterior para comprobarlo al
+enviar. Si la app ha cambiado ese pago, el envio se bloquea para revisarlo;
+recibir datos tampoco borra pagos pendientes del PC. Los pendientes antiguos
+sin esa referencia requieren revision si difieren de la app.
+Los pagos duplicados se muestran como **Revisar** y no se suman ni borran
+automaticamente. Estas protecciones afectan a los pagos diarios de ayudantes,
+no son una resolucion automatica de conflictos de todas las tablas.
 
 ### Recibir datos de la web
 

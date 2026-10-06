@@ -115,6 +115,7 @@
     @media (max-width: 620px) {
       .menu { grid-template-columns: 1fr; }
       .opcion { min-height: 140px; }
+      #economia .indicadores { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -142,6 +143,41 @@
         <a href="/app/alarmas.html">Ver todos los recordatorios</a>
       </div>
     </section>
+    <section class="resumen" id="economia" hidden aria-labelledby="economia-titulo">
+      <h2 id="economia-titulo">Control económico</h2>
+      <p>El periodo se aplica a la actividad. Los pendientes acumulados no desaparecen al cambiar de mes. No se calcula beneficio ni saldo bancario.</p>
+      <div class="cabecera-resumen">
+        <label>Desde <input id="economia-desde" type="date" required></label>
+        <label>Hasta <input id="economia-hasta" type="date" required></label>
+        <button id="economia-consultar" type="button">Consultar periodo</button>
+        <button id="economia-mes" type="button">Mes actual</button>
+      </div>
+      <p id="economia-mensaje" role="status" aria-live="polite"></p>
+      <div id="economia-datos" hidden>
+        <h3>Actividad del periodo</h3>
+        <div class="indicadores">
+          <div class="indicador"><span>Cobros recibidos con fecha</span><strong id="economia-cobrado"></strong></div>
+          <div class="indicador"><span>Gastos registrados del periodo</span><strong id="economia-gastos"></strong></div>
+          <div class="indicador"><span>Abonado de esos gastos, acumulado</span><strong id="economia-abonado"></strong></div>
+          <div class="indicador"><span>Pendiente de esos gastos</span><strong id="economia-pendiente-periodo"></strong></div>
+        </div>
+        <p>Los gastos se agrupan por la fecha del coste, no por la fecha de pago. Lo abonado es el total actual de esos gastos, no las salidas de dinero del mes. Se excluyen fechas futuras a hoy.</p>
+        <p id="economia-estimado"></p>
+        <h3>Pendientes acumulados</h3>
+        <div class="indicadores">
+          <a class="indicador" href="/app/alarmas.html?tipo=cobro"><span>Por cobrar, según registros</span><strong id="economia-cobros-pendientes"></strong></a>
+          <a class="indicador" href="/app/administrador.html#gastos"><span>Por pagar, gastos registrados</span><strong id="economia-pagos-pendientes"></strong></a>
+        </div>
+        <p id="economia-pendientes-estimados"></p>
+        <details><summary>Detalle de cobros pendientes</summary><ul id="economia-lista-cobros"></ul></details>
+        <details><summary>Detalle de pagos pendientes</summary><ul id="economia-lista-pagos"></ul></details>
+        <h3>Por revisar</h3>
+        <p id="economia-revision"></p>
+        <ul id="economia-avisos"></ul>
+        <p>La app no conoce los cambios que todavía no se hayan enviado desde el PC. En Windows, usa los botones de recibir o enviar datos cuando corresponda.</p>
+        <p id="economia-actualizado"></p>
+      </div>
+    </section>
     <section class="menu">
       <a class="opcion agenda" href="/app/agenda.html"><strong>Agenda y citas</strong><span>Visitas, reuniones, llamadas y recordatorios.</span></a>
       <a class="opcion control" href="/app/mi_control.html"><strong>Mi control</strong><span>Trabajos propios, reparaciones, presupuestos e ingresos.</span></a>
@@ -156,6 +192,7 @@
     document.querySelector('#salir').onclick = event => { event.preventDefault(); localStorage.removeItem('alucarpin_token'); location.replace('/app/login.html'); };
   </script>
   <script src="/app/panel.js"></script>
+  <script src="/app/economia.js"></script>
   <script src="/app/pwa.js"></script>
 </body>
 </html>

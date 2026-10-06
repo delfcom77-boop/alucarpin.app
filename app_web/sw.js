@@ -1,4 +1,4 @@
-const CACHE = 'alucarpin-app-v2';
+const CACHE = 'alucarpin-app-v3-economia';
 const ARCHIVOS = [
   '/app/login.html',
   '/app/administrador.html',
@@ -6,6 +6,7 @@ const ARCHIVOS = [
   '/app/catalogo.js',
   '/app/inicio.html',
   '/app/panel.js',
+  '/app/economia.js',
   '/app/obra.html',
   '/app/obra.js',
   '/app/exportar.js',
