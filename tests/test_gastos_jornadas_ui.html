@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Prueba de gastos diarios de ayudantes</title></head>
+<body>
+  <pre id="resultado">Ejecutando...</pre>
+  <iframe id="app" title="Administracion de prueba" style="width:390px;height:800px"></iframe>
+  <script>
+    function preparar() {
+      localStorage.setItem('alucarpin_token', 'prueba-local');
+      window.solicitudes = [];
+      window.fetch = async url => {
+        solicitudes.push(url);
+        let datos = [];
+        if (url === '/ayudantes') datos = [{ id: 1, nombre: 'DANI' }];
+        if (url.startsWith('/gastos')) datos = [
+          { id: 1, tipo: 'jornada', ayudante_id: 1, proveedor: 'DANI', fecha: '2026-10-03',
+            concepto: 'Jornada de ayudante', importe: 50, importe_pagado: 20,
+            pendiente: 30, estado_pago: 'Parcial', revision: false },
+          { id: 3, tipo: 'jornada', ayudante_id: 1, proveedor: 'DANI', fecha: '2026-10-04',
+            concepto: 'Jornada de ayudante', importe: null, importe_pagado: null,
+            pendiente: null, estado_pago: 'Revisar', revision: true },
+        ];
+        if (url.includes('/jornadas-pago?')) datos = [{
+          id: 1, fecha: '2026-10-03', obra: 'Obra A | Obra B', revision: false,
+          pago: { importe: 50, importe_pagado: 20, forma_pago: 'Efectivo', estado_pago: 'Parcial' },
+          gastos_obra: [],
+        }];
+        return new Response(JSON.stringify(datos));
+      };
+    }
+    (async () => {
+      const html = (await fetch('../app_web/administrador.html').then(r => r.text())).replaceAll('/app/', '/app_web/');
+      const marco = document.querySelector('#app');
+      marco.srcdoc = html.replace('<head>', `<head><script>(${preparar.toString()})();<\/script>`);
+      await new Promise(resolve => marco.onload = resolve);
+      const d = marco.contentDocument, w = marco.contentWindow;
+      const comprobar = (valor, texto) => { if (!valor) throw new Error(texto); };
+      const esperar = async condicion => {
+        for (let i = 0; i < 100; i++) {
+          if (condicion()) return;
+          await new Promise(r => setTimeout(r, 30));
+        }
+        throw new Error('Tiempo agotado');
+      };
+      await esperar(() => d.querySelector('#lista-gastos').textContent.includes('DANI'));
+      d.querySelector('[data-apartado="gastos"]').click();
+      comprobar(d.querySelectorAll('#lista-gastos tr').length === 2, 'No muestra una fila por jornada');
+      comprobar(d.querySelector('#totales-gastos').textContent.includes('50.00'), 'Suma mal el gasto');
+      comprobar(d.querySelector('#totales-gastos').textContent.includes('30.00'), 'Suma mal el pendiente');
+      comprobar(d.querySelector('#totales-gastos').textContent.includes('no representan todo el periodo'), 'Oculta jornadas en revision');
+      comprobar(!d.querySelector('#lista-gastos .borrar'), 'Permite borrar un gasto diario independiente');
+      d.querySelector('#filtro-gastos').value = 'jornada';
+      d.querySelector('#filtro-gastos').dispatchEvent(new w.Event('change'));
+      await esperar(() => w.solicitudes.includes('/gastos?tipo=jornada'));
+      d.querySelector('#lista-gastos button').click();
+      await esperar(() => d.querySelector('#jornadas-pago').textContent.includes('Obra A'));
+      comprobar(w.solicitudes.includes('/ayudantes/1/jornadas-pago?desde=2026-10-03&hasta=2026-10-03'), 'No abre el ayudante y fecha correctos');
+      comprobar(d.documentElement.scrollWidth <= d.documentElement.clientWidth, 'Desborda la pantalla movil');
+      document.querySelector('#resultado').textContent = 'OK: jornadas y totales sin duplicados; revision explicita; filtro y enlace a Pagos; vista movil.';
+    })().catch(error => {
+      document.querySelector('#resultado').textContent = 'ERROR: ' + error.message;
+      throw error;
+    });
+  </script>
+</body>
+</html>

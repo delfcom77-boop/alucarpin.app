@@ -513,9 +513,12 @@ def resumen_gestion(usuario=Depends(administrador)):
             if filas or not avisos or not avisos[-1].startswith(tabla + ":"):
                 for gasto in filas:
                     gasto["tipo"] = tipo
+                    gasto["tabla_gasto"] = tabla
                 gastos.extend(filas)
                 break
 
+    with conexion() as db:
+        gastos = incluir_gastos_jornadas(db, gastos)
     return {
         "faenas": faenas,
         "presupuestos": presupuestos,
@@ -597,7 +600,7 @@ def panel_resumen(usuario=Depends(administrador)):
 
 @app.get("/gastos")
 def listar_gastos(
-    tipo: Optional[Literal["faena", "presupuesto"]] = None,
+    tipo: Optional[Literal["faena", "presupuesto", "jornada"]] = None,
     usuario=Depends(administrador),
 ):
     configuraciones = (
@@ -607,8 +610,6 @@ def listar_gastos(
     resultado = []
     with conexion() as db:
         for nombres, tipo_gasto in configuraciones:
-            if tipo and tipo != tipo_gasto:
-                continue
             tabla = next(
                 (
                     nombre for nombre in nombres
@@ -641,12 +642,14 @@ def listar_gastos(
             for fila in filas:
                 gasto = dict(fila)
                 gasto["tipo"] = tipo_gasto
+                gasto["tabla_gasto"] = tabla
                 gasto["pendiente"] = round(
                     max(float(gasto["importe"] or 0) - float(gasto["importe_pagado"] or 0), 0),
                     2,
                 )
                 resultado.append(gasto)
-    return resultado
+        resultado = incluir_gastos_jornadas(db, resultado)
+    return [gasto for gasto in resultado if not tipo or gasto["tipo"] == tipo]
 
 
 @app.post("/gastos", status_code=201)
@@ -2637,6 +2640,42 @@ def agrupar_pagos_dia(db, fichajes, pagos_por_fichaje=None):
         "pagos_existentes": existentes,
         "gastos_obra": gastos,
     }
+
+
+def incluir_gastos_jornadas(db, gastos):
+    fichajes = [dict(fila) for fila in db.execute(
+        "SELECT f.*, a.nombre AS nombre_ayudante FROM fichajes_ayudantes f "
+        "JOIN ayudantes a ON a.id = f.ayudante_id ORDER BY f.fecha DESC, f.ayudante_id, f.id"
+    ).fetchall()]
+    pagos = obtener_pagos_fichajes(db, fichajes)
+    grupos = {}
+    for fichaje in fichajes:
+        grupos.setdefault((fichaje["ayudante_id"], fichaje["fecha"]), []).append(fichaje)
+    vinculados = set()
+    jornadas = []
+    for (ayudante_id, fecha), grupo in grupos.items():
+        jornada = agrupar_pagos_dia(db, grupo, pagos)
+        vinculados.update((pago["tabla_gasto"], pago["gasto_id"])
+                          for pago in jornada["gastos_obra"])
+        pago = jornada["pago"]
+        importe = pago["importe"]
+        pagado = pago["importe_pagado"]
+        historico = next((gasto for gasto in gastos
+                          if gasto.get("tabla_gasto") == pago.get("tabla_gasto")
+                          and gasto["id"] == pago.get("gasto_id")), None)
+        jornadas.append({
+            "id": jornada["id"], "tipo": "jornada", "fecha": fecha,
+            "ayudante_id": ayudante_id, "proveedor": grupo[0]["nombre_ayudante"],
+            "concepto": "Jornada de ayudante", "categoria": "Ayudantes",
+            "obra": jornada["obra"], "fichajes_ids": jornada["fichajes_ids"],
+            "importe": importe, "importe_pagado": pagado,
+            "pendiente": None if jornada["revision"] else round(max(importe - pagado, 0), 2),
+            "estado_pago": pago["estado_pago"], "forma_pago": pago["forma_pago"],
+            "revision": jornada["revision"],
+            "gasto_historico": historico,
+        })
+    return [gasto for gasto in gastos
+            if (gasto.get("tabla_gasto"), gasto["id"]) not in vinculados] + jornadas
 
 
 @app.get("/ayudantes/{ayudante_id}/jornadas-pago")

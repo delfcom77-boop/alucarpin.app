@@ -208,13 +208,15 @@
       <p>Recuento basado en los fichajes, incluidos sábados y domingos. Cada fecha cuenta una vez por ayudante; dos ayudantes el mismo día suman dos días de trabajo. Si un ayudante trabaja en varias faenas el mismo día, ese día aparece en cada faena, pero solo una vez en el total.</p>
       <p id="resumen-dias" class="mensaje" role="status" aria-live="polite">Cargando días trabajados...</p>
       <div class="lista-general"><table><thead><tr><th>Ayudante</th><th>Tipo de trabajo</th><th>Cliente</th><th>Faena / obra</th><th>Ubicación</th><th>Días trabajados</th></tr></thead><tbody id="resumen-faenas"><tr><td colspan="6">Cargando...</td></tr></tbody></table></div>
-      <h3>Compras y otros gastos</h3>
+      <h3>Jornadas, compras y otros gastos</h3>
+      <p>Una jornada genera un gasto por ayudante y fecha, aunque trabaje en varios sitios. Las faenas son un control del trabajo realizado, no un reparto de ese gasto. Los pagos se modifican desde Pagos.</p>
       <div class="fila">
-        <label>Tipo <select id="filtro-gastos"><option value="">Todos</option><option value="faena">Faenas</option><option value="presupuesto">Presupuestos</option></select></label>
-        <label>Estado <select id="filtro-estado-gastos"><option value="">Todos</option><option value="No pagado">No pagado</option><option value="Parcial">Parcial</option><option value="Pagado">Pagado</option></select></label>
+        <label>Tipo <select id="filtro-gastos"><option value="">Todos</option><option value="jornada">Jornadas de ayudantes</option><option value="faena">Faenas</option><option value="presupuesto">Presupuestos</option></select></label>
+        <label>Estado <select id="filtro-estado-gastos"><option value="">Todos</option><option value="No pagado">No pagado</option><option value="Parcial">Parcial</option><option value="Pagado">Pagado</option><option value="Revisar">Revisar</option></select></label>
       </div>
       <div class="lista-general"><table><thead><tr><th>Tipo</th><th>Fecha</th><th>Proveedor</th><th>Concepto</th><th>Importe</th><th>Pagado</th><th>Pendiente</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista-gastos"><tr><td colspan="9">Cargando...</td></tr></tbody></table></div>
       <button type="button" data-exportar-listado="lista-gastos">Descargar gastos filtrados (CSV)</button>
+      <p id="totales-gastos" class="mensaje" role="status" aria-live="polite"></p>
       <div id="mensaje-gastos" class="mensaje"></div>
     </section>
     <section id="apartado-crear-gasto" data-contenido="gastos" hidden>
@@ -830,6 +832,10 @@
       const lista = await respuesta.json();
       const estado = filtroEstadoGastos.value;
       const filtrada = lista.filter(gasto => !estado || gasto.estado_pago === estado);
+      const revisiones = filtrada.filter(gasto => gasto.revision);
+      const calculables = filtrada.filter(gasto => !gasto.revision);
+      const sumar = campo => calculables.reduce((total, gasto) => total + Number(gasto[campo] || 0), 0).toFixed(2);
+      document.querySelector('#totales-gastos').textContent = `Gastos visibles: ${sumar('importe')} € · Pagado: ${sumar('importe_pagado')} € · Pendiente: ${sumar('pendiente')} €${revisiones.length ? ` · ${revisiones.length} jornadas requieren revisión y están excluidas: los totales no representan todo el periodo.` : ''}`;
       const cuerpo = document.querySelector('#lista-gastos');
       cuerpo.textContent = '';
       if (!filtrada.length) {
@@ -839,7 +845,39 @@
       filtrada.forEach(gasto => {
         const fila = document.createElement('tr');
         fila.className = gasto.estado_pago === 'Pagado' ? 'pagado' : gasto.estado_pago === 'Parcial' ? 'parcial' : 'pendiente';
-        const tipoTexto = gasto.tipo === 'presupuesto' ? 'Presupuesto' : 'Faena';
+        if (gasto.tipo === 'jornada' && !gasto.gasto_historico) {
+          const dinero = valor => gasto.revision ? 'Revisar' : `${Number(valor || 0).toFixed(2)} €`;
+          ['Jornada de ayudante', mostrarFecha(gasto.fecha), gasto.proveedor,
+            gasto.concepto, dinero(gasto.importe), dinero(gasto.importe_pagado),
+            dinero(gasto.pendiente), gasto.estado_pago].forEach(texto => {
+            const celda = document.createElement('td');
+            celda.textContent = texto;
+            fila.appendChild(celda);
+          });
+          const acciones = document.createElement('td');
+          const boton = document.createElement('button');
+          boton.type = 'button';
+          boton.textContent = 'Ver en Pagos';
+          boton.onclick = async () => {
+            marcarAyudante(gasto.ayudante_id);
+            desde.value = gasto.fecha;
+            hasta.value = gasto.fecha;
+            mostrarApartado('pagos');
+            try {
+              await cargarFichajes();
+            } catch (error) {
+              const mensaje = document.querySelector('#mensaje-pago-jornada');
+              mensaje.textContent = error.message;
+              mensaje.className = 'mensaje error';
+            }
+          };
+          acciones.appendChild(boton);
+          fila.appendChild(acciones);
+          cuerpo.appendChild(fila);
+          return;
+        }
+        const tipoTexto = gasto.tipo === 'jornada' ? 'Jornada (gasto histórico)' : gasto.tipo === 'presupuesto' ? 'Presupuesto' : 'Faena';
+        if (gasto.gasto_historico) gasto = gasto.gasto_historico;
         fila.innerHTML = `<td>${tipoTexto}</td><td>${mostrarFecha(gasto.fecha)}</td><td>${gasto.proveedor || ''}</td><td>${gasto.concepto || ''}</td><td>${Number(gasto.importe || 0).toFixed(2)} €</td><td>${Number(gasto.importe_pagado || 0).toFixed(2)} €</td><td>${Number(gasto.pendiente || 0).toFixed(2)} €</td><td>${gasto.estado_pago || 'No pagado'}</td><td class="acciones"><button type="button" class="historial-gasto">Historial</button><button type="button" class="pagar-gasto">Registrar pago</button><button type="button" class="editar-gasto">Editar</button><button type="button" class="borrar">Borrar</button></td>`;
         fila.querySelector('.historial-gasto').onclick = async () => {
           const respuesta = await apiFetch(`/gastos/${gasto.tipo}/${gasto.id}/pagos`);

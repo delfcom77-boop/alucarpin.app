@@ -79,6 +79,62 @@ class PagosDiariosTests(unittest.TestCase):
         self.pago(4)
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM pagos_jornadas").fetchone()[0], 2)
 
+    def test_gastos_incluye_una_jornada_por_ayudante_y_dia_sin_crear_pagos(self):
+        gastos = api.listar_gastos(usuario={})
+        self.assertEqual(len(gastos), 3)
+        self.assertEqual(sum(g["importe"] for g in gastos), 150)
+        self.assertTrue(all(g["tipo"] == "jornada" for g in gastos))
+        self.assertEqual(next(g for g in gastos if g["id"] == 1)["fichajes_ids"], [1, 2])
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM pagos_jornadas").fetchone()[0], 0)
+        self.assertEqual(api.listar_gastos(tipo="faena", usuario={}), [])
+
+    def test_gasto_jornada_refleja_pago_parcial_y_pago_completo(self):
+        self.pago(pagado=20)
+        gasto = next(g for g in api.listar_gastos(tipo="jornada", usuario={}) if g["id"] == 1)
+        self.assertEqual((gasto["importe"], gasto["importe_pagado"], gasto["pendiente"]), (50, 20, 30))
+        self.assertEqual(gasto["estado_pago"], "Parcial")
+        self.pago(2, 50)
+        gasto = next(g for g in api.listar_gastos(usuario={}) if g["id"] == 1)
+        self.assertEqual(gasto["pendiente"], 0)
+        self.assertEqual(gasto["estado_pago"], "Pagado")
+
+    def test_gastos_no_duplica_historico_vinculado_ni_pago_diario(self):
+        self.db.executescript("""
+            CREATE TABLE gastos_faenas_extras (
+                id INTEGER, faena_id INTEGER, proveedor TEXT, fecha TEXT, categoria TEXT,
+                importe REAL, importe_pagado REAL, pagado REAL, forma_pago TEXT,
+                estado_pago TEXT, concepto TEXT
+            );
+            INSERT INTO gastos_faenas_extras VALUES
+                (10,25,'DANI','2026-10-03','Ayudantes',50,25,0,'Efectivo','Parcial','Ayudante'),
+                (11,25,'Tienda','2026-10-03','Material',10,0,0,'Efectivo','No pagado','Tornillos');
+        """)
+        gastos = api.listar_gastos(usuario={})
+        self.assertEqual(len(gastos), 4)
+        self.assertEqual(sum(g["importe"] for g in gastos), 160)
+        self.assertEqual(len([g for g in gastos if g["tipo"] == "faena"]), 1)
+        jornada = next(g for g in gastos if g["tipo"] == "jornada" and g["id"] == 1)
+        self.assertEqual(jornada["gasto_historico"]["id"], 10)
+        self.assertEqual(jornada["gasto_historico"]["tipo"], "faena")
+        self.db.execute(
+            "INSERT INTO pagos_jornadas VALUES (1,50,50,'Efectivo','Pagado','2026-10-03',NULL)")
+        gastos = api.listar_gastos(usuario={})
+        self.assertEqual(sum(g["importe"] for g in gastos), 160)
+        self.assertEqual(next(g for g in gastos if g["tipo"] == "jornada" and g["id"] == 1)["importe_pagado"], 50)
+        self.assertIsNone(next(g for g in gastos if g["tipo"] == "jornada" and g["id"] == 1)["gasto_historico"])
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM gastos_faenas_extras").fetchone()[0], 2)
+
+    def test_gastos_jornadas_duplicadas_exige_revision_sin_sumar_importes(self):
+        self.db.executescript("""
+            INSERT INTO pagos_jornadas VALUES (1,50,50,'Efectivo','Pagado','2026-10-03',NULL);
+            INSERT INTO pagos_jornadas VALUES (2,50,50,'Efectivo','Pagado','2026-10-03',NULL);
+        """)
+        gasto = next(g for g in api.listar_gastos(usuario={}) if g["id"] == 1)
+        self.assertTrue(gasto["revision"])
+        self.assertIsNone(gasto["importe"])
+        self.assertIsNone(gasto["pendiente"])
+        self.assertEqual(gasto["estado_pago"], "Revisar")
+
     def test_conserva_y_bloquea_dos_pagos_historicos(self):
         self.db.executescript("""
             INSERT INTO pagos_jornadas VALUES (1,50,50,'Efectivo','Pagado','2026-10-03',NULL);
