@@ -299,6 +299,27 @@ El verificador rechaza destinos existentes en SQLite y destinos con tablas, func
 
 Conserva varias copias fechadas y prueba una restauracion periodicamente. No borres ni sustituyas la base de produccion como parte de esta comprobacion.
 
+### Añadir una copia diaria a este PC (Windows)
+
+La app sigue usando Supabase como hasta ahora. La tarea local solo descarga una copia adicional de lectura; no mueve datos ni cambia la base activa.
+
+1. Enciende el PC y abre sesión en Windows con internet.
+2. Abre la carpeta de Alucarpin y ejecuta **Configurar copias diarias.bat**. Si Windows indica que no puede registrar la tarea, vuelve a abrirlo con el botón derecho → **Ejecutar como administrador** y acepta el aviso usando la misma cuenta de Windows.
+3. Escribe tu usuario de administrador y contraseña de Alucarpin en esa ventana. La contraseña no se muestra, no se guarda en un archivo y no la envíes por chat.
+4. El instalador descarga y comprueba una copia inicial, y crea una tarea de Windows a las 21:00 y cinco minutos después de iniciar sesión. Si una ejecución falla, Windows vuelve a intentarla hasta tres veces, con 15 minutos entre intentos. Si el equipo estaba apagado, intenta ponerse al día al volver a iniciar sesión. Debe estar abierta la sesión de Windows para ejecutarse.
+
+Los ZIP se guardan en `%USERPROFILE%\AlucarpinCopias`; el acceso de Alucarpin se conserva en el Administrador de credenciales de Windows. Se retienen 30 copias diarias y se borra la más antigua solo después de guardar una nueva válida. `copias_diarias.log` muestra ejecuciones y errores: el configurador diferencia si Alucarpin rechazó el usuario o la contraseña o si falló la sesión al descargar. No almacenes ni sincronices estos ZIP en una carpeta compartida: incluyen datos personales y hashes de contraseñas. Esta copia local no reemplaza las copias nativas de Supabase ni protege por sí sola contra la pérdida o avería del mismo PC.
+
+Para quitar la tarea, en **Programador de tareas de Windows → Biblioteca del Programador de tareas**, elimina **Alucarpin - copia diaria**. Luego borra la credencial **AlucarpinAppCopiaDiaria** desde **Administrador de credenciales → Credenciales de Windows**. Las copias ZIP se pueden conservar o borrar manualmente.
+
+### Copia cifrada en OneDrive
+
+Para mantener una segunda copia fuera de este PC, ejecuta **Configurar copia cifrada OneDrive.bat**. La herramienta guarda la frase de cifrado en el Administrador de credenciales de Windows y crea una copia cifrada en `%OneDrive%\AlucarpinCopias`. La tarea diaria local añadirá allí el respaldo cifrado, conservando 30 días. El ZIP sin cifrar permanece solo en `%USERPROFILE%\AlucarpinCopias`; comprueba el icono de OneDrive para confirmar que el archivo `.enc` terminó de sincronizarse.
+
+La frase debe tener al menos 16 caracteres. Anótala y guárdala en un lugar privado distinto de este PC: no se puede recuperar desde OneDrive ni desde el Administrador de credenciales si pierdes el equipo. No la envíes por chat. Sin la frase no se pueden descifrar las copias en la nube.
+
+Para recuperar una copia en otro equipo, descarga el archivo `.zip.enc`, instala la dependencia local ejecutando `python -m pip install -r requirements-copias.txt` y descífralo con `python copias_diarias.py --descifrar "C:\ruta\copia.zip.enc" --destino "C:\ruta\copia.zip"`. Escribe la frase cuando la solicite. El ZIP resultante se valida y luego puede restaurarse siguiendo el procedimiento de comprobación anterior, siempre en una base PostgreSQL nueva y separada, nunca en producción. El descifrado crea un archivo nuevo y no sobrescribe destinos existentes.
+
 ## 4. Flujo diario recomendado
 
 ### Si trabajas desde la web
