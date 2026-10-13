@@ -105,6 +105,18 @@ En el escritorio, actualiza los datos de la app y utiliza **Guardar vinculacion*
 
 Esta mejora no modifica importes, pagos ni liquidaciones.
 
+### Filtros de mis faenas (ayudante)
+
+En **Listado general de mis faenas**, el ayudante puede combinar tipo de faena,
+cliente, obra, ubicacion, poblacion, vinculacion y fechas desde/hasta. Las
+busquedas de texto admiten partes del nombre y no distinguen mayusculas ni
+acentos. Las fechas son inclusivas; un rango invertido muestra un aviso.
+**Pendientes de vincular** incluye registros sin destino aunque tengan un tipo
+de faena declarado. **Limpiar filtros** vuelve a mostrar todos los registros.
+El resumen indica registros visibles y dias distintos, sin duplicar una fecha
+cuando hay varias obras el mismo dia. Los filtros se conservan al actualizar
+el listado o guardar un dia y no cambian el formulario de registro ni los datos.
+
 ### Pagos diarios y liquidaciones
 
 En **Pagos** aparece una fila por ayudante y fecha, con todas las obras realizadas ese dia. Se incluyen sabados y domingos; varios fichajes del mismo ayudante en una fecha no generan varias jornadas. El estado se calcula a partir del importe y lo realmente pagado; los pagos parciales reducen el pendiente.

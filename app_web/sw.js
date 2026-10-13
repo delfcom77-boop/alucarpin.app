@@ -1,4 +1,4 @@
-const CACHE = 'alucarpin-app-v4-fichajes-manuales';
+const CACHE = 'alucarpin-app-v5-filtros-ayudantes';
 const ARCHIVOS = [
   '/app/login.html',
   '/app/administrador.html',

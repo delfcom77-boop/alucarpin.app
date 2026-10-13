@@ -75,6 +75,7 @@
     .error { color: var(--error); }
     .ok { color: var(--success); }
     .lista { overflow-x: auto; }
+    .filtros { display: grid; gap: 0 14px; }
     table { width: 100%; min-width: 650px; border-collapse: collapse; }
     th, td { padding: 11px 8px; border-bottom: 1px solid var(--border); text-align: left; }
     th { background: #edf8f8; }
@@ -82,7 +83,7 @@
     tbody tr.pagado { background: #e7f4ec; color: #185c2b; }
     tbody tr.pendiente { background: #fdf0f0; color: #7a2020; }
     tbody tr:hover, tbody tr.seleccionado { background: #eef8f7; }
-    @media (min-width: 640px) { form { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; } form button, form .mensaje { grid-column: 1 / -1; } }
+    @media (min-width: 640px) { form, .filtros { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; } form button, form .mensaje { grid-column: 1 / -1; } }
   </style>
 </head>
 <body>
@@ -108,12 +109,24 @@
     </section>
     <section>
       <h2>Listado general de mis faenas</h2>
-      <p id="contador">Cargando faenas...</p>
-      <div class="lista">
+      <div id="filtros" class="filtros">
+        <div><label for="filtro-tipo">Tipo de faena</label><select id="filtro-tipo"><option value="">Todos los tipos</option><option value="faena">Faena a 3º</option><option value="presupuesto">Presupuesto Alucarpin</option><option value="reparacion">Reparación</option><option value="pendiente">Pendientes de vincular</option></select></div>
+        <div><label for="filtro-cliente">Cliente</label><select id="filtro-cliente"><option value="">Todos los clientes</option></select></div>
+        <div><label for="filtro-obra">Buscar obra</label><input id="filtro-obra" type="search" placeholder="Nombre o parte del nombre"></div>
+        <div><label for="filtro-ubicacion">Buscar ubicación</label><input id="filtro-ubicacion" type="search"></div>
+        <div><label for="filtro-poblacion">Buscar población</label><input id="filtro-poblacion" type="search"></div>
+        <div><label for="filtro-vinculo">Vinculación</label><select id="filtro-vinculo"><option value="">Todas</option><option value="pendiente">Pendiente de vincular</option><option value="vinculado">Vinculado</option></select></div>
+        <div><label for="filtro-desde">Desde</label><input id="filtro-desde" type="date"></div>
+        <div><label for="filtro-hasta">Hasta</label><input id="filtro-hasta" type="date"></div>
+      </div>
+      <button id="limpiar-filtros" type="button">Limpiar filtros</button>
+      <p id="contador" class="mensaje" role="status">Cargando faenas...</p>
+      <div class="lista" tabindex="0" role="region" aria-label="Mis faenas. Desplaza horizontalmente para ver todas las columnas.">
         <table><thead><tr><th>Día</th><th>Tipo</th><th>Cliente</th><th>Obra</th><th>Ubicación</th><th>Población</th><th>Vinculación</th></tr></thead><tbody id="historial"><tr><td colspan="7">Cargando...</td></tr></tbody></table>
       </div>
     </section>
   </main>
+  <script src="/app/jornadas.js"></script>
   <script>
     const api = '';
     const token = localStorage.getItem('alucarpin_token');
@@ -131,6 +144,29 @@
     const cliente = document.querySelector('#cliente');
     const obra = document.querySelector('#obra');
     const guardar = formulario.querySelector('button[type="submit"]');
+    const filtros = document.querySelector('#filtros');
+    const filtroCliente = document.querySelector('#filtro-cliente');
+    const valorFiltro = nombre => document.querySelector(`#filtro-${nombre}`).value;
+    filtros.addEventListener('input', pintar);
+    filtros.addEventListener('change', pintar);
+    document.querySelector('#limpiar-filtros').addEventListener('click', () => {
+      filtros.querySelectorAll('input, select').forEach(control => { control.value = ''; });
+      pintar();
+    });
+    function actualizarClientes() {
+      const anterior = filtroCliente.value;
+      const clientes = new Map();
+      fichajes.forEach(fichaje => {
+        const nombre = (fichaje.cliente || '').trim();
+        if (nombre) clientes.set(AlucarpinJornadas.normalizar(nombre), nombre);
+      });
+      filtroCliente.replaceChildren(new Option('Todos los clientes', ''));
+      Array.from(clientes).sort((a, b) => a[1].localeCompare(b[1], 'es')).forEach(([clave, nombre]) => {
+        filtroCliente.add(new Option(nombre, clave));
+      });
+      if (anterior && !clientes.has(anterior)) filtroCliente.add(new Option(anterior, anterior));
+      filtroCliente.value = anterior;
+    }
 
     if (!ayudanteId) {
       mensaje.textContent = 'Falta identificar al ayudante en esta prueba.';
@@ -165,16 +201,36 @@
       const ayudante = listaAyudantes.find(item => String(item.id) === String(ayudanteId));
       document.querySelector('#nombre').textContent = ayudante ? ayudante.nombre : 'Ayudante no encontrado';
       fichajes = await respuesta.json();
+      actualizarClientes();
       pintar();
     }
 
     function pintar() {
       historial.textContent = '';
-      contador.textContent = `${fichajes.length} día${fichajes.length === 1 ? '' : 's'} registrado${fichajes.length === 1 ? '' : 's'}`;
+      let visibles;
+      try {
+        visibles = AlucarpinJornadas.filtrar(fichajes, {
+          tipo: valorFiltro('tipo'), cliente: filtroCliente.value, obra: valorFiltro('obra'),
+          desde: valorFiltro('desde'), hasta: valorFiltro('hasta'),
+        }).filter(fichaje =>
+          AlucarpinJornadas.normalizar(fichaje.ubicacion).includes(AlucarpinJornadas.normalizar(valorFiltro('ubicacion')))
+          && AlucarpinJornadas.normalizar(fichaje.poblacion).includes(AlucarpinJornadas.normalizar(valorFiltro('poblacion')))
+          && (!valorFiltro('vinculo') || vinculado(fichaje) === (valorFiltro('vinculo') === 'vinculado'))
+        );
+      } catch (error) {
+        contador.textContent = error.message;
+        contador.className = 'mensaje error';
+        historial.innerHTML = '<tr><td colspan="7">Revisa las fechas de los filtros.</td></tr>';
+        return;
+      }
+      const dias = new Set(visibles.map(fichaje => fichaje.fecha)).size;
+      contador.textContent = `${visibles.length} de ${fichajes.length} registros · ${dias} día${dias === 1 ? '' : 's'} trabajado${dias === 1 ? '' : 's'}`;
+      contador.className = 'mensaje';
       if (!fichajes.length) { historial.innerHTML = '<tr><td colspan="7">Todavía no hay días registrados.</td></tr>'; return; }
-      fichajes.forEach(fichaje => {
+      if (!visibles.length) { historial.innerHTML = '<tr><td colspan="7">No hay faenas con estos filtros.</td></tr>'; return; }
+      visibles.forEach(fichaje => {
         const item = document.createElement('tr');
-        item.className = `registro ${fichaje.pagado ? 'pagado' : 'pendiente'}`;
+        item.className = `registro ${fichaje.pagado ? 'pagado' : 'pendiente'}${String(fichaje.id) === formulario.dataset.id ? ' seleccionado' : ''}`;
         const tipo = fichaje.tipo_destino === 'presupuesto' ? 'Presupuesto Alucarpin' : fichaje.tipo_destino === 'reparacion' ? 'Reparación' : fichaje.tipo_destino === 'faena' ? 'Faena a 3º' : 'Pendiente de vincular';
         [mostrarFecha(fichaje.fecha), tipo, fichaje.cliente, fichaje.obra, fichaje.ubicacion, fichaje.poblacion,
           vinculado(fichaje) ? 'Vinculado' : 'Pendiente de vincular'].forEach(valor => {

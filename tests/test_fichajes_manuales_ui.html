@@ -99,6 +99,64 @@
       comprobar(!d.querySelector('#formulario').dataset.id && !d.querySelector('#cliente').value, 'Cancelar permite otro dia');
       comprobar(d.documentElement.scrollWidth <= w.innerWidth, 'Formulario movil sin desbordamiento');
 
+      const original = { ...w.registros[0] };
+      const escriturasAntes = w.peticiones.filter(p => p.metodo !== 'GET').length;
+      w.registros = [
+        { ...original, cliente: 'José', obra: 'Ventanas', ubicacion: 'Calle Aragón', poblacion: 'Jaca', fecha: '2026-10-10' },
+        { ...original, id: 2, cliente: ' JOSÉ ', obra: 'Puerta', ubicacion: 'Calle Aragón', poblacion: 'Jaca', fecha: '2026-10-10' },
+        { ...original, id: 3, cliente: 'Ana', tipo_destino: 'presupuesto', presupuesto_id: 10, obra: 'Ventanas', ubicacion: 'Calle B', poblacion: 'Huesca', fecha: '2026-10-11' },
+        { ...original, id: 4, cliente: 'Luis', tipo_destino: 'reparacion', trabajo_propio_id: 20, obra: 'Persiana', fecha: '2026-10-12' },
+      ];
+      await w.cargar();
+      const filas = () => d.querySelectorAll('#historial tr.registro').length;
+      const filtrar = (nombre, valor) => {
+        const control = d.querySelector('#filtro-' + nombre);
+        control.value = valor;
+        control.dispatchEvent(new w.Event('input', { bubbles: true }));
+      };
+      const limpiar = () => d.querySelector('#limpiar-filtros').click();
+      comprobar(filas() === 4 && d.querySelector('#contador').textContent.includes('3 días'), 'Cuenta fechas distintas sin duplicar obras del dia');
+      comprobar(d.querySelector('#filtro-cliente').options.length === 4, 'Clientes unicos ignorando espacios y acentos');
+      filtrar('tipo', 'presupuesto');
+      comprobar(filas() === 1 && d.querySelector('#historial').textContent.includes('Ana'), 'Filtra tipo de faena');
+      limpiar();
+      filtrar('cliente', 'jose');
+      filtrar('obra', 'VENT');
+      filtrar('ubicacion', 'aragon');
+      filtrar('poblacion', 'JACA');
+      filtrar('desde', '2026-10-10');
+      filtrar('hasta', '2026-10-10');
+      comprobar(filas() === 1 && d.querySelector('#historial').textContent.includes('Ventanas'), 'Filtros combinados, acentos y fechas inclusivas');
+      d.querySelector('#historial tr.registro').click();
+      comprobar(d.querySelector('#formulario').dataset.id === '1', 'Puede editar fila filtrada');
+      await w.cargar();
+      comprobar(filas() === 1 && d.querySelector('#filtro-obra').value === 'VENT'
+        && d.querySelector('#historial tr.registro').classList.contains('seleccionado'), 'Actualizacion conserva filtros y seleccion');
+      limpiar();
+      comprobar(filas() === 4 && d.querySelector('#formulario').dataset.id === '1', 'Limpiar no toca borrador');
+      filtrar('tipo', 'pendiente');
+      comprobar(filas() === 2, 'Pendientes incluye tipo declarado sin vinculo');
+      limpiar();
+      filtrar('vinculo', 'vinculado');
+      comprobar(filas() === 2, 'Filtra destinos vinculados');
+      limpiar();
+      filtrar('obra', 'No existe');
+      comprobar(filas() === 0 && d.querySelector('#historial').textContent.includes('No hay faenas'), 'Sin coincidencias visible');
+      limpiar();
+      filtrar('desde', '2026-10-12');
+      filtrar('hasta', '2026-10-10');
+      comprobar(d.querySelector('#contador').classList.contains('error') && filas() === 0, 'Rango invertido avisa sin mostrar resultados incorrectos');
+      limpiar();
+      for (const ancho of [320, 390, 768]) {
+        document.querySelector('#ayudante').style.width = ancho + 'px';
+        await new Promise(resolve => w.requestAnimationFrame(() => w.requestAnimationFrame(resolve)));
+        comprobar(d.documentElement.scrollWidth <= w.innerWidth, 'Filtros sin desbordamiento a ' + ancho);
+      }
+      comprobar(w.peticiones.filter(p => p.metodo !== 'GET').length === escriturasAntes, 'Filtrar no modifica datos');
+      w.registros = [original];
+      d.querySelector('#nuevo-dia').click();
+      await w.cargar();
+
       const [a, ad] = await abrir('admin', 'administrador.html');
       a.registros.push({ ...w.registros[0], cliente: '<img src=x onerror="window.inyectado=true">' });
       a.dispatchEvent(new a.Event('focus'));
