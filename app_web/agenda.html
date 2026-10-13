@@ -228,13 +228,27 @@
       <div class="lista"><table><thead><tr><th>Recordatorio</th><th>Cliente</th><th>Teléfono</th><th>Dirección / población</th><th>Qué me ha pedido</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista-seguimientos"><tr><td colspan="7">Cargando...</td></tr></tbody></table></div>
     </section>
     <section data-seccion-contenido="citas">
-      <h2>Próximas citas</h2>
+      <h2>Citas pendientes e historial</h2>
+      <p>Gestiona aquí tus citas previstas. Convertir una faena, presupuesto o reparación crea el trabajo pendiente de revisar en Mi control y marca la cita realizada; no registra un día trabajado ni un cobro.</p>
       <div class="filtro-citas-wrapper">
         <label for="filtro-citas">Filtrar por estado
           <select id="filtro-citas">
             <option value="pendientes">Pendientes</option>
             <option value="realizadas">Realizadas</option>
             <option value="todas">Todas</option>
+          </select>
+        </label>
+        <label for="filtro-tipo-citas">Tipo
+          <select id="filtro-tipo-citas">
+            <option value="">Todos</option>
+            <option value="faena">Faenas a terceros</option>
+            <option value="presupuesto">Presupuestos</option>
+            <option value="reparacion">Reparaciones</option>
+            <option value="tomar_medidas">Tomar medidas</option>
+            <option value="visita">Visitas</option>
+            <option value="reunion">Reuniones</option>
+            <option value="llamada">Llamadas</option>
+            <option value="otro">Otros</option>
           </select>
         </label>
       </div>
@@ -260,7 +274,12 @@
     const aplicarBusqueda = (selector, tablaSelector) => document.querySelector(selector).addEventListener('input', event => { const texto = event.target.value.trim().toLowerCase(); document.querySelectorAll(`${tablaSelector} tr`).forEach(fila => { fila.hidden = Boolean(texto) && !fila.textContent.toLowerCase().includes(texto); }); });
     aplicarBusqueda('#buscar-citas', '#lista');
     aplicarBusqueda('#buscar-notas', '#lista-seguimientos');
-    document.querySelector('#filtro-citas')?.addEventListener('change', cargar);
+    const refrescarCitas = () => cargar().catch(error => {
+      mensajeCitas.textContent = error.message;
+      mensajeCitas.className = 'mensaje error';
+    });
+    document.querySelector('#filtro-citas').addEventListener('change', refrescarCitas);
+    document.querySelector('#filtro-tipo-citas').addEventListener('change', refrescarCitas);
     document.querySelector('#filtro-notas')?.addEventListener('change', cargarSeguimientos);
     document.querySelectorAll('[data-seccion-agenda]').forEach(boton => boton.onclick = () => {
       const seccion = boton.dataset.seccionAgenda;
@@ -304,6 +323,8 @@
     async function calendario(id) { const respuesta = await apiFetch(`/citas/${id}/calendario`); if (!respuesta.ok) throw new Error('No se pudo generar el calendario.'); const enlace = document.createElement('a'); enlace.href = URL.createObjectURL(await respuesta.blob()); enlace.download = `alucarpin-cita-${id}.ics`; enlace.click(); URL.revokeObjectURL(enlace.href); }
     function obtenerCitasFiltradas(citas) {
       const filtro = document.querySelector('#filtro-citas')?.value || 'pendientes';
+      const tipo = document.querySelector('#filtro-tipo-citas').value;
+      citas = citas.filter(cita => !tipo || cita.tipo === tipo);
       if (filtro === 'realizadas') return citas.filter(cita => cita.estado === 'Realizada');
       if (filtro === 'todas') return citas;
       return citas.filter(cita => cita.estado !== 'Realizada');
@@ -354,6 +375,39 @@
         const telefonoCita = cita.telefono ? `<a class="telefono-link" href="tel:${cita.telefono}">${cita.telefono}</a>` : '—';
         fila.innerHTML = `<td>${fechaTexto(cita.fecha)}</td><td>${cita.hora}</td><td>${tipos[cita.tipo] || cita.tipo}</td><td>${cita.cliente || '-'}</td><td>${telefonoCita}</td><td>${[cita.ubicacion, cita.poblacion].filter(Boolean).join(', ') || '-'}</td><td><span class="estado-badge ${estadoClase}">${estadoLabel}</span></td><td class="acciones"><button type="button" class="editar-cita">Modificar</button>${cita.estado === 'Realizada' ? '' : '<button type="button" class="cal">Calendario</button>'}<button type="button" class="realizada" ${cita.estado === 'Realizada' ? 'disabled' : ''}>${cita.estado === 'Realizada' ? 'Realizada' : 'Marcar realizada'}</button><button type="button" class="borrar">Borrar</button></td>`;
         fila.querySelector('.editar-cita').onclick = () => editarCita(cita);
+        const busqueda = document.querySelector('#buscar-citas').value.trim().toLowerCase();
+        fila.hidden = Boolean(busqueda) && !fila.textContent.toLowerCase().includes(busqueda);
+        if (cita.estado !== 'Realizada' && ['faena', 'presupuesto', 'reparacion'].includes(cita.tipo)) {
+          const convertir = document.createElement('button');
+          convertir.type = 'button';
+          convertir.className = 'convertir-cita';
+          convertir.textContent = 'Convertir en trabajo';
+          convertir.onclick = async () => {
+            if (!confirm('¿Crear el trabajo en Mi control y marcar esta cita como realizada? Tu día trabajado se registra aparte.')) return;
+            convertir.disabled = true;
+            let guardado = false;
+            mensajeCitas.replaceChildren();
+            try {
+              const respuesta = await apiFetch(`/citas/${cita.id}/convertir`, {method: 'POST'});
+              const resultado = await respuesta.json();
+              if (!respuesta.ok) throw new Error(textoDetalleError(resultado.detail) || `No se pudo convertir la cita (HTTP ${respuesta.status}).`);
+              guardado = true;
+              await cargar();
+              mensajeCitas.className = 'mensaje exito';
+              mensajeCitas.textContent = 'Trabajo creado y cita realizada. No se ha registrado un día trabajado. ';
+              const enlace = document.createElement('a');
+              enlace.href = `/app/mi_control.html?origen=${encodeURIComponent(resultado.origen)}&obra=${resultado.origen_id}`;
+              enlace.textContent = 'Ver trabajo en Mi control';
+              mensajeCitas.appendChild(enlace);
+            } catch (error) {
+              mensajeCitas.className = 'mensaje error';
+              mensajeCitas.textContent = guardado
+                ? `Trabajo creado, pero no se pudo actualizar el listado: ${error.message}. Recarga; no lo conviertas de nuevo.`
+                : error.message;
+            } finally { convertir.disabled = guardado; }
+          };
+          fila.querySelector('.acciones').prepend(convertir);
+        }
         fila.querySelector('.cal')?.addEventListener('click', () => calendario(cita.id).catch(error => mostrarError(error.message)));
         fila.querySelector('.realizada').onclick = async () => {
           const boton = fila.querySelector('.realizada');

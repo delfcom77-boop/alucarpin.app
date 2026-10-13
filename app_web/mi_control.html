@@ -56,11 +56,6 @@
     </section>
     <section data-diario id="mis-dias"></section>
     <section>
-      <h2>Citas pendientes</h2>
-      <label>Mostrar tipo <select id="filtro-tipo-citas"><option value="">Todas</option><option value="faena">Faenas</option><option value="presupuesto">Presupuestos</option><option value="reparacion">Reparaciones</option></select></label>
-      <div class="lista" role="region" tabindex="0" aria-label="Citas pendientes. Desplaza horizontalmente para ver todas las columnas."><table><thead><tr><th>Fecha</th><th>Hora</th><th>Tipo</th><th>Cliente</th><th>Dirección</th><th>Descripción</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista-citas"><tr><td colspan="8">Cargando...</td></tr></tbody></table></div>
-    </section>
-    <section>
       <h2>Mis trabajos</h2>
       <p>La ejecución y el cobro son independientes. Los cobros de faenas se calculan con sus pagos registrados y sincronizados; los presupuestos solo generan recordatorios cuando están aceptados. Terminar una obra no registra un cobro.</p>
       <div class="fila">
@@ -127,8 +122,6 @@
         mensajeTrabajos.className = 'mensaje error';
       }
     };
-    const filtroTipoCitas = document.querySelector('#filtro-tipo-citas');
-    const listaCitas = document.querySelector('#lista-citas');
     const dialogoEdicion = document.querySelector('#dialogo-edicion');
     const dialogoJornada = document.querySelector('#dialogo-jornada');
     const formularioJornada = document.querySelector('#formulario-jornada');
@@ -155,7 +148,6 @@
     const normalizarBusqueda = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase();
     const fechaLocalHoy = () => { const hoy = new Date(); hoy.setMinutes(hoy.getMinutes() - hoy.getTimezoneOffset()); return hoy.toISOString().slice(0, 10); };
     const tipos = { faena: 'Faena a terceros', presupuesto: 'Presupuesto', reparacion: 'Reparación' };
-    const tiposCita = { faena: 'Faena', presupuesto: 'Presupuesto', reparacion: 'Reparación', tomar_medidas: 'Tomar medidas', visita: 'Visita para valorar', reunion: 'Reunión', llamada: 'Llamada', otro: 'Otro' };
     function actualizarDestinos() {
       const anterior = destinoTrabajo.value;
       destinoTrabajo.replaceChildren(new Option('Crear trabajo nuevo', ''));
@@ -453,30 +445,6 @@
         mensajeJornada.className = 'mensaje error';
       } finally { guardar.disabled = false; }
     };
-    async function cargarCitas() {
-      const respuesta = await apiFetch('/citas');
-      if (!respuesta.ok) throw new Error('No se pudieron cargar las citas.');
-      const citas = await respuesta.json();
-      listaCitas.textContent = '';
-      const tipoSeleccionado = filtroTipoCitas.value;
-      const visibles = citas.filter(cita => !tipoSeleccionado || cita.tipo === tipoSeleccionado);
-      if (!visibles.length) { listaCitas.innerHTML = '<tr><td colspan="8">No hay citas para este filtro.</td></tr>'; return; }
-      visibles.forEach(cita => {
-        const fila = document.createElement('tr');
-        const convertible = ['faena', 'presupuesto', 'reparacion'].includes(cita.tipo);
-        fila.innerHTML = `<td>${fecha(cita.fecha)}</td><td>${cita.hora || ''}</td><td>${tiposCita[cita.tipo] || cita.tipo}</td><td>${cita.cliente || ''}</td><td>${[cita.ubicacion, cita.poblacion].filter(Boolean).join(' | ')}</td><td>${cita.observaciones || ''}</td><td>${cita.estado || 'Pendiente'}</td><td><button type="button" class="convertir-cita" ${cita.estado === 'Realizada' || !convertible ? 'disabled' : ''}>${cita.estado === 'Realizada' ? 'Realizada' : convertible ? 'Convertir' : 'Solo cita'}</button></td>`;
-        fila.querySelector('.convertir-cita').onclick = async () => {
-          const convertir = await apiFetch(`/citas/${cita.id}/convertir`, { method: 'POST' });
-          if (!convertir.ok) { const detalle = await convertir.json().catch(() => ({})); mensaje.textContent = detalle.detail || 'No se pudo convertir la cita.'; mensaje.className = 'mensaje error'; return; }
-          mensaje.textContent = 'Cita convertida en trabajo pendiente de revisar.';
-          mensaje.className = 'mensaje exito';
-          await cargarCitas();
-          await cargarTrabajos();
-        };
-        listaCitas.appendChild(fila);
-      });
-    }
-    filtroTipoCitas.onchange = () => cargarCitas().catch(error => { mensaje.textContent = error.message; mensaje.className = 'mensaje error'; });
     formulario.onsubmit = async event => {
       event.preventDefault();
       const guardar = formulario.querySelector('button[type="submit"]');
@@ -525,7 +493,7 @@
     };
     document.querySelector('#fecha-inicio').value = fechaLocalHoy();
     document.querySelector('#fecha-inicio').max = fechaLocalHoy();
-    Promise.all([cargarTrabajos(), cargarCitas()]).catch(error => { mensaje.textContent = error.message; mensaje.className = 'mensaje error'; });
+    cargarTrabajos().catch(error => { mensaje.textContent = error.message; mensaje.className = 'mensaje error'; });
   </script>
 </body>
 </html>

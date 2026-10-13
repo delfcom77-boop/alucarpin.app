@@ -9,6 +9,12 @@
       window.dias = [];
       window.peticiones = [];
       window.falloCalendario = false;
+      window.falloConversion = false;
+      window.citasPrueba = [
+        {id:1, fecha:'2026-10-04',hora:'09:00',tipo:'faena',cliente:'Cliente faena',estado:'Pendiente'},
+        {id:2, fecha:'2026-10-04',hora:'10:00',tipo:'visita',cliente:'Cliente visita',estado:'Pendiente'},
+        {id:3, fecha:'2026-10-04',hora:'11:00',tipo:'reparacion',cliente:'Cliente realizada',estado:'Realizada'},
+      ];
       URL.createObjectURL = blob => { window.archivo = blob; return 'blob:prueba'; };
       HTMLAnchorElement.prototype.click = function () { window.nombreArchivo = this.download; };
       window.fetch = async (url, opciones = {}) => {
@@ -18,6 +24,12 @@
           cliente: 'Cliente ' + origen, obra: 'Obra ' + origen, fecha_inicio: '2026-09-01', importe: 0,
         }));
         if (url === '/trabajos') return new Response(JSON.stringify(trabajos));
+        if (url === '/citas') return new Response(JSON.stringify(citasPrueba));
+        if (url === '/citas/1/convertir') {
+          if (falloConversion) return new Response('{"detail":"No se pudo convertir prueba"}', {status:503});
+          citasPrueba[0].estado = 'Realizada';
+          return new Response('{"origen":"faena","origen_id":1}', {status:201});
+        }
         if (url === '/jornadas-propias') return new Response(JSON.stringify(dias.filter(d => d.origen !== 'faena')));
         if (url === '/jornadas-faenas') return new Response(JSON.stringify(dias.filter(d => d.origen === 'faena').map(d => ({ ...d, faena_id: d.origen_id }))));
         if (opciones.method === 'POST') {
@@ -52,6 +64,7 @@
       let w = marco.contentWindow;
       let d = marco.contentDocument;
       await esperar(() => d.querySelectorAll('#lista tr[data-origen]').length === 3);
+      comprobar(!d.querySelector('#lista-citas') && !w.peticiones.some(p => p.url === '/citas'), 'Mi control sigue mostrando o consultando citas');
       for (const origen of ['presupuesto', 'propio', 'faena']) {
         const fila = d.querySelector(`#lista tr[data-origen="${origen}"]`);
         Array.from(fila.querySelectorAll('button')).find(b => b.textContent === 'Registrar día').click();
@@ -73,7 +86,31 @@
       w.falloCalendario = true;
       d.querySelector('[data-calendario-trabajos="propias"]').click();
       await esperar(() => d.querySelector('#mensaje-calendario-trabajos').textContent === 'No hay días registrados');
-      document.querySelector('#resultado').textContent = 'OK: Registrar días propios, reparaciones y terceros sin mezclar IDs\nOK: Solo fechas explícitas, no fechas generales ni ayudantes\nOK: Descargas separadas y errores sin éxito falso';
+      await esperar(() => d.querySelectorAll('#lista .editar-cita').length === 2);
+      comprobar(d.querySelectorAll('#lista .convertir-cita').length === 1, 'Convertir se ofrece para visitas o realizadas');
+      d.querySelector('#filtro-tipo-citas').value = 'visita';
+      d.querySelector('#filtro-tipo-citas').dispatchEvent(new w.Event('change'));
+      await esperar(() => d.querySelectorAll('#lista .editar-cita').length === 1);
+      comprobar(!d.querySelector('#lista .convertir-cita'), 'Visita convertible');
+      d.querySelector('#filtro-tipo-citas').value = 'faena';
+      d.querySelector('#filtro-tipo-citas').dispatchEvent(new w.Event('change'));
+      await esperar(() => d.querySelector('#lista .convertir-cita'));
+      w.confirm = () => true;
+      w.falloConversion = true;
+      d.querySelector('#lista .convertir-cita').click();
+      await esperar(() => d.querySelector('#mensaje-citas').textContent.includes('No se pudo convertir prueba'));
+      comprobar(!d.querySelector('#lista .convertir-cita').disabled, 'Error impide reintento');
+      w.falloConversion = false;
+      d.querySelector('#lista .convertir-cita').click();
+      await esperar(() => d.querySelector('#mensaje-citas a'));
+      comprobar(d.querySelector('#mensaje-citas a').getAttribute('href').includes('origen=faena&obra=1'), 'Enlace pierde destino');
+      comprobar(w.dias.length === 0, 'Convertir cita registra día trabajado');
+      comprobar(!d.querySelector('#lista .convertir-cita'), 'Cita convertida sigue pendiente');
+      d.querySelector('#filtro-citas').value = 'realizadas';
+      d.querySelector('#filtro-citas').dispatchEvent(new w.Event('change'));
+      await esperar(() => d.querySelector('#lista .editar-cita'));
+      comprobar(!d.querySelector('#lista .convertir-cita'), 'Cita realizada convertible otra vez');
+      document.querySelector('#resultado').textContent = 'OK: Mi control sin citas ni consultas de agenda\nOK: Citas en Agenda con filtro por estado/tipo y conversión con reintento\nOK: Convertir no registra días; enlace conserva la obra; realizadas no convertibles\nOK: Registrar días sin mezclar IDs y descargas separadas';
     })().catch(error => { document.querySelector('#resultado').textContent = 'ERROR: ' + error.message; throw error; });
   </script>
 </body>

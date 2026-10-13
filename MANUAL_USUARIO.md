@@ -218,6 +218,13 @@ los cambios locales ya estan publicados.
 
 ### Tus dias trabajados en Google Calendar
 
+Las **Citas pendientes e historial** se gestionan solo en **Agenda**, con filtros
+por estado y tipo y busqueda. Mi control no consulta ni muestra citas.
+**Convertir en trabajo**, disponible para citas pendientes de faena, presupuesto
+o reparacion, crea el trabajo pendiente de revisar y marca la cita realizada.
+No registra automaticamente un dia trabajado ni un cobro. El enlace posterior
+abre el trabajo en Mi control, donde puedes registrar el dia cuando corresponda.
+
 En **Mi control -> Registrar trabajo y mi dia**, elige el tipo (faena a terceros,
 presupuesto o reparacion), el dia trabajado y un trabajo existente, o **Crear
 trabajo nuevo** con cliente, obra y ubicacion. **Guardar trabajo** guarda la obra
