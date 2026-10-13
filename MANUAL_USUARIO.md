@@ -266,7 +266,12 @@ en los dos calendarios de jornadas. Tus dias aparecen tambien en la ficha de obr
 
 ### Ficha de obra y exportaciones
 
-En movil, los formularios y dialogos de Mi control se adaptan al ancho de pantalla. Las tablas se desplazan horizontalmente dentro de su recuadro para consultar todas las columnas y acciones, sin mover toda la pagina.
+En movil, los formularios y dialogos de Mi control se adaptan al ancho de pantalla.
+**Mis trabajos** muestra cada trabajo como una ficha con etiquetas y color por
+tipo, sin desplazar horizontalmente. Conserva filtros, importes, dias y acciones,
+con botones tactiles. En pantallas de mas de 768 px mantiene la tabla y su
+desplazamiento dentro del recuadro. La descarga CSV conserva las mismas columnas
+y exporta solo los trabajos filtrados, sin las etiquetas de presentacion.
 
 Al editar un presupuesto desde **Mi control**, cambiar cliente, fecha o estado conserva todos los importes. El campo Importe cambia solo el total final si lo modificas expresamente; no recalcula ni sobrescribe bruto, IVA, efectivo ni el desglose fiscal. El numero de presupuesto tampoco se modifica desde este editor.
 

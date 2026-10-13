@@ -34,6 +34,24 @@
     .borrar { background: #f4cccc; color: #7b2020; }
     dialog { width: min(520px, calc(100% - 24px)); max-height: calc(100dvh - 24px); overflow-y: auto; overflow-wrap: anywhere; border: 1px solid #ddd8cc; border-radius: 12px; padding: 20px; color: #223238; }
     dialog::backdrop { background: rgb(0 0 0 / 45%); }
+    @media (max-width: 768px) {
+      .lista-trabajos { overflow-x: visible; }
+      .lista-trabajos table { display: block; min-width: 0; }
+      .lista-trabajos thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+      .lista-trabajos tbody { display: grid; gap: 14px; }
+      .lista-trabajos tr { display: grid; min-width: 0; border: 1px solid #ddd8cc; border-left: 5px solid #293f4a; border-radius: 10px; padding: 10px; background: #fafbf9; }
+      .lista-trabajos tr[hidden] { display: none; }
+      .lista-trabajos tr.trabajo-faena { border-left-color: #174b82; }
+      .lista-trabajos tr.trabajo-presupuesto { border-left-color: #1c6036; }
+      .lista-trabajos tr.trabajo-reparacion { border-left-color: #854500; }
+      .lista-trabajos td { display: block; min-width: 0; padding: 7px 0; border: 0; overflow-wrap: anywhere; }
+      .lista-trabajos td[data-label]::before { content: attr(data-label); display: block; color: #50656c; font-size: 0.85rem; font-weight: 700; margin-bottom: 3px; }
+      .lista-trabajos td[data-label="Cliente"], .lista-trabajos td[data-label="Obra"] { font-weight: 700; }
+      .lista-trabajos td.acciones { display: flex; border-top: 1px solid #ddd8cc; margin-top: 6px; padding-top: 12px; }
+      .lista-trabajos td.acciones::before { flex-basis: 100%; }
+      .lista-trabajos .acciones button, .lista-trabajos .acciones a { display: flex; align-items: center; justify-content: center; flex: 1 1 100px; min-height: 44px; padding: 10px; border-radius: 8px; text-align: center; overflow-wrap: anywhere; }
+      .lista-trabajos .acciones a { background: #293f4a; color: #fff; text-decoration: none; font-weight: 700; }
+    }
     @media (max-width: 560px) { .fila { grid-template-columns: minmax(0, 1fr); } }
   </style>
 </head>
@@ -65,7 +83,7 @@
       </div>
       <div id="mensaje-trabajos" class="mensaje" aria-live="polite"></div>
       <button id="exportar-trabajos" type="button">Descargar trabajos filtrados (CSV)</button>
-      <div class="lista" role="region" tabindex="0" aria-label="Mis trabajos. Desplaza horizontalmente para ver todas las columnas."><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Origen</th><th>Cliente</th><th>Obra</th><th>Presupuesto</th><th>Importe</th><th>Cobro / ejecución</th><th>Días trabajados</th><th>Acciones</th></tr></thead><tbody id="lista"><tr><td colspan="10">Cargando...</td></tr></tbody></table></div>
+      <div class="lista lista-trabajos" role="region" tabindex="0" aria-label="Mis trabajos: fichas en móvil y tabla en pantallas grandes."><table role="table"><thead role="rowgroup"><tr role="row"><th scope="col">Fecha</th><th scope="col">Tipo</th><th scope="col">Origen</th><th scope="col">Cliente</th><th scope="col">Obra</th><th scope="col">Presupuesto</th><th scope="col">Importe</th><th scope="col">Cobro / ejecución</th><th scope="col">Días trabajados</th><th scope="col">Acciones</th></tr></thead><tbody id="lista" role="rowgroup"><tr><td colspan="10">Cargando...</td></tr></tbody></table></div>
     </section>
     <dialog id="dialogo-edicion"><form method="dialog" id="formulario-edicion-trabajo"><h2>Editar registro</h2><label>Cliente <input id="editar-cliente" required></label><label>Obra <input id="editar-obra"></label><label>Fecha <input id="editar-fecha" type="date"></label><label>Importe (€) <input id="editar-importe" type="number" min="0" step="0.01"></label><label>Estado <select id="editar-estado"><option value="No cobrado">No cobrado</option><option value="Cobrado">Cobrado</option><option value="Presupuesto">Presupuesto</option><option value="Aceptado">Aceptado</option><option value="Rechazado">Rechazado</option><option value="Completado">Completado</option></select></label><div class="acciones"><button value="cancelar" type="button" id="cancelar-edicion-trabajo">Cancelar</button><button value="guardar" type="submit">Guardar cambios</button></div><div id="mensaje-edicion-trabajo" class="mensaje"></div></form></dialog>
     <dialog id="dialogo-jornada">
@@ -267,6 +285,7 @@
       });
       trabajos.forEach(trabajo => {
         const fila = document.createElement('tr');
+        fila.setAttribute('role', 'row');
         fila.dataset.tipo = trabajo.tipo;
         fila.className = `trabajo-${trabajo.tipo}`;
         fila.dataset.cliente = normalizarBusqueda(trabajo.cliente);
@@ -285,8 +304,11 @@
             trabajo.pendiente_cobro !== undefined ? `${Number(trabajo.pendiente_cobro).toFixed(2)} € pendientes` : '',
             trabajo.estado_ejecucion ? `Ejecución: ${trabajo.estado_ejecucion}` : 'Sin aceptar'].filter(Boolean).join(' | ')
         ];
-        celdas.forEach(texto => {
+        const etiquetas = ['Fecha', 'Tipo', 'Origen', 'Cliente', 'Obra', 'Presupuesto', 'Importe', 'Cobro / ejecución'];
+        celdas.forEach((texto, indice) => {
           const celda = document.createElement('td');
+          celda.dataset.label = etiquetas[indice];
+          celda.setAttribute('role', 'cell');
           celda.textContent = texto;
           if (fila.children.length === 1) {
             celda.textContent = '';
@@ -301,9 +323,13 @@
           ? jornadasPorFaena.get(trabajo.origen_id) || []
           : jornadasPropias.filter(j => j.origen === trabajo.origen && j.origen_id === trabajo.origen_id).map(j => j.fecha);
         const celdaJornadas = document.createElement('td');
+        celdaJornadas.dataset.label = 'Días trabajados';
+        celdaJornadas.setAttribute('role', 'cell');
         celdaJornadas.textContent = dias.length ? dias.map(fecha).join(', ') : 'Sin registrar';
         fila.appendChild(celdaJornadas);
         const celdaAcciones = document.createElement('td');
+        celdaAcciones.dataset.label = 'Acciones';
+        celdaAcciones.setAttribute('role', 'cell');
         celdaAcciones.className = 'acciones';
         const ficha = document.createElement('a');
         ficha.href = `/app/obra.html?origen=${encodeURIComponent(trabajo.origen)}&id=${trabajo.origen_id}`;

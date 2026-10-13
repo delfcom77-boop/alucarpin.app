@@ -66,8 +66,24 @@
         }
         const lista = d.querySelector('#lista').closest('.lista');
         comprobar(lista.tabIndex === 0 && lista.getAttribute('role') === 'region', 'Tabla no accesible con teclado');
-        lista.scrollLeft = lista.scrollWidth;
-        comprobar(lista.scrollLeft > 0, 'Tabla pierde desplazamiento');
+        if (ancho <= 768) {
+          comprobar(lista.scrollWidth <= lista.clientWidth + 1, 'Fichas necesitan desplazamiento horizontal');
+          const fila = d.querySelector('#lista tr[data-origen]');
+          comprobar(w.getComputedStyle(fila).display === 'grid', 'No muestra fichas en movil');
+          comprobar([...fila.cells].every(celda => celda.dataset.label), 'Faltan etiquetas de datos');
+          for (const control of fila.querySelectorAll('button,a')) {
+            const r = control.getBoundingClientRect();
+            comprobar(r.left >= 0 && r.right <= w.innerWidth + 1 && r.height >= 44, 'Accion no accesible en movil');
+          }
+          d.querySelector('#filtro-cliente-trabajos').value = 'inexistente';
+          d.querySelector('#filtro-cliente-trabajos').dispatchEvent(new w.Event('input'));
+          comprobar(fila.hidden && w.getComputedStyle(fila).display === 'none', 'Fichas ignoran filtros');
+          d.querySelector('#filtro-cliente-trabajos').value = '';
+          d.querySelector('#filtro-cliente-trabajos').dispatchEvent(new w.Event('input'));
+        } else {
+          lista.scrollLeft = lista.scrollWidth;
+          comprobar(lista.scrollLeft > 0, 'Tabla pierde desplazamiento en escritorio');
+        }
       }
       marco.style.height = '320px';
       await ajustar(390);
@@ -81,7 +97,14 @@
       comprobar(r.top >= 0 && r.bottom <= w.innerHeight, 'Cancelar no accesible con pantalla baja');
       cancelar.click();
       comprobar(w.escrituras.length === 0, 'Prueba modifica datos');
-      document.querySelector('#resultado').textContent = 'OK: 320, 390, 560, 768 y 1280 px\nOK: Todos los tipos y nombres largos sin desbordamiento\nOK: Editar y Registrar dia sin recorte horizontal\nOK: Dialogos desplazables con pantalla baja\nOK: Tablas desplazables con teclado y sin escrituras';
+      let archivo;
+      w.URL.createObjectURL = blob => { archivo = blob; return 'blob:prueba'; };
+      w.HTMLAnchorElement.prototype.click = function () {};
+      d.querySelector('#exportar-trabajos').click();
+      const csv = await archivo.text();
+      comprobar(csv.split('\r\n').length === 2 && !csv.includes('Acciones'), 'CSV pierde columnas o filas');
+      comprobar(csv.split('\r\n')[1].includes(';"Presupuesto";') && !csv.includes('"TipoPresupuesto"'), 'CSV incluye etiquetas de presentacion');
+      document.querySelector('#resultado').textContent = 'OK: Fichas sin desplazamiento horizontal a 320, 390, 560 y 768 px\nOK: Etiquetas, filtros y acciones tactiles de 44 px\nOK: Tabla de escritorio a 1280 px\nOK: Nombres largos, dialogos y fechas sin recortes ni escrituras';
     })().catch(error => { document.querySelector('#resultado').textContent = 'ERROR: ' + error.message; throw error; });
   </script>
 </body>
