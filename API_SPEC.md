@@ -589,6 +589,31 @@ curl -X DELETE \
 - Endpoints CRUD: 6 nuevos (POST/PATCH/DELETE faenas + presupuestos)
 - Validación: Python py_compile sin errores
 - Documentación: Completa
+## Diario del administrador
+
+- `GET /mis-dias`: jornadas de terceros y propias, incluidos registros anteriores;
+  `fecha`, `tipo`, `origen`, `origen_id`, cliente, obra, ubicacion, poblacion,
+  observaciones y `creado_en`. Los registros anteriores tienen `creado_en=null`.
+- `POST /registro-dia`: `solicitud_id` UUID, `fecha`, `tipo` (`faena`,
+  `presupuesto`, `reparacion`). Para reutilizar obra: `origen` (`faena`,
+  `presupuesto`, `propio`) y `origen_id`. Para alta nueva: cliente y obra
+  obligatorios; ubicacion, poblacion, observaciones y num_presupuesto opcionales.
+  Devuelve 201 con la obra y el dia vinculados y el sello de alta. Ambos endpoints
+  requieren administrador, no la contraseña privada del resumen.
+
+Una unica transaccion crea o reutiliza la obra, inserta en `jornadas_faenas` o
+`jornadas_propias` y conserva el detalle historico en `diario_trabajo`, creada al
+inicio en SQLite/PostgreSQL. No crea movimientos monetarios ni acepta fechas
+futuras. El alta nueva queda pendiente de revisar, con importe cero. El cliente
+de una obra existente se toma del servidor; los datos del dia no modifican esa
+obra. El destino debe corresponder al tipo.
+
+Repetir la misma solicitud y contenido devuelve el registro original sin nuevas
+escrituras. Reutilizar el UUID con otros datos, repetir obra/fecha o crear un
+presupuesto cuyo numero ya existe devuelve 409; destino inexistente, 404; datos
+invalidos, 422; fallo de base de datos, 503 con rollback. Los hashes de solicitud
+y el identificador del usuario no se devuelven.
+
 ## Acceso privado al resumen
 
 `GET /panel-resumen` y `GET /resumen-economico` requieren la sesion de

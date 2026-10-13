@@ -16,6 +16,7 @@ from base_datos import ruta_base_datos
 from autenticacion import crear_token, inicializar_usuarios, password_valida, usuario_desde_token
 from respaldo import ErrorRespaldo, crear_respaldo
 from resumen_privado import crear_acceso_privado
+from diario_trabajo import crear_diario
 
 
 BASE_PATH = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
@@ -429,6 +430,7 @@ def administrador(usuario=Depends(usuario_actual)):
 
 router_resumen_privado, resumen_autorizado = crear_acceso_privado(conexion, administrador)
 app.include_router(router_resumen_privado)
+app.include_router(crear_diario(conexion, administrador))
 
 
 @app.get("/copias-seguridad")

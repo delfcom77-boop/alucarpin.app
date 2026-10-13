@@ -1,10 +1,14 @@
-const CACHE = 'alucarpin-app-v7-resumen-actualizado';
+const CACHE = 'alucarpin-app-v8-diario-trabajo';
 const ARCHIVOS = [
   '/app/login.html',
   '/app/administrador.html',
   '/app/jornadas.js',
   '/app/catalogo.js',
   '/app/inicio.html',
+  '/app/mi_control.html',
+  '/app/agenda.html',
+  '/app/diario.js?v=1',
+  '/app/diario.css?v=1',
   '/app/panel.js?v=privado-2',
   '/app/resumen.html',
   '/app/resumen_privado.js?v=privado-2',

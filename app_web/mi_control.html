@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AlucarpinSamitier | Mi control</title>
+  <link rel="stylesheet" href="/app/diario.css?v=1">
   <style>
     :root { font-family: Segoe UI, sans-serif; color: #223238; }
     * { box-sizing: border-box; }
@@ -41,18 +42,19 @@
     <header><h1>Mi control</h1><p>Mis trabajos, ingresos y calendario</p></header>
     <nav><a href="/app/inicio.html">Volver al menú</a></nav>
     <section>
-      <h2>Registrar trabajo</h2>
-      <p>Reutiliza los clientes y obras sugeridos para evitar nombres duplicados. Solo el administrador puede crear nombres nuevos. Las faenas para fichajes de ayudantes se dan de alta en Ayudantes → Faenas.</p>
+      <h2>Registrar trabajo y mi día</h2>
+      <p>Elige una obra existente o crea una nueva. Guardar trabajo registra también tu día en el listado y el calendario de abajo, sin crear pagos ni cobros. Para volver a la misma obra otro día, selecciónala: no la crees de nuevo.</p>
       <form id="formulario">
-        <div class="fila"><label>Tipo <select id="tipo"><option value="faena">Faena</option><option value="presupuesto">Presupuesto</option><option value="reparacion">Reparación</option></select></label><label>Fecha de inicio <input id="fecha-inicio" type="date" required></label></div>
-        <div class="fila"><label>Fecha final <input id="fecha-fin" type="date"></label><label>Cliente <input id="cliente" required></label></div>
+        <div class="fila"><label>Tipo <select id="tipo"><option value="faena">Faena a terceros</option><option value="presupuesto">Presupuesto</option><option value="reparacion">Reparación</option></select></label><label>Día trabajado <input id="fecha-inicio" type="date" required></label></div>
+        <label>Trabajo <select id="trabajo-destino" disabled><option value="">Cargando trabajos…</option></select></label>
+        <label>Cliente <input id="cliente" required></label>
         <div class="fila"><label>Obra o reparación <input id="obra" required></label><label>Dirección / ubicación <input id="ubicacion"></label></div>
-        <div class="fila"><label>Población <input id="poblacion"></label><label>Presupuesto existente <select id="presupuesto"><option value="">Sin vincular</option></select></label></div>
-        <div class="fila"><label>Importe (€) <input id="importe" type="number" min="0" step="0.01" value="0"></label><label>Cobro <select id="estado"><option>No cobrado</option><option>Cobrado</option></select></label></div>
-        <div class="fila"><label>Forma de cobro <input id="forma" placeholder="Efectivo, transferencia..."></label><label>Observaciones <input id="observaciones"></label></div>
+        <div class="fila"><label>Población <input id="poblacion"></label><label id="numero-presupuesto-campo" hidden>Número del presupuesto nuevo (opcional) <input id="numero-presupuesto"></label></div>
+        <label>Qué he hecho este día / observaciones <input id="observaciones" maxlength="2000"></label>
         <button type="submit">Guardar trabajo</button><div id="mensaje" class="mensaje"></div>
       </form>
     </section>
+    <section data-diario id="mis-dias"></section>
     <section>
       <h2>Citas pendientes</h2>
       <label>Mostrar tipo <select id="filtro-tipo-citas"><option value="">Todas</option><option value="faena">Faenas</option><option value="presupuesto">Presupuestos</option><option value="reparacion">Reparaciones</option></select></label>
@@ -87,13 +89,17 @@
   </main>
   <script src="/app/catalogo.js"></script>
   <script src="/app/exportar.js"></script>
+  <script src="/app/diario.js?v=1"></script>
   <script>
     const token = localStorage.getItem('alucarpin_token');
     if (!token) location.replace('/app/login.html');
     const apiFetch = (url, options = {}) => fetch(url, { ...options, headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` } });
     const formulario = document.querySelector('#formulario');
     const tipo = document.querySelector('#tipo');
-    const presupuesto = document.querySelector('#presupuesto');
+    const destinoTrabajo = document.querySelector('#trabajo-destino');
+    let trabajosDisponibles = [];
+    let trabajosCargados = false;
+    let solicitudPendiente = null;
     const mensaje = document.querySelector('#mensaje');
     AlucarpinCatalogo.sugerencias({
       cliente: document.querySelector('#cliente'),
@@ -148,16 +154,33 @@
     const fecha = value => String(value || '').split('-').reverse().join('/');
     const normalizarBusqueda = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase();
     const fechaLocalHoy = () => { const hoy = new Date(); hoy.setMinutes(hoy.getMinutes() - hoy.getTimezoneOffset()); return hoy.toISOString().slice(0, 10); };
-    const tipos = { faena: 'Faena', presupuesto: 'Presupuesto', reparacion: 'Reparación' };
+    const tipos = { faena: 'Faena a terceros', presupuesto: 'Presupuesto', reparacion: 'Reparación' };
     const tiposCita = { faena: 'Faena', presupuesto: 'Presupuesto', reparacion: 'Reparación', tomar_medidas: 'Tomar medidas', visita: 'Visita para valorar', reunion: 'Reunión', llamada: 'Llamada', otro: 'Otro' };
-    tipo.onchange = () => { presupuesto.parentElement.hidden = tipo.value !== 'presupuesto'; presupuesto.required = tipo.value === 'presupuesto'; };
-    async function cargarPresupuestos() {
-      const respuesta = await apiFetch('/presupuestos');
-      if (!respuesta.ok) throw new Error('No se pudieron cargar los presupuestos.');
-      const lista = await respuesta.json();
-      presupuesto.innerHTML = '<option value="">Sin vincular</option>';
-      lista.forEach(item => { const opcion = document.createElement('option'); opcion.value = item.num_presupuesto; opcion.textContent = `Nº ${item.num_presupuesto} | ${item.cliente} | ${item.estado || ''}`; presupuesto.appendChild(opcion); });
+    function actualizarDestinos() {
+      const anterior = destinoTrabajo.value;
+      destinoTrabajo.replaceChildren(new Option('Crear trabajo nuevo', ''));
+      trabajosDisponibles.filter(t => t.tipo === tipo.value).forEach(t => {
+        const opcion = document.createElement('option');
+        opcion.value = `${t.origen}:${t.origen_id}`;
+        opcion.textContent = `${t.cliente} · ${t.obra || 'Sin obra'}${t.num_presupuesto ? ` · Nº ${t.num_presupuesto}` : ''}`;
+        destinoTrabajo.appendChild(opcion);
+      });
+      if ([...destinoTrabajo.options].some(o => o.value === anterior)) destinoTrabajo.value = anterior;
+      destinoTrabajo.disabled = !trabajosCargados;
+      actualizarTrabajo();
     }
+    function actualizarTrabajo() {
+      const seleccionado = trabajosDisponibles.find(t => `${t.origen}:${t.origen_id}` === destinoTrabajo.value);
+      const cliente = document.querySelector('#cliente');
+      cliente.readOnly = Boolean(seleccionado);
+      cliente.required = !seleccionado;
+      document.querySelector('#numero-presupuesto-campo').hidden = tipo.value !== 'presupuesto' || Boolean(seleccionado);
+      for (const campo of ['cliente', 'obra', 'ubicacion', 'poblacion']) {
+        document.querySelector(`#${campo}`).value = seleccionado?.[campo] || '';
+      }
+    }
+    tipo.onchange = actualizarDestinos;
+    destinoTrabajo.onchange = actualizarTrabajo;
     function abrirEdicion(trabajo) {
       trabajoEnEdicion = trabajo;
       document.querySelector('#editar-cliente').value = trabajo.cliente || '';
@@ -220,6 +243,9 @@
       ]);
       if (!respuesta.ok) throw new Error('No se pudieron cargar tus trabajos.');
       const trabajos = await respuesta.json();
+      trabajosDisponibles = trabajos;
+      trabajosCargados = true;
+      actualizarDestinos();
       const cuerpo = document.querySelector('#lista');
       cuerpo.textContent = '';
       jornadasFaenas = [];
@@ -250,6 +276,7 @@
       trabajos.forEach(trabajo => {
         const fila = document.createElement('tr');
         fila.dataset.tipo = trabajo.tipo;
+        fila.className = `trabajo-${trabajo.tipo}`;
         fila.dataset.cliente = normalizarBusqueda(trabajo.cliente);
         fila.dataset.obra = normalizarBusqueda(trabajo.obra);
         fila.dataset.origen = trabajo.origen;
@@ -269,6 +296,13 @@
         celdas.forEach(texto => {
           const celda = document.createElement('td');
           celda.textContent = texto;
+          if (fila.children.length === 1) {
+            celda.textContent = '';
+            const etiqueta = document.createElement('span');
+            etiqueta.className = `dia-tipo ${trabajo.tipo}`;
+            etiqueta.textContent = texto;
+            celda.appendChild(etiqueta);
+          }
           fila.appendChild(celda);
         });
         const dias = trabajo.origen === 'faena'
@@ -410,6 +444,8 @@
         }
         await cargarTrabajos();
         mostrarJornadasFaena(faenaEnJornada);
+        await AlucarpinDiario.actualizar();
+        AlucarpinDiario.mostrarFecha(fechaJornada);
         mensajeJornada.textContent = 'Día trabajado guardado.';
         mensajeJornada.className = 'mensaje exito';
       } catch (error) {
@@ -441,8 +477,55 @@
       });
     }
     filtroTipoCitas.onchange = () => cargarCitas().catch(error => { mensaje.textContent = error.message; mensaje.className = 'mensaje error'; });
-    formulario.onsubmit = async event => { event.preventDefault(); const datos = { tipo: tipo.value, fecha_inicio: document.querySelector('#fecha-inicio').value, fecha_fin: document.querySelector('#fecha-fin').value || null, cliente: document.querySelector('#cliente').value, obra: document.querySelector('#obra').value, ubicacion: document.querySelector('#ubicacion').value, poblacion: document.querySelector('#poblacion').value, observaciones: document.querySelector('#observaciones').value, num_presupuesto: presupuesto.value || null, importe: Number(document.querySelector('#importe').value || 0), estado_cobro: document.querySelector('#estado').value, forma_pago: document.querySelector('#forma').value, fecha_cobro: null }; const respuesta = await apiFetch('/trabajos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) }); const resultado = await respuesta.json(); if (!respuesta.ok) { mensaje.textContent = resultado.detail || 'No se pudo guardar.'; mensaje.className = 'mensaje error'; return; } mensaje.textContent = 'Trabajo guardado. Usa Registrar día para llevar tus jornadas al calendario.'; mensaje.className = 'mensaje exito'; formulario.reset(); document.querySelector('#fecha-inicio').valueAsDate = new Date(); tipo.dispatchEvent(new Event('change')); await cargarTrabajos(); };
-    document.querySelector('#fecha-inicio').valueAsDate = new Date(); tipo.dispatchEvent(new Event('change')); Promise.all([cargarPresupuestos(), cargarTrabajos(), cargarCitas()]).catch(error => { mensaje.textContent = error.message; mensaje.className = 'mensaje error'; });
+    formulario.onsubmit = async event => {
+      event.preventDefault();
+      const guardar = formulario.querySelector('button[type="submit"]');
+      if (guardar.disabled) return;
+      if (!trabajosCargados) { mensaje.textContent = 'No se han podido cargar los trabajos. Recarga antes de guardar para evitar duplicados.'; mensaje.className = 'mensaje error'; return; }
+      const seleccionado = trabajosDisponibles.find(t => `${t.origen}:${t.origen_id}` === destinoTrabajo.value);
+      const datos = {
+        fecha: document.querySelector('#fecha-inicio').value, tipo: tipo.value,
+        origen: seleccionado?.origen || null, origen_id: seleccionado?.origen_id || null,
+        cliente: document.querySelector('#cliente').value, obra: document.querySelector('#obra').value,
+        ubicacion: document.querySelector('#ubicacion').value, poblacion: document.querySelector('#poblacion').value,
+        observaciones: document.querySelector('#observaciones').value,
+        num_presupuesto: seleccionado ? null : document.querySelector('#numero-presupuesto').value || null,
+      };
+      const contenido = JSON.stringify(datos);
+      if (!solicitudPendiente || solicitudPendiente.contenido !== contenido) {
+        solicitudPendiente = {contenido, id: crypto.randomUUID()};
+      }
+      guardar.disabled = true;
+      let guardado = false;
+      try {
+        const respuesta = await apiFetch('/registro-dia', {
+          method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(30000),
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({...datos, solicitud_id: solicitudPendiente.id}),
+        });
+        const resultado = await respuesta.json();
+        if (!respuesta.ok) throw new Error(typeof resultado.detail === 'string' ? resultado.detail : `No se pudo guardar el día (HTTP ${respuesta.status}).`);
+        guardado = true;
+        solicitudPendiente = null;
+        formulario.reset();
+        tipo.value = datos.tipo;
+        document.querySelector('#fecha-inicio').value = fechaLocalHoy();
+        await cargarTrabajos();
+        destinoTrabajo.value = `${resultado.origen}:${resultado.origen_id}`;
+        actualizarTrabajo();
+        await AlucarpinDiario.actualizar();
+        AlucarpinDiario.mostrarFecha(datos.fecha);
+        document.querySelector('#mis-dias').scrollIntoView({behavior: 'smooth', block: 'start'});
+        mensaje.textContent = 'Trabajo y día guardados. Ya aparecen en tu listado y calendario. Para otro día, puedes mantener este trabajo seleccionado.';
+        mensaje.className = 'mensaje exito';
+      } catch (error) {
+        mensaje.textContent = guardado ? `Día guardado, pero no se pudo actualizar la pantalla: ${error.message}. Recarga; no lo crees de nuevo.` : `${error.message} No cambies el formulario si quieres reintentar el mismo registro.`;
+        mensaje.className = 'mensaje error';
+      } finally { guardar.disabled = false; }
+    };
+    document.querySelector('#fecha-inicio').value = fechaLocalHoy();
+    document.querySelector('#fecha-inicio').max = fechaLocalHoy();
+    Promise.all([cargarTrabajos(), cargarCitas()]).catch(error => { mensaje.textContent = error.message; mensaje.className = 'mensaje error'; });
   </script>
 </body>
 </html>

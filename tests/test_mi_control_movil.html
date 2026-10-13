@@ -35,7 +35,7 @@
         throw new Error('Tiempo agotado');
       };
       const comprobar = (ok, mensaje) => { if (!ok) throw new Error(mensaje); };
-      await esperar(() => d.querySelector('#lista tr[data-origen]') && d.querySelector('#presupuesto').options.length === 2);
+      await esperar(() => d.querySelector('#lista tr[data-origen]') && !d.querySelector('#trabajo-destino').disabled);
       const boton = texto => Array.from(d.querySelectorAll('#lista button')).find(b => b.textContent === texto);
       const ajustar = async ancho => {
         marco.style.width = ancho + 'px';

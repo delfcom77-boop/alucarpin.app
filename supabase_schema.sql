@@ -87,6 +87,23 @@ CREATE TABLE IF NOT EXISTS jornadas_faenas (
 CREATE INDEX IF NOT EXISTS idx_jornadas_faenas_faena_fecha
     ON jornadas_faenas (faena_id, fecha);
 
+CREATE TABLE IF NOT EXISTS diario_trabajo (
+    solicitud_id TEXT PRIMARY KEY,
+    contenido_hash TEXT NOT NULL,
+    usuario_id BIGINT NOT NULL,
+    origen TEXT NOT NULL,
+    origen_id BIGINT NOT NULL,
+    fecha DATE NOT NULL,
+    tipo TEXT NOT NULL,
+    cliente TEXT NOT NULL,
+    obra TEXT NOT NULL,
+    ubicacion TEXT NOT NULL,
+    poblacion TEXT NOT NULL,
+    observaciones TEXT NOT NULL,
+    creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (origen, origen_id, fecha)
+);
+
 CREATE INDEX IF NOT EXISTS idx_trabajos_propios_fecha
     ON trabajos_propios (fecha_inicio);
 

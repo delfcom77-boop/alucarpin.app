@@ -124,7 +124,7 @@ class CalendarioJornadasTests(unittest.TestCase):
 
     def test_endpoints_requieren_administrador(self):
         for nombre in ("listar_jornadas_propias", "crear_jornada_propia", "calendario_trabajos"):
-            ruta = next(r for r in api.app.routes if r.name == nombre)
+            ruta = next(r for r in api.app.routes if getattr(r, "name", None) == nombre)
             self.assertIn(api.administrador, [d.call for d in ruta.dependant.dependencies])
 
 

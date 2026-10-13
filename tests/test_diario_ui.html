@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Prueba de diario de trabajo</title></head>
+<body>
+  <pre id="resultado">Ejecutando...</pre>
+  <iframe id="app" title="Mi control de prueba" style="width:390px;height:900px;border:0"></iframe>
+  <script>
+    function preparar() {
+      window.trabajosPrueba = [];
+      window.diasPrueba = [];
+      window.escrituras = [];
+      window.fallarLectura = false;
+      window.fallarGuardar = false;
+      window.fetch = async (url, opciones = {}) => {
+        if (opciones.method) escrituras.push({url, datos: JSON.parse(opciones.body || '{}')});
+        if (url === '/registro-dia') {
+          const datos = JSON.parse(opciones.body);
+          if (fallarGuardar) return new Response('{"detail":"Prueba de error al guardar"}', {status:503});
+          let trabajo = trabajosPrueba.find(t => t.origen === datos.origen && t.origen_id === datos.origen_id);
+          if (!trabajo) {
+            trabajo = {...datos, origen: {faena:'faena', presupuesto:'presupuesto', reparacion:'propio'}[datos.tipo],
+              origen_id: trabajosPrueba.length + 1, fecha_inicio: datos.fecha, importe:0};
+            trabajosPrueba.push(trabajo);
+          }
+          if (diasPrueba.some(d => d.origen === trabajo.origen && d.origen_id === trabajo.origen_id && d.fecha === datos.fecha)) {
+            return new Response('{"detail":"Ya has registrado ese día en este trabajo."}', {status:409});
+          }
+          const dia = {...datos, origen:trabajo.origen, origen_id:trabajo.origen_id, cliente:trabajo.cliente, creado_en:'2026-10-13 21:50:00'};
+          diasPrueba.push(dia);
+          return new Response(JSON.stringify(dia), {status:201});
+        }
+        if (url === '/trabajos') return new Response(JSON.stringify(trabajosPrueba));
+        if (url === '/mis-dias') return fallarLectura
+          ? new Response('{"detail":"No se pudieron consultar los días de prueba."}', {status:503})
+          : new Response(JSON.stringify(diasPrueba));
+        if (url === '/jornadas-faenas') return new Response(JSON.stringify(diasPrueba.filter(d => d.origen === 'faena').map(d => ({...d,faena_id:d.origen_id}))));
+        if (url === '/jornadas-propias') return new Response(JSON.stringify(diasPrueba.filter(d => d.origen !== 'faena')));
+        if (url === '/citas') return new Response('[]');
+        if (url.startsWith('/catalogo')) return new Response('[]');
+        throw new Error('Petición no prevista: ' + url);
+      };
+    }
+    (async () => {
+      const anterior = localStorage.getItem('alucarpin_token');
+      localStorage.setItem('alucarpin_token','prueba-diario');
+      try {
+        const html = (await fetch('../app_web/mi_control.html').then(r => r.text())).replaceAll('/app/','/app_web/');
+        const marco = document.querySelector('#app');
+        marco.srcdoc = html.replace('<head>', `<head><script>(${preparar.toString()})();<\/script>`);
+        await new Promise(resolve => { marco.onload = resolve; });
+        const d = marco.contentDocument, w = marco.contentWindow;
+        let verificaciones = 0;
+        const comprobar = (valor, texto) => { if (!valor) throw new Error(texto); verificaciones++; };
+        const esperar = async condicion => {
+          for (let i=0;i<150;i++) {
+            if (condicion()) return;
+            await new Promise(resolve => setTimeout(resolve,20));
+          }
+          throw new Error('Tiempo agotado');
+        };
+        await esperar(() => !d.querySelector('#trabajo-destino').disabled && d.querySelector('#diario-mensaje').textContent.includes('días distintos'));
+        const guardar = d.querySelector('#formulario button[type="submit"]');
+        const enviar = async () => {
+          d.querySelector('#formulario').requestSubmit();
+          await esperar(() => !guardar.disabled);
+        };
+        for (const tipo of ['faena','presupuesto','reparacion']) {
+          d.querySelector('#tipo').value = tipo;
+          d.querySelector('#tipo').dispatchEvent(new w.Event('change'));
+          d.querySelector('#trabajo-destino').value = '';
+          d.querySelector('#trabajo-destino').dispatchEvent(new w.Event('change'));
+          d.querySelector('#cliente').value = 'Cliente ' + tipo;
+          d.querySelector('#obra').value = '<img src=x onerror=alert(1)> ' + tipo;
+          d.querySelector('#ubicacion').value = 'Calle ' + tipo;
+          d.querySelector('#observaciones').value = 'Montaje de este día';
+          d.querySelector('#fecha-inicio').value = '2026-10-01';
+          await enviar();
+          comprobar(d.querySelector('#mensaje').textContent.includes('Trabajo y día guardados'), 'Falla guardado conjunto: ' + tipo);
+          comprobar(d.querySelector(`#lista tr[data-tipo="${tipo}"] .dia-tipo.${tipo}`), 'Falta color de trabajo ' + tipo);
+          comprobar(d.querySelector(`#diario-lista .diario-registro.${tipo}`), 'No aparece día en listado ' + tipo);
+          comprobar(d.querySelector(`.diario-dia[data-fecha="2026-10-01"] .dia-tipo.${tipo}`), 'No aparece color calendario ' + tipo);
+          comprobar(!d.querySelector('#diario-lista img'), 'Interpreta datos como HTML');
+          comprobar(d.querySelector('#cliente').readOnly, 'No conserva selección de obra tras guardar');
+          d.querySelector('#fecha-inicio').value = '2026-10-02';
+          await enviar();
+          comprobar(w.trabajosPrueba.filter(t => t.tipo === tipo).length === 1, 'Duplica obra al repetir día');
+          comprobar(w.diasPrueba.filter(t => t.tipo === tipo).length === 2, 'Pierde segundo día');
+          d.querySelector('#fecha-inicio').value = '2026-10-02';
+          await enviar();
+          comprobar(d.querySelector('#mensaje').textContent.includes('Ya has registrado'), 'No muestra duplicado');
+        }
+        comprobar(w.escrituras.every(e => e.url === '/registro-dia'), 'Guarda día y trabajo por separado');
+        d.querySelector('#diario-todos').click();
+        comprobar(d.querySelectorAll('#diario-lista article').length === 6, 'Listado no contiene todos los días del mes');
+        comprobar(d.querySelector('#diario-mensaje').textContent.includes('2 días distintos'), 'Cuenta registros como días distintos');
+        d.querySelector('.diario-dia[data-fecha="2026-10-01"]').click();
+        comprobar(d.querySelectorAll('#diario-lista article').length === 3, 'Seleccionar fecha no filtra el listado');
+        d.querySelector('#diario-tipo').value = 'presupuesto';
+        d.querySelector('#diario-tipo').dispatchEvent(new w.Event('change'));
+        comprobar(d.querySelectorAll('#diario-lista article').length === 1, 'Filtro por tipo falla');
+        d.querySelector('#diario-buscar').value = 'No existe';
+        d.querySelector('#diario-buscar').dispatchEvent(new w.Event('input'));
+        comprobar(d.querySelector('#diario-lista').textContent.includes('No hay días'), 'Búsqueda no filtra');
+        d.querySelector('#diario-buscar').value = '';
+        d.querySelector('#diario-buscar').dispatchEvent(new w.Event('input'));
+        w.fallarLectura = true;
+        d.querySelector('#diario-actualizar').click();
+        await esperar(() => d.querySelector('#diario-mensaje').className === 'error');
+        comprobar(!d.querySelector('#diario-lista article'), 'Error mantiene datos antiguos');
+        w.fallarLectura = false;
+        d.querySelector('#diario-actualizar').click();
+        await esperar(() => d.querySelector('#diario-lista article'));
+        d.querySelector('#fecha-inicio').value = '2026-10-03';
+        w.fallarGuardar = true;
+        await enviar();
+        const solicitud = w.escrituras.at(-1).datos.solicitud_id;
+        comprobar(d.querySelector('#mensaje').textContent.includes('Prueba de error'), 'Oculta error al guardar');
+        w.fallarGuardar = false;
+        await enviar();
+        comprobar(w.escrituras.at(-1).datos.solicitud_id === solicitud, 'Reintento usa otra solicitud y puede duplicar');
+        for (const ancho of [320,390,768]) {
+          marco.style.width = ancho + 'px';
+          await new Promise(resolve => w.requestAnimationFrame(() => w.requestAnimationFrame(resolve)));
+          comprobar(d.documentElement.scrollWidth <= w.innerWidth, 'Desborda en ' + ancho);
+          comprobar(d.querySelector('#diario-calendario').scrollWidth <= d.querySelector('#diario-calendario').clientWidth, 'Desborda calendario en ' + ancho);
+        }
+        document.querySelector('#resultado').textContent = `OK: ${verificaciones} comprobaciones de guardado conjunto, reutilización, colores, calendario, filtros, errores, reintentos y móvil.`;
+        document.body.dataset.estado = 'correcto';
+      } finally {
+        if (anterior === null) localStorage.removeItem('alucarpin_token');
+        else localStorage.setItem('alucarpin_token',anterior);
+      }
+    })().catch(error => {
+      document.querySelector('#resultado').textContent = 'ERROR: ' + error.message;
+      document.body.dataset.estado = 'error';
+      throw error;
+    });
+  </script>
+</body>
+</html>

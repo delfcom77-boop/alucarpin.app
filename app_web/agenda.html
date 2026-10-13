@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AlucarpinSamitier | Agenda</title>
+  <link rel="stylesheet" href="/app/diario.css?v=1">
   <style>
     :root {
       --bg: #eef3f1;
@@ -175,9 +176,10 @@
   <main>
     <header><h1>Agenda y citas</h1><p>Visitas, reuniones, llamadas y reparaciones pendientes</p></header>
     <nav><a href="/app/inicio.html">Volver al menú</a></nav>
+    <section data-diario id="mis-dias"></section>
     <section>
       <h2>Mis días trabajados en Google Calendar</h2>
-      <p>Registra tus días en Mi control con Registrar día. No se utilizan fichajes de ayudantes ni fechas generales de presupuestos.</p>
+      <p>Guardar trabajo en Mi control registra también tu día. Lo ves automáticamente en el calendario de la app de arriba. No se utilizan fichajes de ayudantes ni fechas generales de presupuestos.</p>
       <button type="button" data-calendario-trabajos="propias">Descargar mis faenas propias</button>
       <button type="button" data-calendario-trabajos="terceros">Descargar mis faenas a terceros</button>
       <p>Crea dos calendarios en Google Calendar: Faenas propias y Faenas a terceros. En Configuración → Importar y exportar, importa cada archivo en su calendario. Asigna un color diferente a cada uno. Es una importación manual, no una sincronización automática; usa siempre el mismo calendario para cada tipo.</p>
@@ -242,6 +244,7 @@
     </section>
   </main>
   <script src="/app/catalogo.js"></script>
+  <script src="/app/diario.js?v=1"></script>
   <script>
     const token = localStorage.getItem('alucarpin_token');
     if (!token) location.replace('/app/login.html');
