@@ -1,14 +1,14 @@
-const CACHE = 'alucarpin-app-v6-resumen-privado';
+const CACHE = 'alucarpin-app-v7-resumen-actualizado';
 const ARCHIVOS = [
   '/app/login.html',
   '/app/administrador.html',
   '/app/jornadas.js',
   '/app/catalogo.js',
   '/app/inicio.html',
-  '/app/panel.js',
+  '/app/panel.js?v=privado-2',
   '/app/resumen.html',
-  '/app/resumen_privado.js',
-  '/app/economia.js',
+  '/app/resumen_privado.js?v=privado-2',
+  '/app/economia.js?v=privado-2',
   '/app/obra.html',
   '/app/obra.js',
   '/app/exportar.js',
@@ -45,7 +45,7 @@ self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
 
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, { cache: 'reload' })
       .then(response => {
         if (response && response.status === 200) {
           const copia = response.clone();

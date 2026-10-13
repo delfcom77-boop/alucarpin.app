@@ -70,12 +70,40 @@
       const anterior = localStorage.getItem('alucarpin_token');
       localStorage.setItem('alucarpin_token', 'prueba-economia-local');
       try {
+        const worker = await fetch('../app_web/sw.js').then(r => r.text());
+        const eventos = {};
+        const opcionesRed = [];
+        const entorno = {
+          location: {origin: location.origin},
+          addEventListener: (nombre, funcion) => { eventos[nombre] = funcion; },
+        };
+        const respuestaRed = new Response('script actualizado');
+        new Function('self', 'caches', 'fetch', worker)(
+          entorno,
+          {open: async () => ({put: async () => {}})},
+          async (solicitud, opciones) => { opcionesRed.push(opciones); return respuestaRed; },
+        );
+        let respuestaWorker;
+        eventos.fetch({
+          request: new Request(new URL('/app/panel.js?v=privado-2', location.origin)),
+          respondWith: respuesta => { respuestaWorker = respuesta; },
+        });
+        await respuestaWorker;
+        if (opcionesRed[0]?.cache !== 'reload') throw new Error('La actualizacion reutiliza la cache HTTP antigua');
+        eventos.fetch({
+          request: new Request(new URL('/panel-resumen', location.origin)),
+          respondWith: () => { throw new Error('El worker intercepta datos privados'); },
+        });
         const inicio = await fetch('../app_web/inicio.html').then(r => r.text());
         if (inicio.includes('/app/panel.js') || inicio.includes('/app/economia.js') || inicio.includes('id="economia"')) {
           throw new Error('El menu carga datos privados');
         }
         if (!inicio.includes('href="/app/resumen.html"')) throw new Error('Falta opcion de menu privado');
-        const html = (await fetch('../app_web/resumen.html').then(r => r.text()))
+        const original = await fetch('../app_web/resumen.html').then(r => r.text());
+        for (const script of ['resumen_privado.js', 'panel.js', 'economia.js']) {
+          if (!original.includes(`/app/${script}?v=privado-2`)) throw new Error('Script privado sin version: ' + script);
+        }
+        const html = original
           .replaceAll('/app/', '/app_web/').replace('<script src="/app_web/pwa.js"><\/script>', '');
         const marco = document.querySelector('#app');
         marco.srcdoc = html.replace('<head>', `<head><script>(${preparar.toString()})();<\/script>`);

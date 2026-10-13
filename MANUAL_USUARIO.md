@@ -145,6 +145,11 @@ Mi control, Alarmas, Ayudantes y otros apartados conservan sus permisos y
 pueden mostrar sus propios importes. No es un modo de privacidad para toda
 la aplicacion.
 
+Si tras una actualizacion aparece «No se pudo consultar el resumen (HTTP 403)»,
+cierra y vuelve a abrir la app para que se active su nueva version. Los scripts
+del resumen se cargan con version y la actualizacion evita reutilizar codigo
+antiguo de la cache del navegador. No es necesario cambiar la contraseña.
+
 ### Pagos diarios y liquidaciones
 
 En **Pagos** aparece una fila por ayudante y fecha, con todas las obras realizadas ese dia. Se incluyen sabados y domingos; varios fichajes del mismo ayudante en una fecha no generan varias jornadas. El estado se calcula a partir del importe y lo realmente pagado; los pagos parciales reducen el pendiente.
