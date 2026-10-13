@@ -4,13 +4,13 @@ import os
 from pathlib import Path
 import sqlite3
 import sys
-from typing import Literal, Optional
+from typing import Annotated, Literal, Optional
 
 import psycopg
 from psycopg.rows import dict_row
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, StringConstraints, model_validator
 from fastapi.staticfiles import StaticFiles
 from base_datos import ruta_base_datos
 from autenticacion import crear_token, inicializar_usuarios, password_valida, usuario_desde_token
@@ -48,12 +48,15 @@ class ConexionPostgres:
         self.db.commit()
 
 
+TextoFichaje = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=160)]
+
+
 class FichajeCreate(BaseModel):
     ayudante_id: int
     fecha: date
     tipo_destino: Literal["pendiente", "faena", "presupuesto", "reparacion"] = "pendiente"
-    cliente: str = Field(min_length=1)
-    obra: str = Field(min_length=1)
+    cliente: TextoFichaje
+    obra: TextoFichaje
     ubicacion: str = ""
     poblacion: str = ""
     num_presupuesto: Optional[str] = None
@@ -63,12 +66,19 @@ class FichajeCreate(BaseModel):
 class FichajeUpdate(BaseModel):
     fecha: Optional[date] = None
     tipo_destino: Optional[Literal["pendiente", "faena", "presupuesto", "reparacion"]] = None
-    cliente: Optional[str] = Field(default=None, min_length=1)
-    obra: Optional[str] = Field(default=None, min_length=1)
+    cliente: Optional[TextoFichaje] = None
+    obra: Optional[TextoFichaje] = None
     ubicacion: Optional[str] = None
     poblacion: Optional[str] = None
     num_presupuesto: Optional[str] = None
     obra_catalogo: Optional[str] = None
+
+    @model_validator(mode="after")
+    def comprobar_campos_no_nulos(self):
+        for campo in ("fecha", "tipo_destino", "cliente", "obra", "ubicacion", "poblacion"):
+            if campo in self.model_fields_set and getattr(self, campo) is None:
+                raise ValueError(f"El campo {campo} no puede ser nulo")
+        return self
 
 
 class FichajeVinculacion(BaseModel):
@@ -2360,7 +2370,7 @@ def crear_fichaje(fichaje: FichajeCreate, usuario=Depends(usuario_actual)):
             presupuesto_id = None
             estado_revision = "Pendiente de revisar"
             tipo_destino = fichaje.tipo_destino
-            if usuario["rol"] == "ayudante" or fichaje.obra_catalogo:
+            if fichaje.obra_catalogo:
                 obra_catalogo = resolver_obra_catalogo(db, fichaje.obra_catalogo, tipo_destino)
                 canonicos = datos_obra_catalogo(obra_catalogo)
                 tipo_destino = canonicos["tipo_destino"]
@@ -2372,6 +2382,8 @@ def crear_fichaje(fichaje: FichajeCreate, usuario=Depends(usuario_actual)):
                 trabajo_propio_id = canonicos["trabajo_propio_id"]
                 if tipo_destino == "presupuesto" and num_presupuesto:
                     estado_revision = "Validado"
+            elif usuario["rol"] == "ayudante":
+                num_presupuesto = None
             elif fichaje.tipo_destino == "faena":
                 existente = db.execute(
                     """
@@ -2464,6 +2476,7 @@ def crear_fichaje(fichaje: FichajeCreate, usuario=Depends(usuario_actual)):
 @app.patch("/fichajes/{fichaje_id}")
 def modificar_fichaje(fichaje_id: int, cambios: FichajeUpdate, usuario=Depends(usuario_actual)):
     datos = cambios.model_dump(exclude_unset=True)
+    desvincular = "obra_catalogo" in datos and datos["obra_catalogo"] is None
     referencia = datos.pop("obra_catalogo", None)
     if datos.get("num_presupuesto") and not referencia:
         datos["num_presupuesto"] = datos["num_presupuesto"].strip()
@@ -2477,7 +2490,7 @@ def modificar_fichaje(fichaje_id: int, cambios: FichajeUpdate, usuario=Depends(u
     if "fecha" in datos:
         datos["fecha"] = datos["fecha"].isoformat()
     datos = {clave: valor.strip() if isinstance(valor, str) else valor for clave, valor in datos.items()}
-    if not datos and not referencia:
+    if not datos and not referencia and not desvincular:
         raise HTTPException(status_code=400, detail="No hay datos para modificar")
     datos["actualizado_en"] = datetime.utcnow().isoformat(timespec="seconds")
     with conexion() as db:
@@ -2488,10 +2501,23 @@ def modificar_fichaje(fichaje_id: int, cambios: FichajeUpdate, usuario=Depends(u
             permitido = db.execute("SELECT 1 FROM fichajes_ayudantes WHERE id = ? AND ayudante_id = ?", (fichaje_id, usuario["ayudante_id"])).fetchone()
             if not permitido:
                 raise HTTPException(status_code=403, detail="No puedes modificar este fichaje")
-            if not referencia and any(clave in datos and datos[clave] != existente[clave] for clave in (
+            if desvincular:
+                raise HTTPException(status_code=403, detail="Solo el administrador puede quitar la vinculación")
+            vinculado = any(existente[campo] for campo in (
+                "faena_id_vinculada", "presupuesto_id", "trabajo_propio_id", "num_presupuesto"
+            ))
+            cambia_destino = any(clave in datos and datos[clave] != existente[clave] for clave in (
                 "cliente", "obra", "tipo_destino", "ubicacion", "poblacion", "num_presupuesto"
-            )):
-                raise HTTPException(status_code=400, detail="Selecciona una obra del catálogo. Solo el administrador puede crear clientes y obras.")
+            ))
+            if not referencia and vinculado and cambia_destino:
+                raise HTTPException(status_code=409, detail="Este día ya está vinculado. Pide al administrador que corrija su destino.")
+            if not referencia and not vinculado:
+                datos["num_presupuesto"] = None
+                datos["estado_revision"] = "Pendiente de revisar"
+        if desvincular:
+            datos.update(faena_id_vinculada=None, presupuesto_id=None,
+                         trabajo_propio_id=None, num_presupuesto=None,
+                         estado_revision="Pendiente de revisar")
         if referencia:
             canonicos = datos_obra_catalogo(resolver_obra_catalogo(db, referencia, datos.get("tipo_destino", "pendiente")))
             if any(canonicos[clave] != existente[clave] for clave in canonicos):

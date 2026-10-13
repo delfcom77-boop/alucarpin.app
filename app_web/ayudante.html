@@ -91,18 +91,18 @@
       <h1>Mis días trabajados</h1>
       <p id="nombre">Cargando ayudante...</p>
     </header>
-    <button id="actualizar-catalogo" type="button">Actualizar clientes y obras</button>
     <section>
       <h2>Registrar día</h2>
       <form id="formulario">
         <div><label for="fecha">Día</label><input id="fecha" type="date" required></div>
-        <div><label for="tipo-destino">Destino del día trabajado</label><select id="tipo-destino" required><option value="pendiente">Todos los tipos: selecciona una obra</option><option value="faena">Faena a 3º</option><option value="presupuesto">Presupuesto Alucarpin</option><option value="reparacion">Reparación</option></select></div>
-        <div><label for="cliente">Cliente existente</label><select id="cliente" required><option value="">Cargando clientes...</option></select></div>
-        <div><label for="obra">Obra existente</label><select id="obra" required><option value="">Selecciona un cliente</option></select></div>
-        <div><label for="ubicacion">Ubicación</label><input id="ubicacion" readonly></div>
-        <div><label for="poblacion">Población</label><input id="poblacion" readonly></div>
-        <p>Si falta un cliente u obra, pide al administrador que lo dé de alta. No escribas un nombre diferente.</p>
+        <div><label for="tipo-destino">Destino del día trabajado</label><select id="tipo-destino" required><option value="pendiente">No sé el tipo de trabajo</option><option value="faena">Faena a 3º</option><option value="presupuesto">Presupuesto Alucarpin</option><option value="reparacion">Reparación</option></select></div>
+        <div><label for="cliente">Cliente</label><input id="cliente" required maxlength="160"></div>
+        <div><label for="obra">Obra</label><input id="obra" required maxlength="160"></div>
+        <div><label for="ubicacion">Ubicación</label><input id="ubicacion" maxlength="200"></div>
+        <div><label for="poblacion">Población</label><input id="poblacion" maxlength="160"></div>
+        <p>Escribe dónde has trabajado, aunque la obra todavía no exista en el programa. El administrador vinculará el día al presupuesto o faena correspondiente.</p>
         <button type="submit" disabled>Guardar día y añadir otro</button>
+        <button id="nuevo-dia" type="button">Nuevo día / cancelar edición</button>
         <div id="mensaje" class="mensaje" role="status"></div>
       </form>
     </section>
@@ -110,11 +110,10 @@
       <h2>Listado general de mis faenas</h2>
       <p id="contador">Cargando faenas...</p>
       <div class="lista">
-        <table><thead><tr><th>Día</th><th>Tipo</th><th>Cliente</th><th>Obra</th><th>Ubicación</th><th>Población</th></tr></thead><tbody id="historial"><tr><td colspan="6">Cargando...</td></tr></tbody></table>
+        <table><thead><tr><th>Día</th><th>Tipo</th><th>Cliente</th><th>Obra</th><th>Ubicación</th><th>Población</th><th>Vinculación</th></tr></thead><tbody id="historial"><tr><td colspan="7">Cargando...</td></tr></tbody></table>
       </div>
     </section>
   </main>
-  <script src="/app/catalogo.js"></script>
   <script>
     const api = '';
     const token = localStorage.getItem('alucarpin_token');
@@ -129,10 +128,9 @@
     const tipoDestino = document.querySelector('#tipo-destino');
     const contador = document.querySelector('#contador');
     let fichajes = [];
-    let catalogo = [];
     const cliente = document.querySelector('#cliente');
     const obra = document.querySelector('#obra');
-    const guardar = formulario.querySelector('button');
+    const guardar = formulario.querySelector('button[type="submit"]');
 
     if (!ayudanteId) {
       mensaje.textContent = 'Falta identificar al ayudante en esta prueba.';
@@ -141,55 +139,19 @@
     }
     fecha.valueAsDate = new Date();
 
-    tipoDestino.addEventListener('change', () => {
-      pintarClientes();
-    });
-
-    const disponibles = () => catalogo.filter(item => tipoDestino.value === 'pendiente' || item.tipo === tipoDestino.value);
-    function pintarClientes() {
-      const anterior = cliente.value;
-      cliente.replaceChildren(new Option('Selecciona un cliente', ''));
-      const nombres = new Map(disponibles().map(item => [AlucarpinCatalogo.normalizar(item.cliente), item.cliente]));
-      nombres.forEach((nombre, clave) => cliente.add(new Option(nombre, clave)));
-      if (nombres.has(anterior)) cliente.value = anterior;
-      pintarObras();
+    guardar.disabled = !ayudanteId;
+    const vinculado = fichaje => Boolean(fichaje.faena_id_vinculada || fichaje.presupuesto_id || fichaje.trabajo_propio_id || fichaje.num_presupuesto);
+    function nuevoDia() {
+      const fechaActual = fecha.value;
+      delete formulario.dataset.id;
+      formulario.reset();
+      fecha.value = fechaActual;
+      guardar.textContent = 'Guardar día y añadir otro';
+      document.querySelectorAll('#historial .registro').forEach(item => item.classList.remove('seleccionado'));
     }
-    function pintarObras() {
-      const anterior = obra.value;
-      obra.replaceChildren(new Option('Selecciona una obra', ''));
-      disponibles().filter(item => AlucarpinCatalogo.normalizar(item.cliente) === cliente.value).forEach(item => {
-        obra.add(new Option(`${item.obra}${item.ubicacion ? ` | ${item.ubicacion}` : ''}${item.poblacion ? ` | ${item.poblacion}` : ''} (#${item.id})`, item.referencia));
-      });
-      if (Array.from(obra.options).some(opcion => opcion.value === anterior)) obra.value = anterior;
-      actualizarObra();
-    }
-    function actualizarObra() {
-      const seleccionada = catalogo.find(item => item.referencia === obra.value);
-      document.querySelector('#ubicacion').value = seleccionada?.ubicacion || '';
-      document.querySelector('#poblacion').value = seleccionada?.poblacion || '';
-      guardar.disabled = !ayudanteId || !seleccionada;
-    }
-    cliente.addEventListener('change', pintarObras);
-    obra.addEventListener('change', actualizarObra);
-    async function cargarCatalogo() {
-      catalogo = await AlucarpinCatalogo.cargar(apiFetch);
-      pintarClientes();
-      if (!catalogo.length) {
-        mensaje.textContent = 'No hay obras disponibles. Pide al administrador que dé de alta la obra.';
-        mensaje.className = 'mensaje error';
-      }
-    }
-    document.querySelector('#actualizar-catalogo').addEventListener('click', () => {
-      cargarCatalogo().then(() => {
-        if (catalogo.length) {
-          mensaje.textContent = 'Catálogo actualizado.';
-          mensaje.className = 'mensaje ok';
-        }
-      }).catch(error => {
-        mensaje.textContent = error.message;
-        mensaje.className = 'mensaje error';
-        guardar.disabled = true;
-      });
+    document.querySelector('#nuevo-dia').addEventListener('click', () => {
+      nuevoDia();
+      mensaje.textContent = '';
     });
 
     async function cargar() {
@@ -198,6 +160,7 @@
         apiFetch(`${api}/ayudantes`),
         apiFetch(`${api}/ayudantes/${ayudanteId}/fichajes`)
       ]);
+      if (!ayudantes.ok || !respuesta.ok) throw new Error('No se pudieron cargar tus días trabajados.');
       const listaAyudantes = await ayudantes.json();
       const ayudante = listaAyudantes.find(item => String(item.id) === String(ayudanteId));
       document.querySelector('#nombre').textContent = ayudante ? ayudante.nombre : 'Ayudante no encontrado';
@@ -208,12 +171,17 @@
     function pintar() {
       historial.textContent = '';
       contador.textContent = `${fichajes.length} día${fichajes.length === 1 ? '' : 's'} registrado${fichajes.length === 1 ? '' : 's'}`;
-      if (!fichajes.length) { historial.innerHTML = '<tr><td colspan="6">Todavía no hay días registrados.</td></tr>'; return; }
+      if (!fichajes.length) { historial.innerHTML = '<tr><td colspan="7">Todavía no hay días registrados.</td></tr>'; return; }
       fichajes.forEach(fichaje => {
         const item = document.createElement('tr');
         item.className = `registro ${fichaje.pagado ? 'pagado' : 'pendiente'}`;
         const tipo = fichaje.tipo_destino === 'presupuesto' ? 'Presupuesto Alucarpin' : fichaje.tipo_destino === 'reparacion' ? 'Reparación' : fichaje.tipo_destino === 'faena' ? 'Faena a 3º' : 'Pendiente de vincular';
-        item.innerHTML = `<td>${mostrarFecha(fichaje.fecha)}</td><td>${tipo}</td><td>${fichaje.cliente || ''}</td><td>${fichaje.obra}</td><td>${fichaje.ubicacion || ''}</td><td>${fichaje.poblacion || ''}</td>`;
+        [mostrarFecha(fichaje.fecha), tipo, fichaje.cliente, fichaje.obra, fichaje.ubicacion, fichaje.poblacion,
+          vinculado(fichaje) ? 'Vinculado' : 'Pendiente de vincular'].forEach(valor => {
+          const celda = document.createElement('td');
+          celda.textContent = valor || '';
+          item.appendChild(celda);
+        });
         item.onclick = () => cargarEnFormulario(fichaje, item);
         historial.appendChild(item);
       });
@@ -224,23 +192,15 @@
       elemento.classList.add('seleccionado');
       fecha.value = fichaje.fecha;
       tipoDestino.value = fichaje.tipo_destino || 'pendiente';
-      const referencia = fichaje.tipo_destino === 'faena' ? `faena:${fichaje.faena_id_vinculada}`
-        : fichaje.tipo_destino === 'presupuesto' ? `presupuesto:${fichaje.presupuesto_id}`
-        : `reparacion:${fichaje.trabajo_propio_id}`;
-      const seleccionada = catalogo.find(item => item.referencia === referencia)
-        || catalogo.find(item => AlucarpinCatalogo.normalizar(item.cliente) === AlucarpinCatalogo.normalizar(fichaje.cliente)
-          && AlucarpinCatalogo.normalizar(item.obra) === AlucarpinCatalogo.normalizar(fichaje.obra)
-          && (fichaje.tipo_destino === 'pendiente' || item.tipo === fichaje.tipo_destino));
-      if (seleccionada) tipoDestino.value = seleccionada.tipo;
-      tipoDestino.dispatchEvent(new Event('change'));
-      cliente.value = AlucarpinCatalogo.normalizar(seleccionada?.cliente || fichaje.cliente);
-      pintarObras();
-      obra.value = seleccionada?.referencia || '';
-      actualizarObra();
-      if (!seleccionada) {
-        mensaje.textContent = 'Este fichaje antiguo no tiene una obra disponible. Selecciona una del catálogo o pide al administrador que la revise.';
-        mensaje.className = 'mensaje error';
-      }
+      cliente.value = fichaje.cliente || '';
+      obra.value = fichaje.obra || '';
+      document.querySelector('#ubicacion').value = fichaje.ubicacion || '';
+      document.querySelector('#poblacion').value = fichaje.poblacion || '';
+      mensaje.textContent = vinculado(fichaje)
+        ? 'Este día ya está vinculado. Si necesitas corregir su destino, avisa al administrador.'
+        : 'Puedes corregir los datos de este día pendiente de vincular.';
+      mensaje.className = 'mensaje';
+      guardar.textContent = 'Guardar corrección del día';
       window.scrollTo({ top: 0, behavior: 'smooth' });
       formulario.dataset.id = fichaje.id;
     }
@@ -253,30 +213,32 @@
         fecha.focus();
         return;
       }
-      mensaje.textContent = 'Guardando...';
-      mensaje.className = 'mensaje';
-      const seleccionada = catalogo.find(item => item.referencia === obra.value);
-      if (!seleccionada) {
-        mensaje.textContent = 'Selecciona un cliente y una obra existentes.';
+      if (!cliente.value.trim() || !obra.value.trim()) {
+        mensaje.textContent = 'Escribe el cliente y la obra.';
         mensaje.className = 'mensaje error';
         return;
       }
-      const datos = { ayudante_id: Number(ayudanteId), fecha: fecha.value, tipo_destino: seleccionada.tipo, cliente: seleccionada.cliente, obra: seleccionada.obra, ubicacion: seleccionada.ubicacion, poblacion: seleccionada.poblacion, num_presupuesto: seleccionada.num_presupuesto, obra_catalogo: seleccionada.referencia };
-      const fechaGuardada = fecha.value;
+      const datos = { ayudante_id: Number(ayudanteId), fecha: fecha.value, tipo_destino: tipoDestino.value,
+        cliente: cliente.value.trim(), obra: obra.value.trim(),
+        ubicacion: document.querySelector('#ubicacion').value.trim(), poblacion: document.querySelector('#poblacion').value.trim() };
       const id = formulario.dataset.id;
-      const respuesta = await apiFetch(id ? `${api}/fichajes/${id}` : `${api}/fichajes`, { method: id ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) });
-      if (!respuesta.ok) { const detalle = await respuesta.json(); mensaje.textContent = detalle.detail || 'No se pudo guardar.'; mensaje.className = 'mensaje error'; return; }
-      const resultado = await respuesta.json();
-      mensaje.textContent = resultado.estado_revision === 'Pendiente de revisar'
-        ? 'Día guardado en la obra seleccionada, pendiente de revisión. Puedes añadir otro.'
-        : 'Día guardado y vinculado correctamente.';
-      mensaje.className = 'mensaje ok';
-      delete formulario.dataset.id;
-      formulario.reset();
-      fecha.value = fechaGuardada;
-      tipoDestino.value = 'pendiente';
-      tipoDestino.dispatchEvent(new Event('change'));
-      await cargar();
+      guardar.disabled = true;
+      mensaje.textContent = 'Guardando...';
+      mensaje.className = 'mensaje';
+      try {
+        const respuesta = await apiFetch(id ? `${api}/fichajes/${id}` : `${api}/fichajes`, { method: id ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) });
+        const resultado = await respuesta.json();
+        if (!respuesta.ok) throw new Error(typeof resultado.detail === 'string' ? resultado.detail : 'Revisa los datos del día trabajado.');
+        nuevoDia();
+        mensaje.textContent = vinculado(resultado) ? 'Corrección guardada.' : 'Día guardado, pendiente de vincular por el administrador. Puedes añadir otro.';
+        mensaje.className = 'mensaje ok';
+        await cargar();
+      } catch (error) {
+        mensaje.textContent = error.message;
+        mensaje.className = 'mensaje error';
+      } finally {
+        guardar.disabled = !ayudanteId;
+      }
     });
 
     document.addEventListener('visibilitychange', () => {
@@ -287,11 +249,6 @@
     }, 15000);
 
     cargar().catch(() => { historial.textContent = 'No se pudo conectar con el programa.'; });
-    cargarCatalogo().catch(error => {
-      mensaje.textContent = error.message;
-      mensaje.className = 'mensaje error';
-      guardar.disabled = true;
-    });
   </script>
   <script src="/app/pwa.js"></script>
 </body>

@@ -148,7 +148,7 @@
         <input id="editar-id" type="hidden">
         <div class="fila">
           <label>Día <input id="fecha-general" type="date" required></label>
-          <label>Tipo <select id="tipo-general" required><option value="faena">Faena a 3º</option><option value="presupuesto">Presupuesto Alucarpin</option><option value="reparacion">Reparación</option></select></label>
+          <label>Tipo declarado <select id="tipo-general" required><option value="pendiente">Sin indicar</option><option value="faena">Faena a 3º</option><option value="presupuesto">Presupuesto Alucarpin</option><option value="reparacion">Reparación</option></select></label>
         </div>
         <div class="fila">
           <label>Cliente <input id="cliente-general" required></label>
@@ -158,7 +158,8 @@
           <label>Ubicación <input id="ubicacion-general"></label>
           <label>Población <input id="poblacion-general"></label>
         </div>
-        <label>Faena vinculada <select id="faena-general"><option value="">Sin vincular</option></select></label>
+        <label>Vincular a presupuesto, faena o reparación <select id="faena-general"><option value="">Sin vincular</option></select></label>
+        <p>Selecciona el destino correcto, aunque sea distinto del tipo declarado por el ayudante. Se conserva el mismo día y su pago; al vincularlo se usan los datos de la obra elegida.</p>
         <button type="submit">Guardar modificación</button>
         <button type="button" id="cancelar-edicion-fichaje">Cancelar edición</button>
       </form>
@@ -729,8 +730,19 @@
             fila.dataset.ayudanteId = fichaje.ayudante_id;
             fila.dataset.exportEstado = fichaje.estadoPago;
             fila.className = fichaje.estadoPago === 'Pagado' ? 'pagado' : fichaje.estadoPago === 'Parcial' ? 'parcial' : 'pendiente';
-            const tipo = AlucarpinJornadas.mostrarTipo(fichaje.tipo_destino || 'faena');
-            fila.innerHTML = `<td>${fichaje.nombreAyudante}</td><td>${tipo}</td><td>${mostrarFecha(fichaje.fecha)}</td><td>${fichaje.cliente || ''}</td><td>${fichaje.obra}</td><td>${fichaje.ubicacion || ''}</td><td>${fichaje.poblacion || ''}</td><td class="acciones"><button type="button">Modificar</button><button type="button" class="validar" ${fichaje.estado_revision === 'Validado' ? 'disabled' : ''}>${fichaje.estado_revision === 'Validado' ? 'Validado' : 'Validar'}</button><button type="button" class="borrar">Borrar</button></td>`;
+            const tipoDeclarado = fichaje.tipo_destino || 'faena';
+            const tipo = AlucarpinJornadas.mostrarTipo(tipoDeclarado)
+              + (tipoDeclarado !== 'pendiente' && AlucarpinJornadas.pendienteDeVincular(fichaje) ? ' · Pendiente de vincular' : '');
+            [fichaje.nombreAyudante, tipo, mostrarFecha(fichaje.fecha), fichaje.cliente,
+              fichaje.obra, fichaje.ubicacion, fichaje.poblacion].forEach(valor => {
+              const celda = document.createElement('td');
+              celda.textContent = valor || '';
+              fila.appendChild(celda);
+            });
+            const acciones = document.createElement('td');
+            acciones.className = 'acciones';
+            acciones.innerHTML = `<button type="button">Modificar</button><button type="button" class="validar" ${fichaje.estado_revision === 'Validado' ? 'disabled' : ''}>${fichaje.estado_revision === 'Validado' ? 'Validado' : 'Validar'}</button><button type="button" class="borrar">Borrar</button>`;
+            fila.appendChild(acciones);
             fila.onclick = () => seleccionarFichajeGeneral(fichaje, fila);
             fila.querySelector('.acciones button:first-child').onclick = event => { event.stopPropagation(); seleccionarFichajeGeneral(fichaje, fila); };
             fila.querySelector('.validar').onclick = async event => { event.stopPropagation(); await validarFichaje(fichaje); };
@@ -757,6 +769,11 @@
         }
 
         function seleccionarFichajeGeneral(fichaje, fila) {
+          if (!catalogoVinculacionCargado) {
+            mensajeGeneral.textContent = 'No se han cargado los destinos. Espera o actualiza la página.';
+            mensajeGeneral.className = 'mensaje error';
+            return;
+          }
           marcarAyudante(fichaje.ayudante_id);
           document.querySelectorAll('#lista-general tr').forEach(item => item.classList.remove('seleccionada'));
           fila.classList.add('seleccionada');
@@ -765,7 +782,20 @@
           document.querySelector('#obra-general').value = fichaje.obra || '';
           document.querySelector('#ubicacion-general').value = fichaje.ubicacion || '';
           document.querySelector('#poblacion-general').value = fichaje.poblacion || '';
-          faenaGeneral.value = fichaje.faena_id_vinculada || '';
+          faenaGeneral.value = fichaje.faena_id_vinculada ? `faena:${fichaje.faena_id_vinculada}`
+            : fichaje.presupuesto_id ? `presupuesto:${fichaje.presupuesto_id}`
+            : fichaje.trabajo_propio_id ? `reparacion:${fichaje.trabajo_propio_id}` : '';
+          if (fichaje.num_presupuesto && !faenaGeneral.value) {
+            const destino = catalogoVinculacion.find(item => item.tipo === 'presupuesto' && item.num_presupuesto === fichaje.num_presupuesto);
+            faenaGeneral.value = destino?.referencia || '';
+          }
+          if ((fichaje.faena_id_vinculada || fichaje.presupuesto_id || fichaje.trabajo_propio_id || fichaje.num_presupuesto) && !faenaGeneral.value) {
+            mensajeGeneral.textContent = 'El destino vinculado no está disponible. Actualiza la página antes de guardar.';
+            mensajeGeneral.className = 'mensaje error';
+            document.querySelector('#formulario-edicion button[type="submit"]').disabled = true;
+          } else {
+            document.querySelector('#formulario-edicion button[type="submit"]').disabled = !catalogoVinculacionCargado;
+          }
           document.querySelector('#fecha-general').value = fichaje.fecha;
           document.querySelector('#editar-id').value = fichaje.id;
           mostrarApartado('fichajes');
@@ -950,24 +980,28 @@
       if (!lista.length) gastoDestino.innerHTML = '<option value="">No hay destinos disponibles</option>';
     }
 
+    let catalogoVinculacion = [];
+    let catalogoVinculacionCargado = false;
+    document.querySelector('#formulario-edicion button[type="submit"]').disabled = true;
     async function cargarFaenasVinculacion() {
-      const respuesta = await apiFetch('/faenas');
-      if (!respuesta.ok) throw new Error('No se pudieron cargar las faenas.');
-      const lista = await respuesta.json();
+      catalogoVinculacion = await AlucarpinCatalogo.cargar(apiFetch);
       faenaGeneral.innerHTML = '<option value="">Sin vincular</option>';
-      lista.forEach(faena => {
+      catalogoVinculacion.forEach(destino => {
         const opcion = document.createElement('option');
-        opcion.value = faena.id;
+        opcion.value = destino.referencia;
         opcion.textContent = [
-          `#${faena.id}`,
-          faena.cliente,
-          faena.obra,
-          faena.ubicacion,
-          faena.poblacion,
-          faena.fecha,
+          AlucarpinJornadas.mostrarTipo(destino.tipo),
+          `#${destino.id}`,
+          destino.cliente,
+          destino.obra,
+          destino.ubicacion,
+          destino.poblacion,
+          destino.num_presupuesto,
         ].filter(Boolean).join(' | ');
         faenaGeneral.appendChild(opcion);
       });
+      catalogoVinculacionCargado = true;
+      document.querySelector('#formulario-edicion button[type="submit"]').disabled = false;
     }
 
     gastoTipo.addEventListener('change', () => cargarDestinosGasto().catch(error => {
@@ -1120,14 +1154,29 @@
       event.preventDefault();
       const id = document.querySelector('#editar-id').value;
       if (!id) { mensajeGeneral.textContent = 'Selecciona una línea del listado.'; return; }
-      const respuesta = await apiFetch(`${api}/fichajes/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fecha: document.querySelector('#fecha-general').value, tipo_destino: document.querySelector('#tipo-general').value, cliente: document.querySelector('#cliente-general').value, obra: document.querySelector('#obra-general').value, ubicacion: document.querySelector('#ubicacion-general').value, poblacion: document.querySelector('#poblacion-general').value }) });
-      if (!respuesta.ok) { const resultado = await respuesta.json(); mensajeGeneral.textContent = resultado.detail || 'No se pudo modificar.'; return; }
-      const vinculacion = await apiFetch(`${api}/fichajes/${id}/vinculacion`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ faena_id: faenaGeneral.value ? Number(faenaGeneral.value) : null }) });
-      if (!vinculacion.ok) { const resultado = await vinculacion.json(); mensajeGeneral.textContent = resultado.detail || 'No se pudo vincular la faena.'; mensajeGeneral.className = 'mensaje error'; return; }
-      mensajeGeneral.textContent = 'Fichaje modificado correctamente.';
-      mensajeGeneral.className = 'mensaje exito';
-      await cargarListadoGeneral();
-      await cargarFichajes();
+      const botonGuardar = event.currentTarget.querySelector('button[type="submit"]');
+      if (!catalogoVinculacionCargado) { mensajeGeneral.textContent = 'Espera a que se carguen los destinos.'; return; }
+      botonGuardar.disabled = true;
+      try {
+        const respuesta = await apiFetch(`${api}/fichajes/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+          fecha: document.querySelector('#fecha-general').value,
+          tipo_destino: faenaGeneral.value ? faenaGeneral.value.split(':')[0] : document.querySelector('#tipo-general').value,
+          cliente: document.querySelector('#cliente-general').value, obra: document.querySelector('#obra-general').value,
+          ubicacion: document.querySelector('#ubicacion-general').value, poblacion: document.querySelector('#poblacion-general').value,
+          obra_catalogo: faenaGeneral.value || null,
+        }) });
+        const resultado = await respuesta.json();
+        if (!respuesta.ok) throw new Error(typeof resultado.detail === 'string' ? resultado.detail : 'No se pudo guardar el fichaje.');
+        mensajeGeneral.textContent = faenaGeneral.value ? 'Día vinculado correctamente, sin duplicarlo.' : 'Día guardado, pendiente de vincular.';
+        mensajeGeneral.className = 'mensaje exito';
+        await cargarListadoGeneral();
+        await cargarFichajes();
+      } catch (error) {
+        mensajeGeneral.textContent = error.message;
+        mensajeGeneral.className = 'mensaje error';
+      } finally {
+        botonGuardar.disabled = false;
+      }
     });
     formularioLiquidacion.addEventListener('submit', async event => {
       event.preventDefault();

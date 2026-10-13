@@ -1,6 +1,9 @@
 (() => {
   const normalizar = valor => String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('es');
   const tipoDe = fichaje => fichaje.tipo_destino || 'faena';
+  const pendienteDeVincular = fichaje => tipoDe(fichaje) === 'pendiente'
+    || (['faena_id_vinculada', 'presupuesto_id', 'trabajo_propio_id', 'num_presupuesto'].some(campo => campo in fichaje)
+      && !fichaje.faena_id_vinculada && !fichaje.presupuesto_id && !fichaje.trabajo_propio_id && !fichaje.num_presupuesto);
   const mostrarTipo = tipo => ({
     faena: 'Faena a 3º',
     presupuesto: 'Presupuesto Alucarpin',
@@ -13,7 +16,7 @@
       throw new Error('La fecha desde no puede ser posterior a la fecha hasta.');
     }
     return registros.filter(fichaje =>
-      (!filtros.tipo || tipoDe(fichaje) === filtros.tipo)
+      (!filtros.tipo || (filtros.tipo === 'pendiente' ? pendienteDeVincular(fichaje) : tipoDe(fichaje) === filtros.tipo))
       && (!filtros.cliente || normalizar(fichaje.cliente) === filtros.cliente)
       && (!filtros.ayudante || String(fichaje.ayudante_id) === filtros.ayudante)
       && (!filtros.obra || normalizar(fichaje.obra).includes(normalizar(filtros.obra)))
@@ -66,5 +69,5 @@
     };
   }
 
-  window.AlucarpinJornadas = { normalizar, mostrarTipo, filtrar, resumir };
+  window.AlucarpinJornadas = { normalizar, mostrarTipo, pendienteDeVincular, filtrar, resumir };
 })();

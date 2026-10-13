@@ -82,11 +82,19 @@ class CatalogoObrasTests(unittest.TestCase):
         self.assertIsNone(fichaje["num_presupuesto"])
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM faenas").fetchone()[0], 1)
 
-    def test_impide_nombres_nuevos_en_version_antigua(self):
-        with self.assertRaises(api.HTTPException) as error:
-            self.crear(referencia=None)
-        self.assertEqual(error.exception.status_code, 400)
-        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM fichajes_ayudantes").fetchone()[0], 0)
+    def test_fichaje_manual_no_crea_ni_vincula_obras(self):
+        for tipo in ("pendiente", "faena", "presupuesto", "reparacion"):
+            with self.subTest(tipo=tipo):
+                fichaje = self.crear(referencia=None, tipo=tipo)
+                self.assertEqual(fichaje["cliente"], "Nombre inventado")
+                self.assertEqual(fichaje["obra"], "Obra inventada")
+                self.assertEqual(fichaje["tipo_destino"], tipo)
+                self.assertEqual(fichaje["estado_revision"], "Pendiente de revisar")
+                for campo in ("faena_id_vinculada", "presupuesto_id",
+                              "trabajo_propio_id", "num_presupuesto"):
+                    self.assertIsNone(fichaje[campo])
+        for tabla, cantidad in (("faenas", 1), ("presupuestos", 2), ("trabajos_propios", 1)):
+            self.assertEqual(self.db.execute(f"SELECT COUNT(*) FROM {tabla}").fetchone()[0], cantidad)
 
     def test_rechaza_referencia_inexistente_y_tipo_incompatible(self):
         for referencia, tipo in [("faena:999", "faena"), ("reparacion:20", "faena")]:
@@ -94,6 +102,18 @@ class CatalogoObrasTests(unittest.TestCase):
                 with self.assertRaises(api.HTTPException) as error:
                     self.crear(referencia, tipo)
                 self.assertEqual(error.exception.status_code, 400)
+
+    def test_nombre_identico_a_faena_existente_no_vincula_automaticamente(self):
+        fichaje = api.crear_fichaje(
+            api.FichajeCreate(
+                ayudante_id=1, fecha="2026-09-15", tipo_destino="faena",
+                cliente="Decoradora", obra="Santjoanistes nº 4",
+                ubicacion="Calle 4", poblacion="Barcelona",
+            ),
+            self.usuario,
+        )
+        self.assertIsNone(fichaje["faena_id_vinculada"])
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM faenas").fetchone()[0], 1)
 
     def test_presupuesto_existente_y_provisional_no_crean_otro(self):
         for referencia in ["presupuesto:10", "presupuesto:11"]:
@@ -127,11 +147,59 @@ class CatalogoObrasTests(unittest.TestCase):
         self.assertEqual(editado["ayudante_id"], fichaje["ayudante_id"])
         self.assertEqual(self.db.execute("SELECT importe_pagado FROM pagos_jornadas").fetchone()[0], 50)
 
-    def test_edicion_impide_nombres_nuevos_sin_catalogo(self):
+    def test_edicion_manual_de_fichaje_vinculado_requiere_administrador(self):
         fichaje = self.crear()
         with self.assertRaises(api.HTTPException) as error:
             api.modificar_fichaje(fichaje["id"], api.FichajeUpdate(cliente="Nuevo"), self.usuario)
-        self.assertEqual(error.exception.status_code, 400)
+        self.assertEqual(error.exception.status_code, 409)
+
+    def test_edicion_manual_sin_vinculo_preserva_id_y_pago(self):
+        fichaje = self.crear(referencia=None)
+        self.db.execute("INSERT INTO pagos_jornadas VALUES (?, 50, 25)", (fichaje["id"],))
+        editado = api.modificar_fichaje(
+            fichaje["id"],
+            api.FichajeUpdate(cliente=" Cliente nuevo ", obra=" Obra corregida ",
+                              ubicacion=" Calle nueva ", tipo_destino="presupuesto"),
+            self.usuario,
+        )
+        self.assertEqual(editado["id"], fichaje["id"])
+        self.assertEqual(editado["cliente"], "Cliente nuevo")
+        self.assertEqual(editado["obra"], "Obra corregida")
+        self.assertEqual(editado["ubicacion"], "Calle nueva")
+        self.assertIsNone(editado["presupuesto_id"])
+        self.assertEqual(self.db.execute("SELECT importe_pagado FROM pagos_jornadas").fetchone()[0], 25)
+
+    def test_administrador_vincula_fichaje_manual_a_cualquier_tipo(self):
+        fichaje = self.crear(referencia=None)
+        self.db.execute("INSERT INTO pagos_jornadas VALUES (?, 50, 25)", (fichaje["id"],))
+        for referencia, campo in (("presupuesto:10", "presupuesto_id"),
+                                   ("faena:25", "faena_id_vinculada"),
+                                   ("reparacion:20", "trabajo_propio_id")):
+            with self.subTest(referencia=referencia):
+                editado = api.modificar_fichaje(
+                    fichaje["id"], api.FichajeUpdate(obra_catalogo=referencia),
+                    {"rol": "administrador"},
+                )
+                self.assertEqual(editado["id"], fichaje["id"])
+                self.assertEqual(editado[campo], int(referencia.split(":")[1]))
+                for otro in {"presupuesto_id", "faena_id_vinculada", "trabajo_propio_id"} - {campo}:
+                    self.assertIsNone(editado[otro])
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM fichajes_ayudantes").fetchone()[0], 1)
+        self.assertEqual(self.db.execute("SELECT importe_pagado FROM pagos_jornadas").fetchone()[0], 25)
+
+    def test_administrador_desvincula_sin_borrar_dia_ni_pago(self):
+        fichaje = self.crear("presupuesto:10", "presupuesto")
+        self.db.execute("INSERT INTO pagos_jornadas VALUES (?, 50, 25)", (fichaje["id"],))
+        editado = api.modificar_fichaje(
+            fichaje["id"], api.FichajeUpdate(obra_catalogo=None),
+            {"rol": "administrador"},
+        )
+        self.assertEqual(editado["id"], fichaje["id"])
+        self.assertEqual(editado["cliente"], fichaje["cliente"])
+        self.assertEqual(editado["estado_revision"], "Pendiente de revisar")
+        for campo in ("presupuesto_id", "faena_id_vinculada", "trabajo_propio_id", "num_presupuesto"):
+            self.assertIsNone(editado[campo])
+        self.assertEqual(self.db.execute("SELECT importe_pagado FROM pagos_jornadas").fetchone()[0], 25)
 
     def test_edicion_solo_fecha_sigue_permitida(self):
         fichaje = self.crear()
@@ -139,6 +207,39 @@ class CatalogoObrasTests(unittest.TestCase):
             fichaje["id"], api.FichajeUpdate(fecha=date(2026, 10, 6)), self.usuario,
         )
         self.assertEqual(editado["fecha"], "2026-10-06")
+
+    def test_datos_manuales_vacios_y_nulos_se_rechazan(self):
+        for campo in ("cliente", "obra"):
+            with self.subTest(campo=campo):
+                with self.assertRaises(ValueError):
+                    api.FichajeCreate(
+                        ayudante_id=1, fecha="2026-10-13",
+                        **{"cliente": "Cliente", "obra": "Obra", campo: "   "},
+                    )
+        for campo in ("fecha", "tipo_destino", "cliente", "obra", "ubicacion", "poblacion"):
+            with self.subTest(campo=campo):
+                with self.assertRaises(ValueError):
+                    api.FichajeUpdate(**{campo: None})
+
+    def test_vinculo_inexistente_no_cambia_datos_manuales(self):
+        fichaje = self.crear(referencia=None)
+        with self.assertRaises(api.HTTPException):
+            api.modificar_fichaje(
+                fichaje["id"], api.FichajeUpdate(cliente="Corregido", obra_catalogo="faena:999"),
+                {"rol": "administrador"},
+            )
+        guardado = dict(self.db.execute("SELECT * FROM fichajes_ayudantes WHERE id=?", (fichaje["id"],)).fetchone())
+        self.assertEqual(guardado, fichaje)
+
+    def test_ayudante_no_puede_desvincular_ni_editar_registro_ajeno(self):
+        fichaje = self.crear(referencia=None)
+        for cambios, usuario in (
+            (api.FichajeUpdate(obra_catalogo=None), self.usuario),
+            (api.FichajeUpdate(cliente="Otro"), {"rol": "ayudante", "ayudante_id": 2}),
+        ):
+            with self.assertRaises(api.HTTPException) as error:
+                api.modificar_fichaje(fichaje["id"], cambios, usuario)
+            self.assertEqual(error.exception.status_code, 403)
 
     def test_edicion_con_referencia_ignora_nombres_y_numero_inventados(self):
         fichaje = self.crear()

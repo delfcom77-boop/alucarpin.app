@@ -43,6 +43,10 @@
     comprobar(filtrar(pagos, { estado: 'Parcial' }).length === 0, 'Estado sin coincidencias');
     comprobar(filtrar(registros).length === registros.length, 'Limpiar filtros mantiene todos los registros');
     comprobar(mostrarTipo('pendiente') === 'Pendiente de vincular', 'Etiqueta de pendiente en listado');
+    const manual = { ...base, fecha: '2026-10-13', faena_id_vinculada: null, presupuesto_id: null, trabajo_propio_id: null, num_presupuesto: null };
+    comprobar(filtrar([manual], { tipo: 'pendiente' }).length === 1, 'Tipo declarado sin asignacion sigue pendiente de vincular');
+    comprobar(filtrar([manual], { tipo: 'faena' }).length === 1, 'Conserva tipo declarado');
+    comprobar(filtrar([{ ...manual, presupuesto_id: 10, tipo_destino: 'presupuesto' }], { tipo: 'pendiente' }).length === 0, 'Presupuesto vinculado ya no aparece pendiente');
     let errorRango = false;
     try { resumir(registros, { desde: '2026-10-06', hasta: '2026-10-01' }); }
     catch (error) { errorRango = error.message.includes('fecha desde'); }

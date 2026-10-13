@@ -73,6 +73,14 @@ id (INTEGER) | nombre (TEXT) | activo (INTEGER)
 | estado_revision | confirmado_ayudante | sincronizado
 ```
 
+El ayudante registra fecha, tipo de destino, cliente, obra y ubicacion manualmente,
+sin necesitar el catalogo ni crear obras provisionales. Los fichajes sin IDs de
+destino quedan pendientes de vincular, aunque tengan un tipo declarado.
+El administrador los asigna desde el listado de Ayudantes mediante
+`PATCH /fichajes/{id}` con `obra_catalogo` (referencia del catalogo); un valor
+`null` explicito permite desvincularlos. Se conserva el mismo fichaje y su pago.
+Las referencias de catalogo anteriores siguen admitidas por compatibilidad.
+
 El menu principal del administrador incluye un panel resumen de trabajos, cobros, pagos diarios de ayudantes y agenda. Usa `GET /panel-resumen`, no modifica registros y distingue dias sin pago registrado de deudas con importe conocido.
 
 Mi control permite abrir una ficha de obra (`GET /obras/{origen}/{id}`) con datos vinculados, jornadas, gastos y cobros; se imprime localmente para guardar PDF. Los trabajos y los listados de Ayudantes se exportan a CSV respetando sus filtros. `app_web/exportar.js` comparte el escape CSV y la proteccion contra formulas; los pagos diarios no se suman como coste por obra.

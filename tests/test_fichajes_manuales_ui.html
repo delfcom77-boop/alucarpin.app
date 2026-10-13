@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Pruebas de fichajes manuales</title></head>
+<body>
+  <pre id="resultado">Ejecutando...</pre>
+  <iframe id="ayudante" title="Registro manual" style="width:390px;height:700px"></iframe>
+  <iframe id="admin" title="Vinculacion administrativa" style="width:390px;height:700px"></iframe>
+  <script>
+    function preparar() {
+      localStorage.setItem('alucarpin_token', 'prueba-local');
+      window.registros = [];
+      window.peticiones = [];
+      window.fallar = false;
+      window.setInterval = () => 0;
+      window.catalogo = [
+        { referencia: 'faena:25', id: 25, tipo: 'faena', cliente: 'Cliente faena', obra: 'Obra faena' },
+        { referencia: 'presupuesto:10', id: 10, tipo: 'presupuesto', cliente: 'Cliente presupuesto', obra: 'Presupuesto P-10', num_presupuesto: 'P-10' },
+        { referencia: 'reparacion:20', id: 20, tipo: 'reparacion', cliente: 'Cliente reparacion', obra: 'Puerta' },
+      ];
+      window.fetch = async (url, opciones = {}) => {
+        const metodo = opciones.method || 'GET';
+        const datos = opciones.body ? JSON.parse(opciones.body) : null;
+        peticiones.push({ url, metodo, datos });
+        if (url === '/ayudantes') return new Response('[{"id":1,"nombre":"Dani","activo":1}]');
+        if (url === '/catalogo-obras') return new Response(JSON.stringify(catalogo));
+        if (url === '/ayudantes/1/fichajes') return new Response(JSON.stringify(registros));
+        if (url.includes('/jornadas-pago')) return new Response(JSON.stringify(registros.map(registro => ({
+          fecha: registro.fecha, obra: registro.obra, pago: { importe: 50, importe_pagado: 25, estado_pago: 'Parcial' }, pagos_existentes: [],
+        }))));
+        if (url === '/fichajes' || /^\/fichajes\/\d+$/.test(url)) {
+          await new Promise(resolve => setTimeout(resolve, 40));
+          if (fallar) return new Response('{"detail":"Fallo de prueba: no se pudo guardar"}', { status: 409 });
+          let registro = metodo === 'POST' ? { id: registros.length + 1, faena_id_vinculada: null, presupuesto_id: null, trabajo_propio_id: null }
+            : registros.find(item => item.id === Number(url.split('/').pop()));
+          Object.assign(registro, datos, { estado_revision: 'Pendiente de revisar' });
+          if (datos.obra_catalogo) {
+            const destino = catalogo.find(item => item.referencia === datos.obra_catalogo);
+            registro.tipo_destino = destino.tipo;
+            registro.cliente = destino.cliente;
+            registro.obra = destino.obra;
+            registro.faena_id_vinculada = destino.tipo === 'faena' ? destino.id : null;
+            registro.presupuesto_id = destino.tipo === 'presupuesto' ? destino.id : null;
+            registro.trabajo_propio_id = destino.tipo === 'reparacion' ? destino.id : null;
+          } else if ('obra_catalogo' in datos) {
+            registro.faena_id_vinculada = registro.presupuesto_id = registro.trabajo_propio_id = null;
+          }
+          if (metodo === 'POST') registros.push(registro);
+          return new Response(JSON.stringify(registro), { status: metodo === 'POST' ? 201 : 200 });
+        }
+        return new Response('[]');
+      };
+    }
+    (async () => {
+      const esperar = async condicion => {
+        for (let i = 0; i < 150; i++) {
+          if (condicion()) return;
+          await new Promise(resolve => setTimeout(resolve, 20));
+        }
+        throw new Error('Tiempo agotado');
+      };
+      let pruebas = 0;
+      const comprobar = (ok, mensaje) => { if (!ok) throw new Error(mensaje); pruebas++; };
+      const abrir = async (id, archivo) => {
+        let html = (await fetch(`../app_web/${archivo}`).then(r => r.text()))
+          .replaceAll('/app/', '/app_web/').replace('<script src="/app_web/pwa.js"><\/script>', '');
+        html = html.replace("const ayudanteId = new URLSearchParams(location.search).get('ayudante_id');", "const ayudanteId = '1';");
+        const marco = document.querySelector('#' + id);
+        const cargado = new Promise(resolve => marco.onload = resolve);
+        marco.srcdoc = html.replace('<head>', `<head><script>(${preparar.toString()})();<\/script>`);
+        await cargado;
+        return [marco.contentWindow, marco.contentDocument];
+      };
+      const [w, d] = await abrir('ayudante', 'ayudante.html');
+      await esperar(() => !d.querySelector('#formulario button[type="submit"]').disabled);
+      comprobar(d.querySelector('#cliente').tagName === 'INPUT' && !d.querySelector('#ubicacion').readOnly, 'Campos manuales');
+      d.querySelector('#fecha').value = '2026-10-13';
+      d.querySelector('#tipo-destino').value = 'faena';
+      d.querySelector('#cliente').value = 'Cliente sin alta';
+      d.querySelector('#obra').value = '<img src=x onerror="window.inyectado=true">';
+      d.querySelector('#ubicacion').value = 'Calle escrita';
+      d.querySelector('#formulario').requestSubmit();
+      comprobar(d.querySelector('#formulario button[type="submit"]').disabled, 'Bloquea doble envio');
+      await esperar(() => w.registros.length === 1 && d.querySelector('#historial tr.registro'));
+      comprobar(w.peticiones.every(p => p.url !== '/catalogo-obras'), 'No necesita catalogo');
+      comprobar(!w.registros[0].faena_id_vinculada && d.querySelector('#historial').textContent.includes('Pendiente de vincular'), 'Pendiente sin asignacion automatica');
+      comprobar(!d.querySelector('#historial img') && !w.inyectado, 'Nombre se muestra como texto');
+      d.querySelector('#historial tr.registro').click();
+      d.querySelector('#obra').value = 'Obra corregida';
+      d.querySelector('#formulario').requestSubmit();
+      await esperar(() => w.registros[0].obra === 'Obra corregida' && !d.querySelector('#formulario').dataset.id);
+      comprobar(w.registros.length === 1 && w.peticiones.some(p => p.url === '/fichajes/1' && p.metodo === 'PATCH'), 'Corregir no duplica dia');
+      w.fallar = true;
+      d.querySelector('#historial tr.registro').click();
+      d.querySelector('#cliente').value = 'Borrador';
+      d.querySelector('#formulario').requestSubmit();
+      await esperar(() => d.querySelector('#mensaje').classList.contains('error'));
+      comprobar(d.querySelector('#cliente').value === 'Borrador' && d.querySelector('#formulario').dataset.id === '1', 'Fallo conserva borrador');
+      d.querySelector('#nuevo-dia').click();
+      comprobar(!d.querySelector('#formulario').dataset.id && !d.querySelector('#cliente').value, 'Cancelar permite otro dia');
+      comprobar(d.documentElement.scrollWidth <= w.innerWidth, 'Formulario movil sin desbordamiento');
+
+      const [a, ad] = await abrir('admin', 'administrador.html');
+      a.registros.push({ ...w.registros[0], cliente: '<img src=x onerror="window.inyectado=true">' });
+      a.dispatchEvent(new a.Event('focus'));
+      await a.cargarListadoGeneral();
+      await esperar(() => ad.querySelector('#faena-general').options.length === 4 && ad.querySelector('#lista-general .acciones'));
+      comprobar(!ad.querySelector('#lista-general img') && !a.inyectado, 'Revision administrativa muestra texto manual seguro');
+      ad.querySelector('#listado-tipo').value = 'pendiente';
+      ad.querySelector('#listado-tipo').dispatchEvent(new a.Event('change'));
+      comprobar(ad.querySelectorAll('#lista-general tr[data-ayudante-id]').length === 1, 'Filtro pendientes incluye tipo declarado');
+      for (const referencia of ['presupuesto:10', 'faena:25', 'reparacion:20']) {
+        ad.querySelector('#listado-tipo').value = '';
+        ad.querySelector('#listado-tipo').dispatchEvent(new a.Event('change'));
+        ad.querySelector('#lista-general .acciones button').click();
+        ad.querySelector('#faena-general').value = referencia;
+        const anteriores = a.peticiones.filter(p => p.metodo === 'PATCH').length;
+        ad.querySelector('#formulario-edicion').requestSubmit();
+        await esperar(() => a.peticiones.filter(p => p.metodo === 'PATCH').length === anteriores + 1
+          && a.registros[0].obra_catalogo === referencia
+          && !ad.querySelector('#formulario-edicion button[type="submit"]').disabled
+          && ad.querySelector('#mensaje-general').textContent.includes('sin duplicarlo'));
+        comprobar(a.registros.length === 1 && a.registros[0].obra_catalogo === referencia, 'Asigna ' + referencia);
+        comprobar(!a.peticiones.some(p => p.url.endsWith('/vinculacion')), 'Asignacion atomica, sin segunda peticion');
+      }
+      ad.querySelector('#lista-general .acciones button').click();
+      ad.querySelector('#faena-general').value = '';
+      a.fallar = true;
+      ad.querySelector('#formulario-edicion').requestSubmit();
+      await esperar(() => ad.querySelector('#mensaje-general').classList.contains('error'));
+      comprobar(a.registros[0].trabajo_propio_id === 20, 'Fallo de asignacion no cambia destino');
+      a.fallar = false;
+      ad.querySelector('#formulario-edicion').requestSubmit();
+      await esperar(() => ad.querySelector('#mensaje-general').textContent.includes('pendiente de vincular'));
+      comprobar(a.registros.length === 1 && !a.registros[0].trabajo_propio_id, 'Desvincular conserva dia');
+      document.querySelector('#resultado').textContent = `${pruebas} pruebas correctas.`;
+      document.body.dataset.estado = 'correcto';
+    })().catch(error => {
+      document.querySelector('#resultado').textContent = 'ERROR: ' + error.message;
+      document.body.dataset.estado = 'error';
+      throw error;
+    });
+  </script>
+</body>
+</html>

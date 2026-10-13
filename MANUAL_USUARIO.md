@@ -97,11 +97,11 @@ Esta reorganizacion no modifica los datos ni las reglas de pago y liquidacion.
 
 Solo el administrador puede crear clientes y obras nuevos. En **Ayudantes -> Faenas** se dan de alta las faenas con cliente y obra; en **Mi control** se crean las reparaciones, y en **Presupuestos** se crean los presupuestos. Los formularios administrativos sugieren clientes existentes y las obras de cada cliente. Escribir un nombre nuevo sigue estando permitido al administrador. Las sugerencias corrigen diferencias de mayusculas, espacios y acentos al salir del campo.
 
-El ayudante selecciona el tipo de trabajo, un cliente y una obra del catalogo. La ubicacion y la poblacion se rellenan automaticamente. Si falta una obra, debe solicitar su alta al administrador. Un presupuesto se identifica por su numero (o por su identificador si es provisional). La opcion Todos los tipos permite buscar en todos los tipos; al seleccionar una obra, el dia se guarda con su tipo real y su vinculo.
+El ayudante introduce manualmente el dia, el tipo de destino, el cliente, la obra, la ubicacion y la poblacion. Si no sabe el tipo, puede elegir **No se el tipo de trabajo**. No necesita que el cliente o la obra existan en el catalogo: el fichaje se guarda **Pendiente de vincular**, sin crear faenas, presupuestos ni reparaciones automaticamente.
 
-Despues de que el administrador cree una obra, el ayudante puede pulsar **Actualizar clientes y obras** para verla sin salir de la pantalla.
+El administrador abre **Ayudantes -> Listado general de fichajes -> Modificar** y selecciona **Vincular a presupuesto, faena o reparacion**. Puede elegir cualquier destino existente, aunque no coincida con el tipo indicado por el ayudante. Se usan los datos de la obra elegida y se conserva el mismo fichaje, su fecha, ayudante y pago. **Sin vincular** retira la asignacion sin borrar el dia ni su pago. El filtro **Pendientes de vincular** incluye todos los registros sin destino, aunque el ayudante haya indicado un tipo.
 
-Las jornadas nuevas se vinculan a la faena, reparacion o presupuesto existente, sin crear otra obra por cada fecha. El servidor impide que un ayudante introduzca nombres nuevos, incluso desde una version antigua de la app. Los fichajes antiguos no se renombran automaticamente: para editarlos, se selecciona la obra correcta del catalogo; el administrador puede seguir revisando los casos antiguos.
+En el escritorio, actualiza los datos de la app y utiliza **Guardar vinculacion** en el control de ayudantes para elegir el presupuesto o faena. **Verificar e ingresar** no asigna automaticamente los fichajes sin destino por coincidencias de nombre. El ayudante puede corregir los datos manuales mientras no esten vinculados; despues, las correcciones del destino debe hacerlas el administrador. **Nuevo dia / cancelar edicion** permite salir de una correccion y registrar otra jornada.
 
 Esta mejora no modifica importes, pagos ni liquidaciones.
 
