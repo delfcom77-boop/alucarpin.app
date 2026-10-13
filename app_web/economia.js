@@ -27,6 +27,7 @@
     destino.appendChild(nota);
   }
   async function cargar() {
+    if (!AlucarpinPrivado.abierto()) return;
     datos.hidden = true;
     mensaje.textContent = 'Consultando resumen económico…';
     mensaje.className = '';
@@ -38,12 +39,7 @@
       if (!desde.value || !hasta.value || desde.value > hasta.value) {
         throw new Error('Introduce un rango de fechas válido.');
       }
-      const respuesta = await fetch(`/resumen-economico?${new URLSearchParams({desde: desde.value, hasta: hasta.value})}`, {
-        headers: {Authorization: `Bearer ${localStorage.getItem('alucarpin_token')}`},
-        cache: 'no-store', signal: AbortSignal.timeout(30000),
-      });
-      if (!respuesta.ok) throw new Error(`No se pudo consultar el resumen (HTTP ${respuesta.status}).`);
-      const resumen = await respuesta.json();
+      const resumen = await AlucarpinPrivado.obtener(`/resumen-economico?${new URLSearchParams({desde: desde.value, hasta: hasta.value})}`);
       const p = resumen.periodo;
       const a = resumen.acumulado;
       texto('economia-cobrado', euros(p.cobros_recibidos));
@@ -68,6 +64,7 @@
       mensaje.textContent = resumen.avisos.length ? 'Resumen con datos que requieren revisión; consulta los avisos.' : '';
       datos.hidden = false;
     } catch (error) {
+      if (!AlucarpinPrivado.abierto()) return;
       mensaje.className = 'error';
       mensaje.textContent = `${error.message} No se muestran cifras antiguas.`;
     } finally {
@@ -80,12 +77,15 @@
   mesActual();
   boton.onclick = cargar;
   mes.onclick = () => { mesActual(); cargar(); };
-  function mostrar() {
-    if (!document.querySelector('#panel').hidden && panel.hidden) {
-      panel.hidden = false;
-      cargar();
-    }
-  }
-  new MutationObserver(mostrar).observe(document.querySelector('#panel'), {attributes: true, attributeFilter: ['hidden']});
-  mostrar();
+  document.addEventListener('resumen-desbloqueado', () => {
+    panel.hidden = false;
+    cargar();
+  });
+  document.addEventListener('resumen-bloqueado', () => {
+    panel.hidden = true;
+    datos.hidden = true;
+    datos.querySelectorAll('strong, p[id]').forEach(elemento => { elemento.textContent = ''; });
+    datos.querySelectorAll('ul').forEach(elemento => elemento.replaceChildren());
+    mensaje.textContent = '';
+  });
 })();

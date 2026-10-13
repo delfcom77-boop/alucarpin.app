@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from base_datos import ruta_base_datos
 from autenticacion import crear_token, inicializar_usuarios, password_valida, usuario_desde_token
 from respaldo import ErrorRespaldo, crear_respaldo
+from resumen_privado import crear_acceso_privado
 
 
 BASE_PATH = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
@@ -426,6 +427,10 @@ def administrador(usuario=Depends(usuario_actual)):
     return usuario
 
 
+router_resumen_privado, resumen_autorizado = crear_acceso_privado(conexion, administrador)
+app.include_router(router_resumen_privado)
+
+
 @app.get("/copias-seguridad")
 def descargar_copia_seguridad(usuario=Depends(administrador), alcance: Literal["aplicacion", "completa"] = "aplicacion"):
     try:
@@ -543,7 +548,7 @@ def resumen_gestion(usuario=Depends(administrador)):
 
 
 @app.get("/panel-resumen")
-def panel_resumen(usuario=Depends(administrador)):
+def panel_resumen(usuario=Depends(resumen_autorizado)):
     from datetime import timedelta
 
     hoy = date.today()
@@ -611,7 +616,7 @@ def panel_resumen(usuario=Depends(administrador)):
 @app.get("/resumen-economico")
 def resumen_economico(
     desde: Optional[date] = None, hasta: Optional[date] = None,
-    usuario=Depends(administrador),
+    usuario=Depends(resumen_autorizado),
 ):
     from resumen_economico import calcular_resumen, periodo_actual
 

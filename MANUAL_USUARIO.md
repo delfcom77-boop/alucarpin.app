@@ -117,6 +117,34 @@ El resumen indica registros visibles y dias distintos, sin duplicar una fecha
 cuando hay varias obras el mismo dia. Los filtros se conservan al actualizar
 el listado o guardar un dia y no cambian el formulario de registro ni los datos.
 
+### Resumen de gestion privado
+
+**Resumen de gestion** es una opcion del menu principal, no muestra cifras al
+entrar en la app. Su resumen y control economico requieren una contraseña
+privada distinta de la contraseña de administrador. La primera vez, confirma
+tu contraseña de administrador y crea la privada (entre 8 y 128 caracteres).
+Esa cuenta queda como propietaria; otro administrador o un ayudante no puede
+configurar, cambiar ni abrir su resumen.
+
+La contraseña se guarda como hash con sal en el servidor, no en el movil.
+El acceso privado no se guarda en localStorage ni sessionStorage y caduca a
+los cinco minutos, aunque sigas usando la pantalla. **Bloquear resumen**,
+cambiar de pestaña, apagar la pantalla, salir y volver atras bloquean la vista
+y borran las cifras mostradas. El servidor revoca el acceso al cerrar; si no
+hay conexion, el acceso remoto caduca como maximo a los cinco minutos.
+Cinco intentos incorrectos bloquean el acceso durante cinco minutos.
+
+**Cambiar contraseña privada** exige la contraseña de administrador y la
+privada actual, y revoca los accesos anteriores. Guarda la privada en un gestor
+de contraseñas: no existe recuperacion desde una sesion abierta ni se puede
+consultar su valor. Si se pierde, hace falta un procedimiento administrativo
+fuera de la app; no basta con volver a iniciar sesion.
+
+Esta proteccion se limita a **Resumen de gestion** y su control economico.
+Mi control, Alarmas, Ayudantes y otros apartados conservan sus permisos y
+pueden mostrar sus propios importes. No es un modo de privacidad para toda
+la aplicacion.
+
 ### Pagos diarios y liquidaciones
 
 En **Pagos** aparece una fila por ayudante y fecha, con todas las obras realizadas ese dia. Se incluyen sabados y domingos; varios fichajes del mismo ayudante en una fecha no generan varias jornadas. El estado se calcula a partir del importe y lo realmente pagado; los pagos parciales reducen el pendiente.

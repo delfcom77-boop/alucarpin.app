@@ -8,15 +8,9 @@
   const texto = (id, valor) => { document.querySelector(`#${id}`).textContent = valor; };
   const euros = valor => Number(valor).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' });
   const fecha = valor => String(valor).split('-').reverse().join('/');
-  const obtener = async url => {
-    const respuesta = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
-      signal: AbortSignal.timeout(30000),
-    });
-    if (!respuesta.ok) throw new Error(`No se pudo consultar el resumen (HTTP ${respuesta.status}).`);
-    return respuesta.json();
-  };
+  const obtener = url => AlucarpinPrivado.obtener(url);
   async function cargar() {
+    if (!AlucarpinPrivado.abierto()) return;
     boton.disabled = true;
     datos.hidden = true;
     mensaje.className = '';
@@ -51,6 +45,7 @@
       mensaje.textContent = resumen.agenda.total > 8 ? 'Se muestran los primeros 8 avisos; el total incluye todos.' : '';
       datos.hidden = false;
     } catch (error) {
+      if (!AlucarpinPrivado.abierto()) return;
       mensaje.textContent = `${error.message} Pulsa Actualizar resumen para reintentarlo.`;
       mensaje.className = 'error';
       texto('actualizado', 'Resumen no disponible; no se muestran cifras antiguas.');
@@ -58,19 +53,17 @@
       boton.disabled = false;
     }
   }
-  try {
-    const usuario = await obtener('/yo');
-    if (usuario.rol !== 'administrador') {
-      location.replace('/app/ayudante.html');
-      return;
-    }
+  boton.onclick = cargar;
+  document.addEventListener('resumen-desbloqueado', () => {
     panel.hidden = false;
-    boton.onclick = cargar;
-    await cargar();
-  } catch (error) {
-    panel.hidden = false;
-    mensaje.textContent = error.message;
-    mensaje.className = 'error';
-    boton.onclick = () => location.reload();
-  }
+    cargar();
+  });
+  document.addEventListener('resumen-bloqueado', () => {
+    panel.hidden = true;
+    datos.hidden = true;
+    datos.querySelectorAll('strong, small').forEach(elemento => { elemento.textContent = ''; });
+    document.querySelector('#avisos').replaceChildren();
+    texto('actualizado', '');
+    mensaje.textContent = '';
+  });
 })();

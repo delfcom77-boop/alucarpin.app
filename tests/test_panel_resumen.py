@@ -103,7 +103,7 @@ class PanelResumenTests(unittest.TestCase):
 
     def test_endpoint_requiere_administrador(self):
         ruta = next(r for r in api.app.routes if getattr(r, "path", None) == "/panel-resumen")
-        self.assertEqual(ruta.dependant.dependencies[0].call, api.administrador)
+        self.assertEqual(ruta.dependant.dependencies[0].call, api.resumen_autorizado)
         with self.assertRaises(api.HTTPException) as error:
             api.administrador({"rol": "ayudante"})
         self.assertEqual(error.exception.status_code, 403)

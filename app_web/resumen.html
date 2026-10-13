@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AlucarpinSamitier | Resumen privado</title>
+  <style>
+    :root {
+      --bg: #eef3f1;
+      --panel: #ffffff;
+      --text: #1d2d34;
+      --muted: #4a5d64;
+      --brand: #114e55;
+      --brand-light: #1d8a8d;
+      --accent: #f28b42;
+      --shadow: rgba(14, 41, 45, 0.18);
+      font-family: Segoe UI, sans-serif;
+      color: var(--text);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: linear-gradient(180deg, #f5f7f4 0%, #edf2f1 100%);
+    }
+    main {
+      width: min(980px, calc(100% - 24px));
+      margin: auto;
+      padding: 28px 12px 40px;
+    }
+    header {
+      background: linear-gradient(135deg, #142d31 0%, #1d5e62 100%);
+      color: #fff;
+      border-radius: 18px;
+      padding: 26px 22px;
+      box-shadow: 0 16px 24px rgba(17, 78, 85, 0.22);
+    }
+    header .eyebrow {
+      display: inline-block;
+      margin-bottom: 10px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.12);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-size: 0.7rem;
+      font-weight: 700;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(2rem, 4vw, 3rem);
+      line-height: 1.1;
+    }
+    header p { margin: 0; font-size: 1.05rem; opacity: 0.9; }
+    .menu {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(240px, 1fr));
+      gap: 18px;
+      margin-top: 24px;
+    }
+    .opcion {
+      min-height: 180px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 22px 20px;
+      border-radius: 18px;
+      color: #fff;
+      text-decoration: none;
+      font-weight: 700;
+      box-shadow: 0 12px 22px var(--shadow);
+      border: 2px solid rgba(255,255,255,0.22);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .opcion:hover { transform: translateY(-2px); }
+    .opcion strong {
+      font-size: clamp(1.35rem, 2vw, 2.1rem);
+      line-height: 1.1;
+    }
+    .opcion span {
+      font-weight: 600;
+      line-height: 1.5;
+      font-size: 0.98rem;
+      opacity: 0.98;
+    }
+    .control { background: linear-gradient(135deg, #1d8a8d 0%, #0f5f63 100%); }
+    .agenda { background: linear-gradient(135deg, #f28b42 0%, #d75f32 100%); }
+    .ayudantes { background: linear-gradient(135deg, #9b7f42 0%, #6a4c2a 100%); }
+    .alarmas { background: linear-gradient(135deg, #864c7e 0%, #5a3158 100%); }
+    .remates { background: linear-gradient(135deg, #536f72 0%, #293f4a 100%); }
+    .salir {
+      display: inline-block;
+      margin-top: 24px;
+      color: #a13333;
+      font-weight: 800;
+      text-decoration: none;
+      font-size: 1rem;
+    }
+    [hidden] { display: none !important; }
+    .resumen { margin-top: 24px; background: var(--panel); padding: 20px; border-radius: 18px; }
+    .resumen h2 { margin: 0; }
+    .cabecera-resumen { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+    button { font: inherit; border: 0; border-radius: 8px; padding: 10px 14px; background: var(--brand); color: white; cursor: pointer; }
+    button:disabled { opacity: .6; cursor: wait; }
+    input { display: block; width: 100%; min-height: 44px; padding: 10px; margin: 8px 0 16px; border: 1px solid #bccdcc; border-radius: 8px; font: inherit; }
+    #acceso { max-width: 540px; margin: 24px auto; }
+    #acceso label { display: block; font-weight: 700; }
+    .indicadores { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 16px 0; }
+    .indicador { display: flex; flex-direction: column; gap: 8px; padding: 16px; background: #eef3f1; border-radius: 12px; color: var(--text); text-decoration: none; min-width: 0; overflow-wrap: anywhere; }
+    .indicador strong { font-size: 1.8rem; color: var(--brand); }
+    .indicador small, #actualizado { color: var(--muted); }
+    .error { color: #a13333; font-weight: 700; }
+    #avisos { padding-left: 22px; }
+    #avisos li { margin: 12px 0; overflow-wrap: anywhere; }
+    #avisos a { color: var(--brand); }
+    a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+    @media (max-width: 380px) { .indicadores { grid-template-columns: 1fr; } }
+    @media (max-width: 620px) {
+      .menu { grid-template-columns: 1fr; }
+      .opcion { min-height: 140px; }
+      #economia .indicadores { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <span class="eyebrow">Acceso privado</span>
+      <h1>Resumen de gestión</h1>
+      <p>Protegido con tu contraseña privada.</p>
+    </header>
+    <nav><a class="salir" href="/app/inicio.html">Volver al menú</a> <button id="bloquear-resumen" type="button" hidden>Bloquear resumen</button></nav>
+    <section class="resumen" id="acceso">
+      <h2 id="titulo-acceso">Desbloquear resumen</h2>
+      <p id="instrucciones-acceso">Comprobando configuración…</p>
+      <form id="formulario-acceso" hidden>
+        <label for="clave-privada">Contraseña privada</label><input id="clave-privada" type="password" autocomplete="current-password" required maxlength="128">
+        <button type="submit">Abrir resumen</button>
+        <button type="button" id="cambiar-clave">Cambiar contraseña privada</button>
+      </form>
+      <form id="formulario-clave" hidden>
+        <label for="clave-admin">Tu contraseña de administrador</label><input id="clave-admin" type="password" autocomplete="current-password" required maxlength="128">
+        <div id="clave-anterior-campo" hidden><label for="clave-anterior">Contraseña privada actual</label><input id="clave-anterior" type="password" autocomplete="current-password" maxlength="128"></div>
+        <label for="clave-nueva">Nueva contraseña privada (mínimo 8 caracteres)</label><input id="clave-nueva" type="password" autocomplete="new-password" required minlength="8" maxlength="128">
+        <label for="clave-confirmar">Repite la nueva contraseña privada</label><input id="clave-confirmar" type="password" autocomplete="new-password" required minlength="8" maxlength="128">
+        <button type="submit">Guardar contraseña privada</button>
+        <button type="button" id="cancelar-clave" hidden>Cancelar</button>
+      </form>
+      <p id="mensaje-acceso" role="status"></p>
+      <button id="reintentar-acceso" type="button" hidden>Reintentar</button>
+      <p>El resumen se bloquea al salir, cambiar de pantalla o tras cinco minutos. Esta contraseña protege este apartado, no las cifras que aparecen en otros menús.</p>
+    </section>
+    <section class="resumen" id="panel" aria-labelledby="titulo-resumen" hidden>
+      <div class="cabecera-resumen"><h2 id="titulo-resumen">Resumen de gestión</h2><button id="actualizar" type="button">Actualizar resumen</button></div>
+      <p id="actualizado">Consulta actual de tus registros.</p>
+      <p id="mensaje-panel" role="status" aria-live="polite"></p>
+      <div id="datos-panel" hidden>
+        <div class="indicadores">
+          <a class="indicador" href="/app/alarmas.html?tipo=trabajo"><span>Trabajos por terminar</span><strong id="trabajos-pendientes"></strong><small id="trabajos-detalle"></small></a>
+          <a class="indicador" href="/app/alarmas.html?tipo=cobro"><span>Cobros pendientes</span><strong id="cobros-importe"></strong><small id="cobros-detalle"></small></a>
+          <a class="indicador" href="/app/administrador.html#pagos"><span>Pagos de ayudantes</span><strong id="pagos-importe"></strong><small id="pagos-detalle"></small></a>
+          <a class="indicador" href="/app/agenda.html"><span>Agenda: vencidos y próximos 7 días</span><strong id="agenda-total"></strong><small id="agenda-detalle"></small></a>
+        </div>
+        <p>Los pagos de ayudantes cuentan un día por persona y fecha hasta hoy, independientemente de la obra. Los días sin pago registrado no se dan por impagados ni se les asigna un importe. Las liquidaciones no se suman como otro pago.</p>
+        <h3>Notas y citas a atender</h3>
+        <ul id="avisos"></ul>
+        <a href="/app/alarmas.html">Ver todos los recordatorios</a>
+      </div>
+    </section>
+    <section class="resumen" id="economia" hidden aria-labelledby="economia-titulo">
+      <h2 id="economia-titulo">Control económico</h2>
+      <p>El periodo se aplica a la actividad. Los pendientes acumulados no desaparecen al cambiar de mes. No se calcula beneficio ni saldo bancario.</p>
+      <div class="cabecera-resumen">
+        <label>Desde <input id="economia-desde" type="date" required></label>
+        <label>Hasta <input id="economia-hasta" type="date" required></label>
+        <button id="economia-consultar" type="button">Consultar periodo</button>
+        <button id="economia-mes" type="button">Mes actual</button>
+      </div>
+      <p id="economia-mensaje" role="status" aria-live="polite"></p>
+      <div id="economia-datos" hidden>
+        <h3>Actividad del periodo</h3>
+        <div class="indicadores">
+          <div class="indicador"><span>Cobros recibidos con fecha</span><strong id="economia-cobrado"></strong></div>
+          <div class="indicador"><span>Gastos registrados del periodo</span><strong id="economia-gastos"></strong></div>
+          <div class="indicador"><span>Abonado de esos gastos, acumulado</span><strong id="economia-abonado"></strong></div>
+          <div class="indicador"><span>Pendiente de esos gastos</span><strong id="economia-pendiente-periodo"></strong></div>
+        </div>
+        <p>Los gastos se agrupan por la fecha del coste, no por la fecha de pago. Lo abonado es el total actual de esos gastos, no las salidas de dinero del mes. Se excluyen fechas futuras a hoy.</p>
+        <p id="economia-estimado"></p>
+        <h3>Pendientes acumulados</h3>
+        <div class="indicadores">
+          <a class="indicador" href="/app/alarmas.html?tipo=cobro"><span>Por cobrar, según registros</span><strong id="economia-cobros-pendientes"></strong></a>
+          <a class="indicador" href="/app/administrador.html#gastos"><span>Por pagar, gastos registrados</span><strong id="economia-pagos-pendientes"></strong></a>
+        </div>
+        <p id="economia-pendientes-estimados"></p>
+        <details><summary>Detalle de cobros pendientes</summary><ul id="economia-lista-cobros"></ul></details>
+        <details><summary>Detalle de pagos pendientes</summary><ul id="economia-lista-pagos"></ul></details>
+        <h3>Por revisar</h3>
+        <p id="economia-revision"></p>
+        <ul id="economia-avisos"></ul>
+        <p>La app no conoce los cambios que todavía no se hayan enviado desde el PC. En Windows, usa los botones de recibir o enviar datos cuando corresponda.</p>
+        <p id="economia-actualizado"></p>
+      </div>
+    </section>
+  </main>
+  <script src="/app/resumen_privado.js"></script>
+  <script src="/app/panel.js"></script>
+  <script src="/app/economia.js"></script>
+  <script src="/app/pwa.js"></script>
+</body>
+</html>

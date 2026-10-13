@@ -8,8 +8,39 @@
     function preparar() {
       window.peticiones = [];
       window.fallar = false;
-      window.fetch = async url => {
+      window.configurado = true;
+      window.otroPropietario = false;
+      window.lento = false;
+      window.cerrado = false;
+      window.temporizadorPrivado = null;
+      const originalTimeout = window.setTimeout;
+      window.setTimeout = (fn, ms) => {
+        if (ms === 300000) { window.temporizadorPrivado = fn; return 1; }
+        return originalTimeout(fn, ms);
+      };
+      window.fetch = async (url, opciones = {}) => {
         peticiones.push(url);
+        if (url === '/resumen-privado/estado') {
+          if (otroPropietario) return new Response('{"detail":"Este resumen privado pertenece a otro administrador."}', {status:403});
+          return new Response(JSON.stringify({configurado}));
+        }
+        if (url === '/resumen-privado/configuracion') {
+          const datos = JSON.parse(opciones.body);
+          if (datos.password_admin !== 'AdministradorPrueba2026!') return new Response('{"detail":"Contraseña de administrador incorrecta."}', {status:403});
+          configurado = true;
+          return new Response('{"configurado":true}');
+        }
+        if (url === '/resumen-privado/abrir') {
+          if (JSON.parse(opciones.body).password !== 'PrivadaPrueba2026!') return new Response('{"detail":"Contraseña incorrecta."}', {status:403});
+          cerrado = false;
+          return new Response('{"token":"privado-prueba","duracion_segundos":300}');
+        }
+        if (url === '/resumen-privado/cerrar') { cerrado = true; return new Response('{"bloqueado":true}'); }
+        if (url === '/panel-resumen' || url.startsWith('/resumen-economico?')) {
+          if (opciones.headers['X-Resumen-Token'] !== 'privado-prueba') throw new Error('Falta acceso privado');
+          if (lento) await new Promise(resolve => { window.resolverConsulta = resolve; });
+          if (cerrado) return new Response('{"detail":"El resumen está bloqueado."}', {status:403});
+        }
         if (url === '/yo') return new Response(JSON.stringify({rol: 'administrador'}));
         if (url === '/panel-resumen') return new Response(JSON.stringify({
           fecha: '2026-10-06', trabajos: {pendientes: 2, vencidos: 1},
@@ -18,7 +49,7 @@
           agenda: {total: 0, vencidos: 0, hasta: '2026-10-13', avisos: []},
         }));
         if (url.startsWith('/resumen-economico?')) {
-          if (fallar) return new Response('{}', {status: 503});
+          if (fallar) return new Response('{"detail":"No se pudo consultar el resumen (HTTP 503)."}', {status: 503});
           const parametros = new URLSearchParams(url.split('?')[1]);
           return new Response(JSON.stringify({
             fecha: '2026-10-06', desde: parametros.get('desde'), hasta: parametros.get('hasta'),
@@ -39,7 +70,12 @@
       const anterior = localStorage.getItem('alucarpin_token');
       localStorage.setItem('alucarpin_token', 'prueba-economia-local');
       try {
-        const html = (await fetch('../app_web/inicio.html').then(r => r.text()))
+        const inicio = await fetch('../app_web/inicio.html').then(r => r.text());
+        if (inicio.includes('/app/panel.js') || inicio.includes('/app/economia.js') || inicio.includes('id="economia"')) {
+          throw new Error('El menu carga datos privados');
+        }
+        if (!inicio.includes('href="/app/resumen.html"')) throw new Error('Falta opcion de menu privado');
+        const html = (await fetch('../app_web/resumen.html').then(r => r.text()))
           .replaceAll('/app/', '/app_web/').replace('<script src="/app_web/pwa.js"><\/script>', '');
         const marco = document.querySelector('#app');
         marco.srcdoc = html.replace('<head>', `<head><script>(${preparar.toString()})();<\/script>`);
@@ -53,7 +89,20 @@
           }
           throw new Error('Tiempo agotado');
         };
-        await esperar(() => !d.querySelector('#economia-datos').hidden);
+        await esperar(() => !d.querySelector('#formulario-acceso').hidden);
+        comprobar(d.querySelector('#panel').hidden && d.querySelector('#economia').hidden, 'Muestra resumen sin contraseña');
+        comprobar(!w.peticiones.some(url => url === '/panel-resumen' || url.startsWith('/resumen-economico')), 'Consulta cifras antes de desbloquear');
+        const abrir = async () => {
+          d.querySelector('#clave-privada').value = 'PrivadaPrueba2026!';
+          d.querySelector('#formulario-acceso').requestSubmit();
+          await esperar(() => !d.querySelector('#economia-datos').hidden);
+        };
+        d.querySelector('#clave-privada').value = 'Incorrecta';
+        d.querySelector('#formulario-acceso').requestSubmit();
+        await esperar(() => d.querySelector('#mensaje-acceso').textContent.includes('incorrecta'));
+        comprobar(d.querySelector('#economia').hidden, 'Clave incorrecta abre resumen');
+        await abrir();
+        comprobar(!d.querySelector('#clave-privada').value, 'Conserva contraseña en formulario');
         const hoy = new Date();
         const mes = `${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,'0')}-01`;
         comprobar(d.querySelector('#economia-desde').value === mes, 'No abre en el mes actual local');
@@ -76,13 +125,71 @@
         await esperar(() => !d.querySelector('#economia-datos').hidden);
         comprobar(d.querySelector('#economia-desde').value === mes, 'No restablece el mes');
         comprobar(d.documentElement.scrollWidth <= d.documentElement.clientWidth, 'Desborda la pantalla movil');
-        document.querySelector('#resultado').textContent = 'OK: mes actual; filtros; pendientes antiguos; avisos; error sin cifras antiguas; texto seguro; pantalla movil.';
+        d.querySelector('#bloquear-resumen').click();
+        comprobar(d.querySelector('#panel').hidden && d.querySelector('#economia').hidden, 'Bloquear no oculta paneles');
+        comprobar(!d.querySelector('#economia-cobrado').textContent && !d.querySelector('#cobros-importe').textContent
+          && !d.querySelector('#economia-lista-cobros').textContent, 'Conserva cifras en DOM tras bloquear');
+        await esperar(() => w.cerrado);
+        await abrir();
+        comprobar([...d.querySelectorAll('#economia-datos p')].some(p => p.textContent.includes('Los gastos se agrupan')), 'El bloqueo borra explicaciones del resumen');
+        w.dispatchEvent(new w.PageTransitionEvent('pageshow', {persisted:true}));
+        comprobar(!w.AlucarpinPrivado.abierto(), 'Volver atras restaura acceso privado');
+        await abrir();
+        w.temporizadorPrivado();
+        comprobar(!w.AlucarpinPrivado.abierto() && d.querySelector('#economia').hidden, 'No bloquea a los cinco minutos');
+        await abrir();
+        w.lento = true;
+        d.querySelector('#economia-consultar').click();
+        await esperar(() => w.resolverConsulta);
+        d.querySelector('#bloquear-resumen').click();
+        w.resolverConsulta();
+        await esperar(() => !d.querySelector('#economia-consultar').disabled);
+        comprobar(d.querySelector('#economia').hidden && !d.querySelector('#economia-cobrado').textContent, 'Respuesta tardia revela cifras tras bloqueo');
+        comprobar(!w.sessionStorage.getItem('resumen_token') && !w.localStorage.getItem('resumen_token'), 'Persiste acceso privado en almacenamiento');
+        w.lento = false;
+        await abrir();
+        Object.defineProperty(d, 'hidden', {configurable:true, value:true});
+        d.dispatchEvent(new w.Event('visibilitychange'));
+        comprobar(!w.AlucarpinPrivado.abierto() && d.querySelector('#panel').hidden, 'Ocultar la pantalla no bloquea');
+        let cargado = new Promise(resolve => { marco.onload = resolve; });
+        marco.srcdoc = html.replace('<head>', '<head><script>('
+          + preparar.toString().replace('window.configurado = true', 'window.configurado = false') + ')();<\/script>');
+        await cargado;
+        await esperar(() => {
+          const formulario = marco.contentDocument.querySelector('#formulario-clave');
+          return marco.contentWindow.configurado === false && formulario && !formulario.hidden;
+        });
+        const w2 = marco.contentWindow, d2 = marco.contentDocument;
+        comprobar(d2.querySelector('#panel').hidden && !w2.AlucarpinPrivado.abierto(), 'Recarga conserva acceso privado');
+        d2.querySelector('#clave-admin').value = 'AdministradorPrueba2026!';
+        d2.querySelector('#clave-nueva').value = 'PrivadaPrueba2026!';
+        d2.querySelector('#clave-confirmar').value = 'NoCoincide2026!';
+        d2.querySelector('#formulario-clave').requestSubmit();
+        await esperar(() => d2.querySelector('#mensaje-acceso').textContent.includes('no coinciden'));
+        comprobar(!w2.peticiones.includes('/resumen-privado/configuracion'), 'Envia configuracion con confirmacion incorrecta');
+        d2.querySelector('#clave-confirmar').value = 'PrivadaPrueba2026!';
+        d2.querySelector('#formulario-clave').requestSubmit();
+        await esperar(() => !d2.querySelector('#formulario-acceso').hidden);
+        comprobar(d2.querySelector('#panel').hidden && !d2.querySelector('#clave-admin').value && !d2.querySelector('#clave-nueva').value, 'Configurar abre resumen o conserva contraseña');
+        cargado = new Promise(resolve => { marco.onload = resolve; });
+        marco.srcdoc = html.replace('<head>', '<head><script>('
+          + preparar.toString().replace('window.otroPropietario = false', 'window.otroPropietario = true') + ')();<\/script>');
+        await cargado;
+        await esperar(() => {
+          const mensaje = marco.contentDocument.querySelector('#mensaje-acceso');
+          return mensaje && mensaje.textContent.includes('otro administrador');
+        });
+        const d3 = marco.contentDocument;
+        comprobar(d3.querySelector('#formulario-acceso').hidden && d3.querySelector('#formulario-clave').hidden && d3.querySelector('#panel').hidden, 'Permite abrir/configurar a otro propietario');
+        document.querySelector('#resultado').textContent = 'OK: menu sin cifras; contraseña obligatoria; configuracion; propietario unico; bloqueo y caducidad; ocultacion y volver atras; recarga; respuesta tardia segura; filtros; texto seguro; pantalla movil.';
+        document.body.dataset.estado = 'correcto';
       } finally {
         if (anterior === null) localStorage.removeItem('alucarpin_token');
         else localStorage.setItem('alucarpin_token', anterior);
       }
     })().catch(error => {
       document.querySelector('#resultado').textContent = 'ERROR: ' + error.message;
+      document.body.dataset.estado = 'error';
       throw error;
     });
   </script>

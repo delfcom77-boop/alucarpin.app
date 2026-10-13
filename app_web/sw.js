@@ -1,4 +1,4 @@
-const CACHE = 'alucarpin-app-v5-filtros-ayudantes';
+const CACHE = 'alucarpin-app-v6-resumen-privado';
 const ARCHIVOS = [
   '/app/login.html',
   '/app/administrador.html',
@@ -6,6 +6,8 @@ const ARCHIVOS = [
   '/app/catalogo.js',
   '/app/inicio.html',
   '/app/panel.js',
+  '/app/resumen.html',
+  '/app/resumen_privado.js',
   '/app/economia.js',
   '/app/obra.html',
   '/app/obra.js',

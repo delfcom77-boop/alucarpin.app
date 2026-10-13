@@ -589,6 +589,24 @@ curl -X DELETE \
 - Endpoints CRUD: 6 nuevos (POST/PATCH/DELETE faenas + presupuestos)
 - Validación: Python py_compile sin errores
 - Documentación: Completa
+## Acceso privado al resumen
+
+`GET /panel-resumen` y `GET /resumen-economico` requieren la sesion de
+administrador y `X-Resumen-Token`. El token privado se genera tras verificar
+la contraseña independiente y queda ligado al propietario y al token de
+login concreto. Caduca a los 300 segundos y las respuestas llevan
+`Cache-Control: no-store, private`. Sin acceso privado, devuelven 403 sin cifras.
+
+- `GET /resumen-privado/estado`: indica si hay contraseña configurada; 403 para otro administrador.
+- `PUT /resumen-privado/configuracion`: `password_admin`, `password_nueva` y, si ya existe, `password_actual`. Reautentica, asigna propietario en la primera configuracion y revoca sesiones privadas. Clave nueva distinta de login, 8-128 caracteres.
+- `POST /resumen-privado/abrir`: `{"password":"..."}`; devuelve `token` y `duracion_segundos`. Cinco errores bloquean durante 300 segundos (429). Sin configuracion: 409.
+- `POST /resumen-privado/cerrar`: revoca `X-Resumen-Token` del usuario actual, sin cerrar la sesion de administrador.
+
+El inicio crea exclusivamente `resumen_privado` y `sesiones_resumen_privado`
+en SQLite/PostgreSQL. Guarda hashes de contraseña y token, no sus valores.
+No hay recuperacion o cambio de propietario desde la API. Esta proteccion
+no cambia los permisos ni los importes de los demas endpoints.
+
 ## Catalogo compartido de clientes y obras
 
 `GET /catalogo-obras` requiere una sesion autenticada y esta disponible para administradores y ayudantes. Devuelve una lista de objetos con `referencia`, `tipo`, `id`, `cliente`, `obra`, `ubicacion`, `poblacion` y `num_presupuesto`, sin importes. El catalogo se obtiene de las faenas con obra, los presupuestos y las reparaciones existentes; no requiere una tabla ni migracion nueva.

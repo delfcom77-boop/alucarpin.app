@@ -127,7 +127,7 @@ class ResumenEconomicoTests(unittest.TestCase):
 
     def test_endpoint_administrador_y_rango_invalido(self):
         ruta = next(r for r in api.app.routes if getattr(r, "path", None) == "/resumen-economico")
-        self.assertEqual(ruta.dependant.dependencies[0].call, api.administrador)
+        self.assertEqual(ruta.dependant.dependencies[0].call, api.resumen_autorizado)
         with self.assertRaises(api.HTTPException) as error:
             api.resumen_economico(date(2026, 10, 31), date(2026, 10, 1), {})
         self.assertEqual(error.exception.status_code, 400)
