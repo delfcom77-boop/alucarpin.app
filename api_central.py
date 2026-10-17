@@ -17,6 +17,7 @@ from autenticacion import crear_token, inicializar_usuarios, password_valida, us
 from respaldo import ErrorRespaldo, crear_respaldo
 from resumen_privado import crear_acceso_privado
 from diario_trabajo import crear_diario
+from cuentas_reparaciones import inicializar_cuentas, resumenes_cuentas, movimientos, materializar_historico
 
 
 BASE_PATH = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
@@ -356,6 +357,7 @@ def inicializar_usuarios(db):
 def startup():
     inicializar_base_datos()
     with conexion() as db:
+        inicializar_cuentas(db, bool(DATABASE_URL))
         db.execute(
             "CREATE TABLE IF NOT EXISTS estados_ejecucion_trabajos ("
             "trabajo_id INTEGER PRIMARY KEY REFERENCES trabajos_propios(id) ON DELETE CASCADE, "
@@ -1098,6 +1100,8 @@ def listar_alarmas(usuario=Depends(administrador)):
             "COALESCE(e.estado, 'Pendiente') AS estado_ejecucion "
             "FROM trabajos_propios t LEFT JOIN estados_ejecucion_trabajos e ON e.trabajo_id = t.id"
         ).fetchall()
+        cuentas_reparacion = resumenes_cuentas(db, [
+            dict(t) for t in db.execute("SELECT * FROM trabajos_propios WHERE tipo='reparacion'").fetchall()])
         obras = consultar_estados_obras(db)
     alarmas = []
     for fila in notas:
@@ -1109,12 +1113,16 @@ def listar_alarmas(usuario=Depends(administrador)):
         ident = datos.pop("id")
         ejecucion = datos.pop("estado_ejecucion")
         cobro = datos.pop("estado_cobro")
+        cuenta = cuentas_reparacion.get(ident)
+        pendiente = cuenta["pendiente_cobro"] if cuenta else max(float(datos["importe"] or 0), 0)
+        if cuenta:
+            cobro = cuenta["estado_cobro"]
         alarmas.append({**datos, "tipo": "trabajo", "referencia_id": ident,
                         "estado": "Archivado" if ejecucion == "Terminado" else "Pendiente",
                         "estado_ejecucion": ejecucion})
         if cobro != "Cobrado":
             alarmas.append({**datos, "tipo": "cobro", "referencia_id": ident, "estado": "No cobrado",
-                            "pendiente_cobro": max(float(datos["importe"] or 0), 0)})
+                            "pendiente_cobro": pendiente})
     for obra in obras:
         datos = {
             "fecha": obra["fecha_inicio"], "hora": "", "cliente": obra["cliente"],
@@ -1943,6 +1951,8 @@ def listar_trabajos(usuario=Depends(administrador)):
         presupuestos = {fila["id"]: fila["estado"] for fila in db.execute(
             "SELECT id, estado FROM presupuestos"
         ).fetchall()}
+        cuentas = resumenes_cuentas(db, [
+            dict(t) for t in db.execute("SELECT * FROM trabajos_propios WHERE tipo='reparacion'").fetchall()])
     resultado = []
     for fila in filas:
         trabajo = dict(fila)
@@ -1955,6 +1965,10 @@ def listar_trabajos(usuario=Depends(administrador)):
             trabajo["estado_ejecucion"] = None
         if trabajo["origen"] == "presupuesto":
             trabajo["estado"] = presupuestos[trabajo["origen_id"]]
+        if trabajo["origen"] == "propio":
+            cuenta = cuentas[trabajo["origen_id"]]
+            trabajo.update(cuenta, pendiente_cobro=cuenta["pendiente_cobro"],
+                           cuenta_con_movimientos=cuenta["tiene_historial"])
         resultado.append(trabajo)
     return resultado
 
@@ -2022,14 +2036,22 @@ def ficha_obra(
                 (obra["num_presupuesto"],),
             ).fetchall()]
         else:
-            cobros = []
+            cobros = [
+                {"id": m["id"], "fecha": m["fecha"], "importe_iva": m["importe"], "importe_b": 0,
+                 "forma_pago": m["forma_pago"], "observaciones": m["concepto"]}
+                for m in movimientos(db, obra_id) if m["clase"] == "ingreso"
+            ] if origen == "propio" else []
+        gastos_reparacion = [
+            {**m, "pendiente": round(m["importe"] - m["importe_pagado"], 2)}
+            for m in movimientos(db, obra_id) if m["clase"] == "gasto"
+        ] if origen == "propio" else []
     gastos = [g for g in listar_gastos(tipo=origen, usuario=usuario)
               if (origen == "faena" and g["faena_id"] == obra_id) or
               (origen == "presupuesto" and obra["num_presupuesto"]
-               and g["num_presupuesto"] == obra["num_presupuesto"])] if origen != "propio" else []
+               and g["num_presupuesto"] == obra["num_presupuesto"])] if origen != "propio" else gastos_reparacion
     for cobro in cobros:
         cobro["importe"] = round(float(cobro["importe_iva"] or 0) + float(cobro["importe_b"] or 0), 2)
-    if origen == "propio" and obra["estado_cobro"] == "Cobrado":
+    if origen == "propio" and obra.get("historico"):
         cobros.append({"id": None, "fecha": obra["fecha_cobro"], "importe": obra["importe"],
                        "forma_pago": obra["forma_pago"], "observaciones": "Estado de cobro registrado en Mi control, sin movimiento independiente."})
     return {
@@ -2095,6 +2117,11 @@ def modificar_trabajo(trabajo_id: int, datos: TrabajoUpdate, usuario=Depends(adm
     valores = _trabajo_datos(datos)
     asignaciones = ", ".join(f"{clave} = ?" for clave in valores)
     with conexion() as db:
+        anterior = db.execute("SELECT * FROM trabajos_propios WHERE id=?", (trabajo_id,)).fetchone()
+        if anterior and anterior["tipo"] == "reparacion":
+            if datos.tipo != "reparacion" and movimientos(db, trabajo_id, True):
+                raise HTTPException(409, "La reparacion tiene historial contable y no se puede cambiar de tipo.")
+            materializar_historico(db, dict(anterior))
         cursor = db.execute(
             f"UPDATE trabajos_propios SET {asignaciones}, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?",
             [*valores.values(), trabajo_id],
@@ -2108,6 +2135,8 @@ def modificar_trabajo(trabajo_id: int, datos: TrabajoUpdate, usuario=Depends(adm
 @app.delete("/trabajos/{trabajo_id}")
 def borrar_trabajo(trabajo_id: int, usuario=Depends(administrador)):
     with conexion() as db:
+        if db.execute("SELECT 1 FROM movimientos_reparaciones WHERE trabajo_id=? LIMIT 1", (trabajo_id,)).fetchone():
+            raise HTTPException(status_code=409, detail="La reparacion tiene historial contable y no se puede borrar.")
         if db.execute("SELECT 1 FROM remates_vinculos WHERE trabajo_id = ? LIMIT 1", (trabajo_id,)).fetchone():
             raise HTTPException(status_code=409, detail="La obra tiene remates vinculados y no se puede borrar.")
         if db.execute("SELECT 1 FROM jornadas_propias WHERE trabajo_id = ? LIMIT 1", (trabajo_id,)).fetchone():

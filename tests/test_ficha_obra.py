@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch
 
 import api_central as api
+from cuentas_reparaciones import inicializar_cuentas
 from tests import test_pagos_diarios
 
 
@@ -11,6 +12,7 @@ class FichaObraTests(unittest.TestCase):
 
     def preparar(self):
         self.db.executescript("""
+            CREATE TABLE trabajos_propios(id INTEGER PRIMARY KEY);
             ALTER TABLE fichajes_ayudantes ADD COLUMN presupuesto_id INTEGER;
             ALTER TABLE fichajes_ayudantes ADD COLUMN trabajo_propio_id INTEGER;
             CREATE TABLE jornadas_faenas (faena_id INTEGER, fecha TEXT);
@@ -28,6 +30,7 @@ class FichaObraTests(unittest.TestCase):
             INSERT INTO pagos_ingresos VALUES (1,'P1','2026-10-03',200,30,'Efectivo','Cobro P1');
             INSERT INTO pagos_ingresos VALUES (2,'P2','2026-10-03',999,0,'Efectivo','Ajeno');
         """)
+        inicializar_cuentas(self.db)
 
     def obra(self, origen="faena"):
         return {
@@ -131,6 +134,7 @@ class FichaObraTests(unittest.TestCase):
         self.preparar()
         obra = self.obra("propio")
         obra["estado_cobro"] = "Cobrado"
+        obra["historico"] = True
         with (patch.object(api, "listar_trabajos", return_value=[obra]),
               patch.object(api, "consultar_remates", return_value=[])):
             ficha = api.ficha_obra("propio", 25, {})

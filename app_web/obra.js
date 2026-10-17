@@ -60,7 +60,7 @@
       texto('#resumen', `${r.dias_ayudantes} días de ayudantes en ${r.fechas_trabajadas} fechas, con ${r.ayudantes} ayudantes. ${r.dias_obra_registrados} días propios registrados.`);
       texto('#importe-resumen', `Gastos vinculados: ${euros(r.gastos)} · Gastos pagados: ${euros(r.gastos_pagados)} · Cobros registrados: ${euros(r.cobros_registrados)}.`);
       texto('#limitaciones', origen === 'propio'
-        ? 'Las reparaciones no tienen un vínculo directo a gastos en el modelo actual. El cobro refleja el estado guardado en Mi control.'
+        ? 'Cobros y gastos vinculados a esta reparación. Los cobros parciales se registran desde Contabilidad → Ingresos del programa. Un cobro histórico sin fecha no se atribuye a un mes inventado.'
         : origen === 'presupuesto'
           ? 'Los gastos y cobros se vinculan por número de presupuesto. Un estado histórico Completado puede indicar cobrado sin movimientos de cobro independientes; no se inventan esos movimientos.'
           : 'Los gastos y cobros se vinculan al identificador de la faena. Los días propios y los días de ayudantes son recuentos separados.');

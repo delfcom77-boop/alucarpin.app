@@ -107,10 +107,31 @@ def calcular_resumen(db, desde, hasta, hoy, postgres=False):
         obra("presupuesto", fila, dinero(fila.get("presupuesto_final")),
              totales_cobrados.get(("presupuesto", numero), Decimal(0)),
              str(fila.get("estado") or "").strip().upper() == "COMPLETADO")
+    movimientos_reparaciones = leer("movimientos_reparaciones") if "movimientos_reparaciones" in tablas else []
+    ingresos_reparaciones = {}
+    for movimiento in movimientos_reparaciones:
+        if movimiento["clase"] != "ingreso":
+            continue
+        ingresos_reparaciones.setdefault(movimiento["trabajo_id"], []).append(movimiento)
     for fila in leer("trabajos_propios"):
-        if fila.get("num_presupuesto") and fila["num_presupuesto"] in numeros:
+        if fila.get("tipo") != "reparacion" and fila.get("num_presupuesto") and fila["num_presupuesto"] in numeros:
             continue
         importe = dinero(fila.get("importe"))
+        historial = ingresos_reparaciones.get(fila["id"])
+        if historial is not None:
+            cobrado = Decimal(0)
+            for movimiento in historial:
+                if movimiento["eliminado"]:
+                    continue
+                dia = fecha(movimiento["fecha"])
+                cantidad = dinero(movimiento["importe"])
+                if not dia or dia <= hoy:
+                    cobrado += cantidad
+                if not dia:
+                    avisos.append(f"Reparacion #{fila['id']}: cobro historico sin fecha, fuera del periodo.")
+                cobros.append((dia, cantidad))
+            obra("propio", fila, importe, cobrado)
+            continue
         pagado = fila.get("estado_cobro") == "Cobrado"
         obra("propio", fila, importe, importe if pagado else Decimal(0))
         if pagado:
@@ -126,6 +147,11 @@ def calcular_resumen(db, desde, hasta, hoy, postgres=False):
     ):
         for fila in leer(*nombres):
             gastos.append({**fila, "tipo": tipo, "referencia_destino": fila[referencia],
+                           "registrado": True, "revision": False})
+    for movimiento in movimientos_reparaciones:
+        if movimiento["clase"] == "gasto" and not movimiento["eliminado"]:
+            gastos.append({**movimiento, "tipo": "reparacion",
+                           "referencia_destino": movimiento["trabajo_id"],
                            "registrado": True, "revision": False})
     grupos = {}
     fichajes = leer("fichajes_ayudantes")

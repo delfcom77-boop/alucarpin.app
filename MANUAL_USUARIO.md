@@ -18,6 +18,28 @@ Programa de escritorio -> Supabase -> Web
 
 ## 2. Aplicacion web
 
+### Ingresos de todos los trabajos desde el programa
+
+En **Contabilidad > Ingresos** del ordenador puedes filtrar por presupuesto
+propio, faena a terceros o reparacion, cliente y obra/numero de presupuesto.
+Selecciona el trabajo para introducir uno o varios cobros parciales, consultar
+el historial, modificar un ingreso o generar su comprobante PDF.
+
+**Gastos del trabajo** consulta o registra costes del mismo destino. No son
+gastos de cada ingreso: varios cobros no duplican el coste de materiales.
+Las reparaciones tienen historial propio de gastos y cantidades pagadas.
+
+Tras sincronizar, **Mi control > Ver ficha** muestra los cobros y gastos
+vinculados de las reparaciones. Los pendientes del listado, las alarmas y el
+resumen economico utilizan los cobros parciales reales. No se cuenta a la vez
+el historial y el antiguo estado Cobrado. Un cobro antiguo sin fecha conserva
+su importe, pero no se asigna a un mes inventado.
+
+Si falla el envio, el PC indica **Pendiente de sincronizar** y conserva los
+movimientos para reintentarlos. Los cambios simultaneos se detienen para
+revision; no se elige un dispositivo automaticamente. Esta funcion necesita
+la version actualizada tanto del programa como del servidor.
+
 ### Acceso
 
 1. Abre `https://alucarpin-app.onrender.com`.

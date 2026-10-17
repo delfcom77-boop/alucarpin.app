@@ -69,6 +69,32 @@ CREATE TABLE IF NOT EXISTS trabajos_propios (
     actualizado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+ALTER TABLE trabajos_propios ADD COLUMN IF NOT EXISTS cuenta_uid TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_trabajo_cuenta_uid
+    ON trabajos_propios(cuenta_uid) WHERE cuenta_uid IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS movimientos_reparaciones (
+    id TEXT PRIMARY KEY,
+    trabajo_id BIGINT NOT NULL REFERENCES trabajos_propios(id),
+    clase TEXT NOT NULL CHECK(clase IN ('ingreso','gasto')),
+    fecha TEXT,
+    importe DOUBLE PRECISION NOT NULL CHECK(importe >= 0),
+    importe_pagado DOUBLE PRECISION NOT NULL DEFAULT 0
+        CHECK(importe_pagado >= 0 AND importe_pagado <= importe),
+    forma_pago TEXT NOT NULL,
+    concepto TEXT NOT NULL DEFAULT '',
+    proveedor TEXT NOT NULL DEFAULT '',
+    categoria TEXT NOT NULL DEFAULT 'Otros',
+    version INTEGER NOT NULL DEFAULT 1,
+    version_base INTEGER NOT NULL DEFAULT 0,
+    eliminado INTEGER NOT NULL DEFAULT 0,
+    historico INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_movimientos_reparacion
+    ON movimientos_reparaciones(trabajo_id, clase);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cobro_historico_reparacion
+    ON movimientos_reparaciones(trabajo_id) WHERE historico=1;
+
 CREATE TABLE IF NOT EXISTS jornadas_faenas (
     id BIGSERIAL PRIMARY KEY,
     faena_id BIGINT NOT NULL REFERENCES faenas(id) ON DELETE RESTRICT,

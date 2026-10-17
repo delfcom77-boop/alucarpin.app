@@ -198,14 +198,16 @@
       document.querySelector('#editar-fecha').value = trabajo.fecha_inicio || '';
       document.querySelector('#editar-importe').value = trabajo.importe || 0;
       const estado = document.querySelector('#editar-estado');
-      estado.value = trabajo.origen === 'presupuesto' ? (trabajo.estado || 'Presupuesto') : (trabajo.estado_cobro || 'No cobrado');
-      estado.parentElement.hidden = trabajo.origen === 'faena';
+      estado.value = trabajo.origen === 'presupuesto' ? (trabajo.estado || 'Presupuesto') : (trabajo.estado_cobro === 'Parcial' ? 'No cobrado' : trabajo.estado_cobro || 'No cobrado');
+      estado.parentElement.hidden = trabajo.origen === 'faena' || Boolean(trabajo.cuenta_con_movimientos);
       document.querySelector('#mensaje-edicion-trabajo').className = 'mensaje';
       document.querySelector('#mensaje-edicion-trabajo').textContent = trabajo.origen === 'faena'
         ? 'El cobro se calcula a partir de los pagos de la faena ya registrados y sincronizados.'
         : trabajo.origen === 'presupuesto'
           ? 'El importe edita solo el total final. El bruto, IVA, efectivo y desglose se conservan sin recalcular.'
-          : '';
+          : trabajo.cuenta_con_movimientos
+            ? 'El cobro se calcula con el historial de Contabilidad → Ingresos. Cambiar el importe no modifica los ingresos registrados.'
+            : '';
       dialogoEdicion.showModal();
     }
     document.querySelector('#cancelar-edicion-trabajo').onclick = () => dialogoEdicion.close();
