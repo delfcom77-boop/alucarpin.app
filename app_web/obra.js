@@ -51,6 +51,10 @@
         Población: obra.poblacion, Fecha: fecha(obra.fecha_inicio), Presupuesto: obra.num_presupuesto,
         Ejecución: obra.estado_ejecucion || 'Sin aceptar', Cobro: obra.estado_cobro,
         'Importe registrado': euros(obra.importe), Observaciones: obra.observaciones,
+        ...(obra.parte_terceros ? {
+          'Total de la obra': euros(obra.importe_total_obra),
+          'Parte de otro autónomo (fuera de mis ingresos)': euros(obra.parte_terceros),
+        } : {}),
       })) {
         const dt = document.createElement('dt'); dt.textContent = nombre;
         const dd = document.createElement('dd'); dd.textContent = valor || 'Sin registrar';
@@ -70,7 +74,8 @@
         j.sin_registro ? 'Sin pago registrado' : euros(j.pagado_dia), j.obras_del_dia,
       ]));
       tabla('gastos', ficha.gastos.map(g => [fecha(g.fecha), g.proveedor, g.concepto, g.categoria, euros(g.importe), euros(g.importe_pagado), euros(g.pendiente)]));
-      tabla('cobros', ficha.cobros.map(c => [fecha(c.fecha), euros(c.importe), c.forma_pago, c.observaciones]));
+      tabla('cobros', ficha.cobros.map(c => [fecha(c.fecha), euros(c.importe), c.forma_pago,
+        c.beneficiario ? `Cobro ajeno: ${c.beneficiario}. Excluido de mis ingresos. ${c.observaciones || ''}` : c.observaciones]));
       const tiposRemate = { u: 'Bandeja / U', chapa: 'Chapa', angulo: 'Ángulo / L', tubo: 'Tubo', tubo_redondo: 'Tubo redondo' };
       const medidasRemate = r => {
         if (r.tipo === 'u') return `${r.medida_1} × ${r.medida_2} × ${r.medida_3} · Medidas ${r.posicion_medidas === 'exterior' ? 'exteriores' : 'interiores'}`;

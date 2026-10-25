@@ -37,3 +37,22 @@ def importe_faena_sql(alias="f"):
         f"(SELECT SUM(j.importe) FROM jornadas_faenas j WHERE j.faena_id={alias}.id),"
         f"{alias}.precio,0)"
     )
+
+
+def inicializar_beneficiarios(db, postgres=False):
+    if postgres:
+        db.execute(
+            "ALTER TABLE pagos_faenas ADD COLUMN IF NOT EXISTS beneficiario "
+            "TEXT NOT NULL DEFAULT ''"
+        )
+    else:
+        columnas = {fila[1] for fila in db.execute("PRAGMA table_info(pagos_faenas)")}
+        if columnas and "beneficiario" not in columnas:
+            db.execute("ALTER TABLE pagos_faenas ADD COLUMN beneficiario TEXT NOT NULL DEFAULT ''")
+
+
+def parte_terceros_sql(alias="f"):
+    return (
+        "(SELECT COALESCE(SUM(COALESCE(pt.importe_iva,0)+COALESCE(pt.importe_b,0)),0) "
+        f"FROM pagos_faenas pt WHERE pt.faena_id={alias}.id AND TRIM(pt.beneficiario)<> '')"
+    )

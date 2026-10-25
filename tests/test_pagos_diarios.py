@@ -400,8 +400,9 @@ class AlarmasTrabajoTests(unittest.TestCase):
                 (5,'2020-01-01','Completado antiguo','P5',100,'Completado');
             INSERT INTO pagos_ingresos VALUES (1,'P1',25,0), (2,'P2',100,0);
         """)
-        from importes_faenas import inicializar_importes
+        from importes_faenas import inicializar_importes, inicializar_beneficiarios
         inicializar_importes(self.db)
+        inicializar_beneficiarios(self.db)
 
     def test_faenas_presupuestos_aceptados_y_cobros_parciales(self):
         self.cargar_obras()

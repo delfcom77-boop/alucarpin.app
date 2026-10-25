@@ -409,6 +409,8 @@ def startup():
             "importe_iva DOUBLE PRECISION DEFAULT 0, importe_b DOUBLE PRECISION DEFAULT 0, "
             "observaciones TEXT, forma_pago TEXT DEFAULT 'Transferencia')"
         )
+        from importes_faenas import inicializar_beneficiarios
+        inicializar_beneficiarios(db, bool(DATABASE_URL))
 
 
 def usuario_actual(credenciales: HTTPAuthorizationCredentials = Depends(seguridad)):
@@ -1054,14 +1056,18 @@ def consultar_estados_obras(db):
     filas = db.execute("""
         SELECT f.id AS origen_id, 'faena' AS origen, f.fecha AS fecha_inicio,
                f.cliente, f.obra, f.ubicacion, f.poblacion,
-               COALESCE(f.importe_acordado, f.precio, 0) AS importe,
+               COALESCE(f.importe_acordado, f.precio, 0) - COALESCE(p.terceros,0) AS importe,
                COALESCE(p.cobrado, 0) AS importe_cobrado,
                COALESCE(e.estado, 'Pendiente') AS estado_ejecucion,
-               '' AS estado_presupuesto, NULL AS num_presupuesto
+               '' AS estado_presupuesto, NULL AS num_presupuesto,
+               COALESCE(f.importe_acordado, f.precio, 0) AS importe_total_obra,
+               COALESCE(p.terceros,0) AS parte_terceros
         FROM faenas f
         LEFT JOIN estados_ejecucion_faenas e ON e.faena_id = f.id
         LEFT JOIN (
-            SELECT faena_id, SUM(COALESCE(importe_iva, 0) + COALESCE(importe_b, 0)) AS cobrado
+            SELECT faena_id,
+                SUM(CASE WHEN TRIM(beneficiario)='' THEN COALESCE(importe_iva,0)+COALESCE(importe_b,0) ELSE 0 END) AS cobrado,
+                SUM(CASE WHEN TRIM(beneficiario)<>'' THEN COALESCE(importe_iva,0)+COALESCE(importe_b,0) ELSE 0 END) AS terceros
             FROM pagos_faenas GROUP BY faena_id
         ) p ON p.faena_id = f.id
         UNION ALL
@@ -1070,7 +1076,8 @@ def consultar_estados_obras(db):
                b.presupuesto_final AS importe, COALESCE(p.cobrado, 0) AS importe_cobrado,
                COALESCE(e.estado, CASE WHEN UPPER(TRIM(b.estado)) = 'COMPLETADO'
                     THEN 'Terminado' ELSE 'Pendiente' END) AS estado_ejecucion,
-               b.estado AS estado_presupuesto, b.num_presupuesto
+               b.estado AS estado_presupuesto, b.num_presupuesto,
+               b.presupuesto_final AS importe_total_obra, 0 AS parte_terceros
         FROM presupuestos b
         LEFT JOIN estados_ejecucion_presupuestos e ON e.presupuesto_id = b.id
         LEFT JOIN (
@@ -2030,7 +2037,7 @@ def ficha_obra(
         remates = [r for r in consultar_remates(db) if r["obra_catalogo"] == referencia_remates]
         if origen == "faena":
             cobros = [dict(f) for f in db.execute(
-                "SELECT id, fecha, importe_iva, importe_b, forma_pago, observaciones "
+                "SELECT id, fecha, importe_iva, importe_b, forma_pago, observaciones, beneficiario "
                 "FROM pagos_faenas WHERE faena_id = ? ORDER BY fecha, id", (obra_id,),
             ).fetchall()]
         elif origen == "presupuesto" and obra["num_presupuesto"]:
@@ -2068,7 +2075,10 @@ def ficha_obra(
             "dias_obra_registrados": len(dias_obra),
             "gastos": round(sum(float(g["importe"] or 0) for g in gastos), 2),
             "gastos_pagados": round(sum(float(g["importe_pagado"] or 0) for g in gastos), 2),
-            "cobros_registrados": round(sum(float(c["importe"] or 0) for c in cobros), 2),
+            "cobros_registrados": round(sum(float(c["importe"] or 0) for c in cobros
+                                          if not (c.get("beneficiario") or "").strip()), 2),
+            "cobros_terceros": round(sum(float(c["importe"] or 0) for c in cobros
+                                        if (c.get("beneficiario") or "").strip()), 2),
         },
     }
 

@@ -1,0 +1,1 @@
+ALTER TABLE pagos_faenas ADD COLUMN IF NOT EXISTS beneficiario TEXT NOT NULL DEFAULT '';

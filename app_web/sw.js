@@ -1,4 +1,4 @@
-const CACHE = 'alucarpin-app-v13-total-acordado';
+const CACHE = 'alucarpin-app-v14-cobros-terceros';
 const ARCHIVOS = [
   '/app/login.html',
   '/app/administrador.html',

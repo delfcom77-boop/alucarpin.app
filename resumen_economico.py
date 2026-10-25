@@ -52,12 +52,16 @@ def calcular_resumen(db, desde, hasta, hoy, postgres=False):
 
     cobros = []
     totales_cobrados = {}
+    partes_terceros = {}
     for tabla, tipo, referencia in (
         ("pagos_faenas", "faena", "faena_id"),
         ("pagos_ingresos", "presupuesto", "num_presupuesto"),
     ):
         for fila in leer(tabla):
             importe = dinero(fila.get("importe_iva")) + dinero(fila.get("importe_b"))
+            if tipo == "faena" and str(fila.get("beneficiario") or "").strip():
+                partes_terceros[fila["faena_id"]] = partes_terceros.get(fila["faena_id"], Decimal(0)) + importe
+                continue
             dia = fecha(fila.get("fecha"))
             if not dia:
                 avisos.append(f"{tabla} #{fila['id']}: cobro sin fecha, fuera del periodo.")
@@ -93,7 +97,7 @@ def calcular_resumen(db, desde, hasta, hoy, postgres=False):
     for fila in faenas:
         obra("faena", fila, dinero(
             fila["importe_acordado"] if fila.get("importe_acordado") is not None
-            else fila.get("precio")),
+            else fila.get("precio")) - partes_terceros.get(fila["id"], Decimal(0)),
              totales_cobrados.get(("faena", fila["id"]), Decimal(0)))
     numeros = {}
     for fila in presupuestos:

@@ -88,3 +88,22 @@ class ImporteAcordadoTests(unittest.TestCase):
         for texto in ("NaN", "inf", "-1", "1.001", "18.911,50", "1000000000"):
             with self.subTest(texto=texto), self.assertRaises(ValueError):
                 importe_acordado(texto)
+
+    def test_cobro_del_otro_autonomo_no_cuenta_en_mis_ingresos(self):
+        with self.conexion() as db:
+            db.execute("UPDATE pagos_faenas SET beneficiario='Otro autonomo' WHERE importe_iva=8651.5")
+            db.execute(
+                "INSERT INTO pagos_faenas (faena_id,fecha,importe_b,forma_pago) "
+                "VALUES (25,'2026-10-21',1260,'Efectivo')"
+            )
+        trabajo = next(t for t in api.listar_trabajos({}) if t["origen"] == "faena")
+        self.assertEqual(trabajo["importe_total_obra"], 18911.5)
+        self.assertEqual(trabajo["parte_terceros"], 8651.5)
+        self.assertEqual(trabajo["importe"], 10260)
+        self.assertEqual(trabajo["importe_cobrado"], 10260)
+        self.assertEqual(trabajo["pendiente_cobro"], 0)
+        with self.conexion() as db:
+            resumen = calcular_resumen(db, date(2026,1,1), date(2026,12,31), date(2026,10,25))
+            self.assertFalse(resumen["cobros"])
+            self.assertEqual(resumen["periodo"]["cobros_recibidos"], 10260)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM pagos_faenas").fetchone()[0], 5)

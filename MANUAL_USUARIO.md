@@ -20,6 +20,14 @@ Programa de escritorio -> Supabase -> Web
 
 ### Faenas con un importe total acordado
 
+Los cobros pertenecientes a otro autonomo se identifican en **Contabilidad >
+Ingresos > Cobro de otro autonomo**, escribiendo el beneficiario (vacio: cobro
+propio). Se conservan como referencia en el historial y en la ficha de la app,
+pero se excluyen de los ingresos propios y del beneficio. El total global de
+obra y la parte de terceros se muestran por separado; esa parte no genera deuda
+pendiente. Los costes adicionales se registran aparte, sin marcarlos pagados
+hasta que se realice el pago.
+
 En el programa del ordenador, **Faenas > Total acordado (IVA incluido,
 opcional)** guarda el precio completo de una obra sin modificar el precio
 diario ni los dias trabajados. En la app ese importe se utiliza para el total,

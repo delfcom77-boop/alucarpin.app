@@ -98,6 +98,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_cobro_historico_reparacion
 ALTER TABLE faenas ADD COLUMN IF NOT EXISTS importe_acordado
 DOUBLE PRECISION CHECK (importe_acordado >= 0);
 
+ALTER TABLE pagos_faenas ADD COLUMN IF NOT EXISTS beneficiario TEXT NOT NULL DEFAULT '';
+
 CREATE TABLE IF NOT EXISTS jornadas_faenas (
     id BIGSERIAL PRIMARY KEY,
     faena_id BIGINT NOT NULL REFERENCES faenas(id) ON DELETE RESTRICT,

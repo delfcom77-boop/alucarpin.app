@@ -31,6 +31,8 @@ class FichaObraTests(unittest.TestCase):
             INSERT INTO pagos_ingresos VALUES (2,'P2','2026-10-03',999,0,'Efectivo','Ajeno');
         """)
         inicializar_cuentas(self.db)
+        from importes_faenas import inicializar_beneficiarios
+        inicializar_beneficiarios(self.db)
 
     def obra(self, origen="faena"):
         return {
@@ -95,6 +97,14 @@ class FichaObraTests(unittest.TestCase):
         self.assertEqual(ficha["resumen"]["gastos"], 20)
         self.assertEqual(ficha["resumen"]["gastos_pagados"], 10)
         self.assertEqual(len(ficha["gastos"]), 1)
+
+    def test_cobros_ajenos_se_etiquetan_y_no_se_suman_a_cobros_propios(self):
+        self.preparar()
+        self.db.execute("UPDATE pagos_faenas SET beneficiario='Otro autonomo' WHERE id=1")
+        ficha = self.consultar()
+        self.assertEqual(ficha["resumen"]["cobros_registrados"], 0)
+        self.assertEqual(ficha["resumen"]["cobros_terceros"], 120)
+        self.assertEqual(ficha["cobros"][0]["beneficiario"], "Otro autonomo")
 
     def test_remates_de_ficha_se_filtran_por_tipo_e_id_no_por_nombres(self):
         self.preparar()
