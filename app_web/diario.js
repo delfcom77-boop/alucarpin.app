@@ -95,7 +95,19 @@
       const ficha = document.createElement('a');
       ficha.textContent = 'Ver trabajo';
       ficha.href = `/app/obra.html?origen=${encodeURIComponent(dia.origen)}&id=${dia.origen_id}`;
-      tarjeta.append(etiqueta, titulo, ubicacion, nota, sello, document.createElement('br'), ficha);
+      if (destino.hasAttribute('data-diario-compacto')) {
+        const detalle = document.createElement('details');
+        const resumen = document.createElement('summary');
+        etiqueta.textContent = {faena: '3º', presupuesto: 'P', reparacion: 'R'}[dia.tipo];
+        etiqueta.title = nombres[dia.tipo];
+        etiqueta.setAttribute('aria-label', nombres[dia.tipo]);
+        titulo.title = titulo.textContent;
+        resumen.append(etiqueta, titulo);
+        detalle.append(resumen, ubicacion, nota, sello, document.createElement('br'), ficha);
+        tarjeta.appendChild(detalle);
+      } else {
+        tarjeta.append(etiqueta, titulo, ubicacion, nota, sello, document.createElement('br'), ficha);
+      }
       lista.appendChild(tarjeta);
     }
     if (cargado) {

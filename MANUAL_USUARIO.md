@@ -18,6 +18,15 @@ Programa de escritorio -> Supabase -> Web
 
 ## 2. Aplicacion web
 
+### Listados compactos de Mi control
+
+Mis trabajos se presenta por lineas tambien en movil. Desliza la tabla
+lateralmente para ver columnas y acciones; los nombres largos se consultan
+completos en Ver ficha y no se recortan en el CSV. Los filtros se conservan.
+Mis dias trabajados muestra una linea por registro con fecha, cliente, obra y
+color de tipo. Pulsa la linea para desplegar ubicacion, observaciones, sello de
+registro y enlace al trabajo. El calendario y la presentacion de Agenda no cambian.
+
 ### Ingresos de todos los trabajos desde el programa
 
 En **Contabilidad > Ingresos** del ordenador puedes filtrar por presupuesto

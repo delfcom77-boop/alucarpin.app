@@ -66,23 +66,24 @@
         }
         const lista = d.querySelector('#lista').closest('.lista');
         comprobar(lista.tabIndex === 0 && lista.getAttribute('role') === 'region', 'Tabla no accesible con teclado');
-        if (ancho <= 768) {
-          comprobar(lista.scrollWidth <= lista.clientWidth + 1, 'Fichas necesitan desplazamiento horizontal');
+        {
           const fila = d.querySelector('#lista tr[data-origen]');
-          comprobar(w.getComputedStyle(fila).display === 'grid', 'No muestra fichas en movil');
+          comprobar(w.getComputedStyle(fila).display === 'table-row', 'No muestra lineas de tabla');
+          comprobar(fila.getBoundingClientRect().height <= 60, 'Registro ocupa mas de una linea compacta');
           comprobar([...fila.cells].every(celda => celda.dataset.label), 'Faltan etiquetas de datos');
+          comprobar(fila.cells[3].title.length > 100, 'Nombres largos pierden el texto completo');
           for (const control of fila.querySelectorAll('button,a')) {
             const r = control.getBoundingClientRect();
-            comprobar(r.left >= 0 && r.right <= w.innerWidth + 1 && r.height >= 44, 'Accion no accesible en movil');
+            comprobar(r.height >= 44, 'Accion no accesible en movil');
           }
           d.querySelector('#filtro-cliente-trabajos').value = 'inexistente';
           d.querySelector('#filtro-cliente-trabajos').dispatchEvent(new w.Event('input'));
           comprobar(fila.hidden && w.getComputedStyle(fila).display === 'none', 'Fichas ignoran filtros');
           d.querySelector('#filtro-cliente-trabajos').value = '';
           d.querySelector('#filtro-cliente-trabajos').dispatchEvent(new w.Event('input'));
-        } else {
           lista.scrollLeft = lista.scrollWidth;
           comprobar(lista.scrollLeft > 0, 'Tabla pierde desplazamiento en escritorio');
+          lista.scrollLeft = 0;
         }
       }
       marco.style.height = '320px';
@@ -104,7 +105,7 @@
       const csv = await archivo.text();
       comprobar(csv.split('\r\n').length === 2 && !csv.includes('Acciones'), 'CSV pierde columnas o filas');
       comprobar(csv.split('\r\n')[1].includes(';"Presupuesto";') && !csv.includes('"TipoPresupuesto"'), 'CSV incluye etiquetas de presentacion');
-      document.querySelector('#resultado').textContent = 'OK: Fichas sin desplazamiento horizontal a 320, 390, 560 y 768 px\nOK: Etiquetas, filtros y acciones tactiles de 44 px\nOK: Tabla de escritorio a 1280 px\nOK: Nombres largos, dialogos y fechas sin recortes ni escrituras';
+      document.querySelector('#resultado').textContent = 'OK: Lineas de hasta 60 px a 320, 390, 560, 768 y 1280 px\nOK: Tabla con desplazamiento lateral, filtros y acciones tactiles de 44 px\nOK: Nombres completos, dialogos y CSV sin escrituras';
     })().catch(error => { document.querySelector('#resultado').textContent = 'ERROR: ' + error.message; throw error; });
   </script>
 </body>

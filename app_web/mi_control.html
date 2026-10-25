@@ -34,24 +34,24 @@
     .borrar { background: #f4cccc; color: #7b2020; }
     dialog { width: min(520px, calc(100% - 24px)); max-height: calc(100dvh - 24px); overflow-y: auto; overflow-wrap: anywhere; border: 1px solid #ddd8cc; border-radius: 12px; padding: 20px; color: #223238; }
     dialog::backdrop { background: rgb(0 0 0 / 45%); }
-    @media (max-width: 768px) {
-      .lista-trabajos { overflow-x: visible; }
-      .lista-trabajos table { display: block; min-width: 0; }
-      .lista-trabajos thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-      .lista-trabajos tbody { display: grid; gap: 14px; }
-      .lista-trabajos tr { display: grid; min-width: 0; border: 1px solid #ddd8cc; border-left: 5px solid #293f4a; border-radius: 10px; padding: 10px; background: #fafbf9; }
-      .lista-trabajos tr[hidden] { display: none; }
-      .lista-trabajos tr.trabajo-faena { border-left-color: #174b82; }
-      .lista-trabajos tr.trabajo-presupuesto { border-left-color: #1c6036; }
-      .lista-trabajos tr.trabajo-reparacion { border-left-color: #854500; }
-      .lista-trabajos td { display: block; min-width: 0; padding: 7px 0; border: 0; overflow-wrap: anywhere; }
-      .lista-trabajos td[data-label]::before { content: attr(data-label); display: block; color: #50656c; font-size: 0.85rem; font-weight: 700; margin-bottom: 3px; }
-      .lista-trabajos td[data-label="Cliente"], .lista-trabajos td[data-label="Obra"] { font-weight: 700; }
-      .lista-trabajos td.acciones { display: flex; border-top: 1px solid #ddd8cc; margin-top: 6px; padding-top: 12px; }
-      .lista-trabajos td.acciones::before { flex-basis: 100%; }
-      .lista-trabajos .acciones button, .lista-trabajos .acciones a { display: flex; align-items: center; justify-content: center; flex: 1 1 100px; min-height: 44px; padding: 10px; border-radius: 8px; text-align: center; overflow-wrap: anywhere; }
-      .lista-trabajos .acciones a { background: #293f4a; color: #fff; text-decoration: none; font-weight: 700; }
-    }
+    .lista-trabajos table { min-width: 1000px; }
+    .lista-trabajos th, .lista-trabajos td { padding: 4px 8px; white-space: nowrap; }
+    .lista-trabajos td:not(.acciones) { max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+    .lista-trabajos tr.trabajo-faena { border-left: 4px solid #174b82; }
+    .lista-trabajos tr.trabajo-presupuesto { border-left: 4px solid #1c6036; }
+    .lista-trabajos tr.trabajo-reparacion { border-left: 4px solid #854500; }
+    .lista-trabajos .acciones { flex-wrap: nowrap; gap: 6px; }
+    .lista-trabajos .acciones button, .lista-trabajos .acciones a { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; min-height: 44px; padding: 6px 10px; border-radius: 6px; }
+    .lista-trabajos .acciones a { background: #293f4a; color: #fff; text-decoration: none; font-weight: 700; }
+    [data-diario-compacto] .diario-registro { padding: 0 8px; margin-top: 0; border-radius: 0; border-width: 0 0 1px 4px; }
+    [data-diario-compacto] summary { display: flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; }
+    [data-diario-compacto] summary::before { content: '+'; flex-shrink: 0; font-weight: 700; }
+    [data-diario-compacto] details[open] summary::before { content: '-'; }
+    [data-diario-compacto] summary h4 { min-width: 0; margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 0.95rem; }
+    [data-diario-compacto] details[open] summary h4 { white-space: normal; overflow-wrap: anywhere; }
+    [data-diario-compacto] summary .dia-tipo { flex-shrink: 0; }
+    [data-diario-compacto] details p { margin: 6px 0; }
+    [data-diario-compacto] details a { display: inline-flex; align-items: center; min-height: 44px; }
     @media (max-width: 560px) { .fila { grid-template-columns: minmax(0, 1fr); } }
   </style>
 </head>
@@ -72,7 +72,7 @@
         <button type="submit">Guardar trabajo</button><div id="mensaje" class="mensaje"></div>
       </form>
     </section>
-    <section data-diario id="mis-dias"></section>
+    <section data-diario data-diario-compacto id="mis-dias"></section>
     <section>
       <h2>Mis trabajos</h2>
       <p>La ejecución y el cobro son independientes. Los cobros de faenas se calculan con sus pagos registrados y sincronizados; los presupuestos solo generan recordatorios cuando están aceptados. Terminar una obra no registra un cobro.</p>
@@ -83,7 +83,8 @@
       </div>
       <div id="mensaje-trabajos" class="mensaje" aria-live="polite"></div>
       <button id="exportar-trabajos" type="button">Descargar trabajos filtrados (CSV)</button>
-      <div class="lista lista-trabajos" role="region" tabindex="0" aria-label="Mis trabajos: fichas en móvil y tabla en pantallas grandes."><table role="table"><thead role="rowgroup"><tr role="row"><th scope="col">Fecha</th><th scope="col">Tipo</th><th scope="col">Origen</th><th scope="col">Cliente</th><th scope="col">Obra</th><th scope="col">Presupuesto</th><th scope="col">Importe</th><th scope="col">Cobro / ejecución</th><th scope="col">Días trabajados</th><th scope="col">Acciones</th></tr></thead><tbody id="lista" role="rowgroup"><tr><td colspan="10">Cargando...</td></tr></tbody></table></div>
+      <p>Listado por líneas. Desliza la tabla lateralmente para ver todas las columnas y acciones. Abre «Ver ficha» para consultar los datos completos.</p>
+      <div class="lista lista-trabajos" role="region" tabindex="0" aria-label="Mis trabajos por líneas. Desplazamiento lateral para consultar todas las columnas."><table role="table"><thead role="rowgroup"><tr role="row"><th scope="col">Fecha</th><th scope="col">Tipo</th><th scope="col">Origen</th><th scope="col">Cliente</th><th scope="col">Obra</th><th scope="col">Presupuesto</th><th scope="col">Importe</th><th scope="col">Cobro / ejecución</th><th scope="col">Días trabajados</th><th scope="col">Acciones</th></tr></thead><tbody id="lista" role="rowgroup"><tr><td colspan="10">Cargando...</td></tr></tbody></table></div>
     </section>
     <dialog id="dialogo-edicion"><form method="dialog" id="formulario-edicion-trabajo"><h2>Editar registro</h2><label>Cliente <input id="editar-cliente" required></label><label>Obra <input id="editar-obra"></label><label>Fecha <input id="editar-fecha" type="date"></label><label>Importe (€) <input id="editar-importe" type="number" min="0" step="0.01"></label><label>Estado <select id="editar-estado"><option value="No cobrado">No cobrado</option><option value="Cobrado">Cobrado</option><option value="Presupuesto">Presupuesto</option><option value="Aceptado">Aceptado</option><option value="Rechazado">Rechazado</option><option value="Completado">Completado</option></select></label><div class="acciones"><button value="cancelar" type="button" id="cancelar-edicion-trabajo">Cancelar</button><button value="guardar" type="submit">Guardar cambios</button></div><div id="mensaje-edicion-trabajo" class="mensaje"></div></form></dialog>
     <dialog id="dialogo-jornada">
@@ -312,6 +313,7 @@
           celda.dataset.label = etiquetas[indice];
           celda.setAttribute('role', 'cell');
           celda.textContent = texto;
+          celda.title = texto;
           if (fila.children.length === 1) {
             celda.textContent = '';
             const etiqueta = document.createElement('span');
@@ -328,6 +330,7 @@
         celdaJornadas.dataset.label = 'Días trabajados';
         celdaJornadas.setAttribute('role', 'cell');
         celdaJornadas.textContent = dias.length ? dias.map(fecha).join(', ') : 'Sin registrar';
+        celdaJornadas.title = celdaJornadas.textContent;
         fila.appendChild(celdaJornadas);
         const celdaAcciones = document.createElement('td');
         celdaAcciones.dataset.label = 'Acciones';

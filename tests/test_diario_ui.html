@@ -118,12 +118,27 @@
         w.fallarGuardar = false;
         await enviar();
         comprobar(w.escrituras.at(-1).datos.solicitud_id === solicitud, 'Reintento usa otra solicitud y puede duplicar');
-        for (const ancho of [320,390,768]) {
+        for (const ancho of [320,390,768,1280]) {
           marco.style.width = ancho + 'px';
           await new Promise(resolve => w.requestAnimationFrame(() => w.requestAnimationFrame(resolve)));
           comprobar(d.documentElement.scrollWidth <= w.innerWidth, 'Desborda en ' + ancho);
           comprobar(d.querySelector('#diario-calendario').scrollWidth <= d.querySelector('#diario-calendario').clientWidth, 'Desborda calendario en ' + ancho);
+          const registros = [...d.querySelectorAll('#diario-lista article')];
+          comprobar(registros.length > 0, 'Faltan registros compactos');
+          for (const registro of registros) {
+            const detalle = registro.querySelector('details');
+            comprobar(detalle && !detalle.open, 'Dia no aparece como linea plegada');
+            comprobar(registro.getBoundingClientRect().height <= 52, 'Dia ocupa mas de una linea compacta');
+            detalle.open = true;
+            comprobar(registro.querySelector('a').getBoundingClientRect().height >= 44, 'Enlace al trabajo no accesible al desplegar');
+            comprobar(registro.querySelector('h4').title, 'Falta nombre completo del registro');
+            detalle.open = false;
+          }
         }
+        d.querySelector('[data-diario-compacto]').removeAttribute('data-diario-compacto');
+        d.querySelector('#diario-todos').click();
+        comprobar(d.querySelectorAll('#diario-lista article').length > 0, 'Faltan registros en presentacion normal');
+        comprobar(!d.querySelector('#diario-lista details'), 'La presentacion normal de Agenda ha cambiado');
         document.querySelector('#resultado').textContent = `OK: ${verificaciones} comprobaciones de guardado conjunto, reutilización, colores, calendario, filtros, errores, reintentos y móvil.`;
         document.body.dataset.estado = 'correcto';
       } finally {
