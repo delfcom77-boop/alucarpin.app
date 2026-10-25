@@ -315,9 +315,11 @@ def conexion():
 
 
 def inicializar_base_datos():
+    from importes_faenas import inicializar_importes
     if DATABASE_URL:
         with conexion() as db:
             db.execute("SELECT 1")
+            inicializar_importes(db, True)
             inicializar_usuarios(db)
         return
 
@@ -338,6 +340,7 @@ def inicializar_base_datos():
     db.execute("CREATE TABLE IF NOT EXISTS notas_usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, usuario_id INTEGER NOT NULL, titulo TEXT NOT NULL, contenido TEXT NOT NULL, fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP, fecha_actualizacion TEXT DEFAULT CURRENT_TIMESTAMP, completada INTEGER NOT NULL DEFAULT 0)")
     db.execute("CREATE TABLE IF NOT EXISTS alarmas (id INTEGER PRIMARY KEY AUTOINCREMENT, cantidad INTEGER NOT NULL DEFAULT 0, descripcion TEXT NOT NULL, activo INTEGER NOT NULL DEFAULT 1, fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP, fecha_actualizacion TEXT DEFAULT CURRENT_TIMESTAMP)")
     db.execute("CREATE TABLE IF NOT EXISTS remates (id INTEGER PRIMARY KEY AUTOINCREMENT, origen TEXT NOT NULL DEFAULT 'propia', origen_id INTEGER NOT NULL DEFAULT 0, cliente TEXT NOT NULL, obra TEXT NOT NULL, pieza TEXT NOT NULL, lacado_color TEXT NOT NULL, tipo TEXT NOT NULL, modo_chapa TEXT NOT NULL DEFAULT 'normal', orientacion_chapa TEXT NOT NULL DEFAULT 'abajo', posicion_medidas TEXT NOT NULL DEFAULT 'interior', medida_1 REAL NOT NULL DEFAULT 0, medida_2 REAL NOT NULL DEFAULT 0, medida_3 REAL NOT NULL DEFAULT 0, largura REAL NOT NULL DEFAULT 0, cantidad INTEGER NOT NULL DEFAULT 1, observaciones TEXT NOT NULL DEFAULT '', creado_en TEXT DEFAULT CURRENT_TIMESTAMP, actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP)")
+    inicializar_importes(db)
     inicializar_usuarios(db)
     db.commit()
     db.close()
@@ -1050,7 +1053,8 @@ def listar_citas(usuario=Depends(administrador)):
 def consultar_estados_obras(db):
     filas = db.execute("""
         SELECT f.id AS origen_id, 'faena' AS origen, f.fecha AS fecha_inicio,
-               f.cliente, f.obra, f.ubicacion, f.poblacion, f.precio AS importe,
+               f.cliente, f.obra, f.ubicacion, f.poblacion,
+               COALESCE(f.importe_acordado, f.precio, 0) AS importe,
                COALESCE(p.cobrado, 0) AS importe_cobrado,
                COALESCE(e.estado, 'Pendiente') AS estado_ejecucion,
                '' AS estado_presupuesto, NULL AS num_presupuesto
@@ -1926,7 +1930,7 @@ def listar_trabajos(usuario=Depends(administrador)):
          UNION ALL
          SELECT id, fecha AS fecha_inicio, NULL AS fecha_fin, 'faena' AS tipo,
              cliente, obra, ubicacion, poblacion, NULL AS observaciones,
-             NULL AS num_presupuesto, precio AS importe,
+             NULL AS num_presupuesto, COALESCE(importe_acordado, precio, 0) AS importe,
              'No cobrado' AS estado_cobro, NULL AS forma_pago,
              NULL AS fecha_cobro, estado_revision, 'faena' AS origen, id AS origen_id
          FROM faenas

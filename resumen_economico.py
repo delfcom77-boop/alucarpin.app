@@ -91,7 +91,9 @@ def calcular_resumen(db, desde, hasta, hoy, postgres=False):
     faenas = leer("faenas")
     presupuestos = leer("presupuestos")
     for fila in faenas:
-        obra("faena", fila, dinero(fila.get("precio")),
+        obra("faena", fila, dinero(
+            fila["importe_acordado"] if fila.get("importe_acordado") is not None
+            else fila.get("precio")),
              totales_cobrados.get(("faena", fila["id"]), Decimal(0)))
     numeros = {}
     for fila in presupuestos:

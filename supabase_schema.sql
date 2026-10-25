@@ -95,6 +95,9 @@ CREATE INDEX IF NOT EXISTS idx_movimientos_reparacion
 CREATE UNIQUE INDEX IF NOT EXISTS idx_cobro_historico_reparacion
     ON movimientos_reparaciones(trabajo_id) WHERE historico=1;
 
+ALTER TABLE faenas ADD COLUMN IF NOT EXISTS importe_acordado
+DOUBLE PRECISION CHECK (importe_acordado >= 0);
+
 CREATE TABLE IF NOT EXISTS jornadas_faenas (
     id BIGSERIAL PRIMARY KEY,
     faena_id BIGINT NOT NULL REFERENCES faenas(id) ON DELETE RESTRICT,

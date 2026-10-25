@@ -18,6 +18,14 @@ Programa de escritorio -> Supabase -> Web
 
 ## 2. Aplicacion web
 
+### Faenas con un importe total acordado
+
+En el programa del ordenador, **Faenas > Total acordado (IVA incluido,
+opcional)** guarda el precio completo de una obra sin modificar el precio
+diario ni los dias trabajados. En la app ese importe se utiliza para el total,
+el pendiente y los avisos de cobro. No crea ingresos: los cobros se registran por
+separado en Contabilidad. Dejar el campo vacio conserva el funcionamiento anterior.
+
 ### Listados compactos de Mi control
 
 Mis trabajos se presenta por lineas tambien en movil. Desliza la tabla

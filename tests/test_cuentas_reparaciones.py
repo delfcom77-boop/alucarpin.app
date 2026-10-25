@@ -24,7 +24,7 @@ class CuentasReparacionesTests(unittest.TestCase):
             INSERT INTO trabajos_propios VALUES(1,'reparacion','2026-10-01',NULL,'Cliente','Ventana',
                 'Calle','','',NULL,300,'No cobrado','',NULL,'Validado',NULL);
             CREATE TABLE faenas(id INTEGER, fecha TEXT, cliente TEXT, obra TEXT, ubicacion TEXT,
-                poblacion TEXT, precio REAL, estado_revision TEXT);
+                poblacion TEXT, precio REAL, estado_revision TEXT, importe_acordado REAL);
             CREATE TABLE presupuestos(id INTEGER, fecha TEXT, cliente TEXT, num_presupuesto TEXT,
                 presupuesto_final REAL, estado TEXT, estado_revision TEXT);
             CREATE TABLE estados_ejecucion_trabajos(trabajo_id INTEGER, estado TEXT);
