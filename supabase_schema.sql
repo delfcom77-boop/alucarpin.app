@@ -345,3 +345,4 @@ CREATE TABLE IF NOT EXISTS tareas (
     hecha_en TEXT NOT NULL,
     version INTEGER NOT NULL CHECK (version > 0)
 );
+ALTER TABLE tareas ENABLE ROW LEVEL SECURITY;

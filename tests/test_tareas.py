@@ -6,6 +6,7 @@ from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 from uuid import uuid4
+import shlex
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.testclient import TestClient
@@ -158,3 +159,15 @@ class TareasAPITests(unittest.TestCase):
         with self.assertLogs("tareas_api", level="ERROR"):
             respuesta = self.crear()
         self.assertEqual(respuesta.status_code, 503)
+
+
+class TareasDespliegueTests(unittest.TestCase):
+    def test_imagen_incluye_modulos_y_recursos_del_apartado(self):
+        raiz = Path(__file__).resolve().parents[1]
+        incluidos = set()
+        for linea in (raiz / "Dockerfile").read_text().splitlines():
+            if linea.startswith("COPY "):
+                incluidos.update(shlex.split(linea)[1:-1])
+        for archivo in ("tareas.py", "tareas_api.py", "app_web/tareas.html", "app_web/tareas.css", "app_web/tareas.js"):
+            self.assertIn(archivo, incluidos)
+            self.assertTrue((raiz / archivo).is_file())

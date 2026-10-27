@@ -34,6 +34,8 @@ def inicializar_tareas(db):
         "creado_en TEXT NOT NULL, actualizado_en TEXT NOT NULL, hecha_en TEXT NOT NULL, "
         "version INTEGER NOT NULL CHECK (version > 0))"
     )
+    if hasattr(db, "db"):
+        db.execute("ALTER TABLE tareas ENABLE ROW LEVEL SECURITY")
 
 
 def validar_tarea(datos):
