@@ -1,4 +1,4 @@
-const CACHE = 'alucarpin-app-v14-cobros-terceros';
+const CACHE = 'alucarpin-app-v15-tareas';
 const ARCHIVOS = [
   '/app/login.html',
   '/app/administrador.html',
@@ -7,6 +7,9 @@ const ARCHIVOS = [
   '/app/inicio.html',
   '/app/mi_control.html',
   '/app/agenda.html',
+  '/app/tareas.html',
+  '/app/tareas.css',
+  '/app/tareas.js',
   '/app/diario.js?v=1',
   '/app/diario.css?v=1',
   '/app/panel.js?v=privado-2',

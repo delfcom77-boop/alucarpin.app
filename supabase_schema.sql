@@ -329,3 +329,19 @@ UPDATE seguimientos_agenda
 SET creado_en = COALESCE(creado_en, CURRENT_TIMESTAMP),
     actualizado_en = COALESCE(actualizado_en, CURRENT_TIMESTAMP)
 WHERE creado_en IS NULL OR actualizado_en IS NULL;
+-- Tareas independientes de citas, gastos y dias trabajados.
+CREATE TABLE IF NOT EXISTS tareas (
+    id TEXT PRIMARY KEY,
+    titulo TEXT NOT NULL,
+    tipo TEXT NOT NULL,
+    cliente TEXT NOT NULL,
+    obra TEXT NOT NULL,
+    notas TEXT NOT NULL,
+    fecha_prevista TEXT NOT NULL,
+    prioridad TEXT NOT NULL,
+    estado TEXT NOT NULL,
+    creado_en TEXT NOT NULL,
+    actualizado_en TEXT NOT NULL,
+    hecha_en TEXT NOT NULL,
+    version INTEGER NOT NULL CHECK (version > 0)
+);

@@ -17,6 +17,7 @@ from autenticacion import crear_token, inicializar_usuarios, password_valida, us
 from respaldo import ErrorRespaldo, crear_respaldo
 from resumen_privado import crear_acceso_privado
 from diario_trabajo import crear_diario
+from tareas_api import crear_tareas
 from cuentas_reparaciones import inicializar_cuentas, resumenes_cuentas, movimientos, materializar_historico
 
 
@@ -438,6 +439,7 @@ def administrador(usuario=Depends(usuario_actual)):
 router_resumen_privado, resumen_autorizado = crear_acceso_privado(conexion, administrador)
 app.include_router(router_resumen_privado)
 app.include_router(crear_diario(conexion, administrador))
+app.include_router(crear_tareas(conexion, administrador))
 
 
 @app.get("/copias-seguridad")

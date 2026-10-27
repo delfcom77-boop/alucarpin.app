@@ -18,6 +18,37 @@ Programa de escritorio -> Supabase -> Web
 
 ## 2. Aplicacion web
 
+### Tareas (app y programa)
+
+Abre **Tareas** en el menu. Crea una tarea con un titulo (llamar, preparar un
+presupuesto, comprar material...), tipo, prioridad, fecha prevista opcional y
+notas. Cliente y obra son referencias de texto opcionales: puedes escribirlos
+o copiarlos de un trabajo existente; esto no modifica ni crea la obra.
+
+El listado compacto tiene filtros **Pendientes, Hoy, Atrasadas, Hechas y Todas**,
+tipo, prioridad y busqueda por tarea, cliente, obra o notas. Hoy muestra tareas
+pendientes previstas para ese dia; Atrasadas las de una fecha anterior.
+Las pendientes sin fecha siguen visibles en Pendientes.
+
+Pulsa **Hecha** al terminar: se guarda automaticamente la fecha y hora reales,
+que se muestran en la hora local del dispositivo. Editar una tarea hecha no
+cambia su fecha de finalizacion. **Reabrir** devuelve a pendiente y quita esa
+fecha; al terminar de nuevo se registra una nueva. Las hechas no se borran:
+se consultan con Hechas o Todas. No se crean ingresos, gastos ni dias trabajados.
+
+En el ordenador se guardan primero en SQLite, incluso sin conexion. Al abrir
+Tareas y despues de guardar se intenta enviar y recibir solo tareas. **Sincronizar
+con la app** reintenta; el mensaje confirma si estan sincronizadas o pendientes.
+La recepcion general solo recibe; el envio general tambien envia las tareas.
+En la app pulsa **Actualizar listado** para ver cambios del ordenador. La app
+necesita conexion para consultar o guardar; no simula un guardado sin red.
+
+Si una tarea cambia en ambos dispositivos no se sobrescribe automaticamente:
+en Tareas del ordenador se ofrecen **Conservar PC**, **Conservar app** o
+**Decidir mas tarde**, con los detalles de ambas versiones. Una edicion web
+anticuada se rechaza para que recargues antes de guardar. Android Auto no
+forma parte de esta version.
+
 ### Faenas con un importe total acordado
 
 Los cobros pertenecientes a otro autonomo se identifican en **Contabilidad >

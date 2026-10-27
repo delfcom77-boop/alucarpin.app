@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AlucarpinSamitier | Tareas</title>
+  <link rel="stylesheet" href="/app/tareas.css">
+</head>
+<body>
+  <main>
+    <header><h1>Tareas</h1><p>Llamadas, presupuestos, compras y cosas pendientes.</p></header>
+    <nav><a href="/app/inicio.html">Volver al menú</a><button id="nueva" type="button">Nueva tarea</button><button id="actualizar" type="button">Actualizar listado</button></nav>
+    <p>Al marcar «Hecha» se guarda automáticamente el día y la hora. Las tareas hechas permanecen en el historial. No se crean citas, presupuestos, gastos ni días trabajados.</p>
+    <p id="mensaje" role="status" aria-live="polite"></p>
+    <section aria-label="Filtros de tareas">
+      <div class="filtros">
+        <label>Mostrar<select id="filtro"><option>Pendientes</option><option>Hoy</option><option>Atrasadas</option><option>Hechas</option><option>Todas</option></select></label>
+        <label>Tipo<select id="filtro-tipo"><option value="">Todos</option><option>Llamada</option><option>Presupuesto</option><option>Material</option><option>Visita</option><option>Otro</option></select></label>
+        <label>Prioridad<select id="filtro-prioridad"><option value="">Todas</option><option>Normal</option><option>Alta</option></select></label>
+        <label>Buscar<input id="buscar" type="search" placeholder="Tarea, cliente, obra o notas"></label>
+      </div>
+      <p id="contador"></p>
+      <p>Listado por líneas: desliza lateralmente para ver todas las columnas.</p>
+      <div class="lista" tabindex="0" role="region" aria-label="Listado de tareas con desplazamiento lateral">
+        <table><thead><tr><th>Estado</th><th>Tarea</th><th>Tipo</th><th>Cliente / obra</th><th>Prioridad</th><th>Prevista</th><th>Creada</th><th>Hecha el</th><th>Acciones</th></tr></thead><tbody id="lista"><tr><td colspan="9">Cargando…</td></tr></tbody></table>
+      </div>
+    </section>
+    <dialog id="editor" aria-labelledby="titulo-editor">
+      <h2 id="titulo-editor">Nueva tarea</h2>
+      <form id="formulario">
+        <label>Qué tengo que hacer<input id="titulo" required maxlength="240" placeholder="Ej.: Llamar a María para el presupuesto"></label>
+        <div class="filtros">
+          <label>Tipo<select id="tipo"><option>Otro</option><option>Llamada</option><option>Presupuesto</option><option>Material</option><option>Visita</option></select></label>
+          <label>Prioridad<select id="prioridad"><option>Normal</option><option>Alta</option></select></label>
+          <label>Fecha prevista (opcional)<input id="fecha_prevista" type="date"></label>
+          <label>Estado<select id="estado"><option>Pendiente</option><option>Hecha</option></select></label>
+        </div>
+        <label>Copiar cliente y obra de un trabajo (opcional)<select id="trabajo"><option value="">Sin seleccionar</option></select></label>
+        <p id="mensaje-catalogo" role="status"></p>
+        <p>También puedes escribirlos libremente. Se guardan como referencia en la tarea, sin modificar ni crear la obra.</p>
+        <label>Cliente (opcional)<input id="cliente" maxlength="160"></label>
+        <label>Obra / referencia (opcional)<input id="obra" maxlength="300"></label>
+        <label>Notas<textarea id="notas" maxlength="4000" rows="3"></textarea></label>
+        <p id="fechas"></p>
+        <p id="mensaje-editor" role="alert"></p>
+        <div class="acciones"><button type="submit">Guardar tarea</button><button id="cancelar" type="button">Cerrar sin guardar</button></div>
+      </form>
+    </dialog>
+  </main>
+  <script src="/app/tareas.js"></script>
+  <script src="/app/pwa.js"></script>
+</body>
+</html>
