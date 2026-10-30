@@ -31,22 +31,33 @@ independiente. No hay subcarpetas, ubicacion, precios ni vinculacion con
 Contabilidad. La unidad queda fija: no mezcles cajas con
 unidades. Admite hasta tres decimales (por ejemplo, metros de cable).
 Administradores y ayudantes pueden dar de alta material y registrar movimientos.
-Solo el administrador puede editar nombre/minimo o desactivar/reactivar.
+El administrador y los responsables autorizados del almacen pueden editar
+nombre/minimo, desactivar/reactivar y eliminar materiales. Este permiso es
+exclusivo del almacen y no convierte a un ayudante en administrador.
 Las carpetas se muestran como **pestanas horizontales**, desplazables en movil.
 Selecciona una pestana (tambien con flechas izquierda/derecha desde el teclado)
-para ver sus variantes. El administrador dispone de **Cambiar nombre de carpeta**:
+para ver sus variantes. El administrador y los responsables disponen de **Cambiar nombre de carpeta**:
 no modifica stock ni movimientos historicos; los nuevos movimientos usan el
 nombre actualizado.
 
-**Eliminar carpeta completa** es exclusivo del administrador y requiere escribir
+**Eliminar carpeta completa** es exclusivo del administrador y los responsables y requiere escribir
 su nombre exacto. **Borra definitivamente la carpeta, todas sus variantes, sus
 cantidades y todo su historial, incluso con stock disponible. No se puede
 deshacer desde la app.** No afecta a otras carpetas ni a materiales sin carpeta.
 El borrado es una unica transaccion; si falla, no se elimina una parte suelta.
-Los ayudantes no pueden renombrar ni eliminar carpetas.
+Los demas ayudantes no pueden renombrar ni eliminar carpetas o materiales.
+
+En cada linea, **Eliminar material** borra definitivamente esa variante, su stock
+y todo su historial, incluso si figura una cantidad disponible. Requiere escribir
+el nombre exacto de la variante y muestra la cantidad que se va a borrar.
+Conserva la carpeta y los demas materiales. Si el material cambia mientras se
+confirma, hay que actualizar y confirmar de nuevo. No se puede deshacer.
+Los permisos se comprueban en el servidor por cuenta, no por el nombre mostrado.
+El alta o retirada de un responsable se realiza en `almacen_responsables`
+mediante su `usuario_id`; no se concede este permiso al resto de ayudantes.
 
 Los materiales anteriores aparecen en
-**Sin carpeta** sin cambiar cantidades ni historial. El administrador puede
+**Sin carpeta** sin cambiar cantidades ni historial. El administrador o un responsable puede
 usar **Editar** para elegir una carpeta y, si lo desea, abreviar el nombre de
 la variante. El identificador y los movimientos anteriores no cambian.
 Ambos roles pueden crear carpetas y variantes. No se repite una variante dentro
@@ -61,7 +72,7 @@ restante, sin nombres de personas. **Anadir** suma una entrada.
 si el stock cambio mientras contabas, hay que actualizar antes de corregirlo.
 
 Los filtros permiten ver Todos los activos, Falta reponer (incluye agotados)
-y Agotados; el administrador tambien puede ver Desactivados. Con minimo vacio
+y Agotados; el administrador y los responsables tambien pueden ver Desactivados. Con minimo vacio
 solo se avisa al agotarse. Con minimo definido se avisa al bajar de el.
 El historial se filtra por material y permite cargar movimientos anteriores.
 No se permite sacar mas cantidad de la disponible.

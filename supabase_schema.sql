@@ -348,6 +348,10 @@ CREATE TABLE IF NOT EXISTS tareas (
 ALTER TABLE tareas ENABLE ROW LEVEL SECURITY;
 
 -- Stock compartido: cantidades en milesimas para evitar errores de redondeo.
+CREATE TABLE IF NOT EXISTS almacen_responsables (
+    usuario_id BIGINT PRIMARY KEY
+);
+ALTER TABLE almacen_responsables ENABLE ROW LEVEL SECURITY;
 CREATE TABLE IF NOT EXISTS almacen_carpetas (
     id TEXT PRIMARY KEY,
     nombre TEXT NOT NULL,

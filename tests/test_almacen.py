@@ -341,12 +341,91 @@ class AlmacenTests(unittest.TestCase):
         self.assertEqual(self.movimiento(material, "salida", "1").status_code, 404)
         self.assertEqual(self.alta(nombre="Nueva", carpeta_id=carpeta["id"]).status_code, 404)
 
-    def test_solo_administrador_puede_renombrar_y_borrar(self):
+    def test_ayudante_sin_permiso_no_puede_renombrar_y_borrar(self):
         carpeta = self.carpeta().json()
         url = "/almacen/carpetas/" + carpeta["id"]
         self.assertEqual(self.cliente.put(url, json={"nombre": "Otro", "nombre_anterior": "Siliconas"}).status_code, 403)
         self.assertEqual(self.cliente.request("DELETE", url, json={"confirmar_nombre": "Siliconas"}).status_code, 403)
         self.assertEqual(self.cliente.get("/almacen/carpetas").json(), [carpeta])
+
+    def test_responsable_gestiona_sin_ser_administrador_y_revocacion_inmediata(self):
+        self.assertEqual(self.cliente.get("/almacen/permisos").json(), {"gestionar": False})
+        carpeta = self.carpeta().json()
+        material = self.alta(nombre="Blanca", carpeta_id=carpeta["id"]).json()
+        url = "/almacen/materiales/" + material["id"]
+        with closing(self.conexion()) as db:
+            db.execute("INSERT INTO almacen_responsables(usuario_id) VALUES(2)")
+            db.commit()
+        self.assertEqual(self.cliente.get("/almacen/permisos").json(), {"gestionar": True})
+        editado = self.cliente.put(url, json={
+            "nombre": "Blanca", "unidad": "botes", "minimo": "2", "version": 1,
+        })
+        self.assertEqual(editado.status_code, 200)
+        carpeta_url = "/almacen/carpetas/" + carpeta["id"]
+        self.assertEqual(self.cliente.put(carpeta_url, json={
+            "nombre": "Selladores", "nombre_anterior": "Siliconas",
+        }).status_code, 200)
+        with closing(self.conexion()) as db:
+            db.execute("DELETE FROM almacen_responsables WHERE usuario_id=2")
+            db.commit()
+        self.assertEqual(self.cliente.get("/almacen/permisos").json(), {"gestionar": False})
+        self.assertEqual(self.cliente.request("DELETE", url, json={
+            "confirmar_nombre": "Blanca", "version": 2,
+        }).status_code, 403)
+        self.assertEqual(self.cliente.request("DELETE", carpeta_url, json={
+            "confirmar_nombre": "Selladores",
+        }).status_code, 403)
+        self.assertEqual(len(self.materiales()), 1)
+
+    def test_borrar_material_con_stock_historial_y_reintento_conserva_carpeta_y_otras_variantes(self):
+        carpeta = self.carpeta().json()
+        material = self.alta(nombre="Blanca", carpeta_id=carpeta["id"], cantidad="8").json()
+        otra = self.alta(nombre="Negra", carpeta_id=carpeta["id"]).json()
+        with closing(self.conexion()) as db:
+            db.execute("INSERT INTO almacen_responsables(usuario_id) VALUES(2)")
+            db.commit()
+        url = "/almacen/materiales/" + material["id"]
+        datos = {"confirmar_nombre": "Blanca", "version": material["version"]}
+        self.assertEqual(self.cliente.request("DELETE", url, json={**datos, "confirmar_nombre": "Negra"}).status_code, 409)
+        self.movimiento(material, "entrada", "1")
+        self.assertEqual(self.cliente.request("DELETE", url, json=datos).status_code, 409)
+        datos["version"] = next(m for m in self.materiales() if m["id"] == material["id"])["version"]
+        respuesta = self.cliente.request("DELETE", url, json=datos)
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(self.cliente.request("DELETE", url, json=datos).json(), respuesta.json())
+        self.assertEqual(self.materiales(), [otra])
+        self.assertEqual(self.cliente.get("/almacen/carpetas").json(), [carpeta])
+        self.assertEqual({m["material_id"] for m in self.cliente.get("/almacen/movimientos").json()["movimientos"]}, {otra["id"]})
+        self.assertEqual(self.movimiento(material, "salida", "1").status_code, 404)
+        # Una nueva alta con el mismo nombre no debe confundirse con un reintento antiguo.
+        nueva = self.alta(nombre="Blanca", carpeta_id=carpeta["id"]).json()
+        self.assertEqual(self.cliente.request("DELETE", url, json=datos).status_code, 200)
+        self.assertEqual({m["id"] for m in self.materiales()}, {otra["id"], nueva["id"]})
+        self.assertEqual(self.cliente.request("DELETE", "/almacen/carpetas/" + carpeta["id"], json={
+            "confirmar_nombre": "Siliconas",
+        }).status_code, 200)
+        self.assertEqual(self.materiales(), [])
+
+    def test_borrar_material_permisos_validacion_y_rollback(self):
+        material = self.alta().json()
+        url = "/almacen/materiales/" + material["id"]
+        datos = {"confirmar_nombre": material["nombre"], "version": 1}
+        self.assertEqual(self.cliente.request("DELETE", url, json=datos).status_code, 403)
+        self.cliente.headers["Authorization"] = "Bearer administrador"
+        self.assertEqual(self.cliente.get("/almacen/permisos").json(), {"gestionar": True})
+        self.assertEqual(self.cliente.request("DELETE", url, json={"confirmar_nombre": material["nombre"]}).status_code, 422)
+        with closing(self.conexion()) as db:
+            db.execute("CREATE TRIGGER impedir_linea BEFORE DELETE ON almacen_materiales BEGIN SELECT RAISE(ABORT,'fallo de prueba'); END")
+            db.commit()
+        with self.assertLogs("almacen", level="ERROR"):
+            self.assertEqual(self.cliente.request("DELETE", url, json=datos).status_code, 503)
+        self.assertEqual(self.materiales(), [material])
+        self.assertEqual(len(self.cliente.get("/almacen/movimientos").json()["movimientos"]), 1)
+        with closing(self.conexion()) as db:
+            db.execute("DROP TRIGGER impedir_linea")
+            db.commit()
+        self.assertEqual(self.cliente.request("DELETE", url, json=datos).status_code, 200)
+        self.assertEqual(self.materiales(), [])
 
     def test_borrado_revierte_completo_si_falla_una_parte(self):
         carpeta = self.carpeta().json()
@@ -371,7 +450,7 @@ class AlmacenPostgresTests(unittest.TestCase):
             with closing(sqlite3.connect(":memory:")) as esquema:
                 inicializar_almacen(esquema)
                 sql = [f[0] for f in esquema.execute("SELECT sql FROM sqlite_master WHERE type='table' ORDER BY name DESC")]
-            orden = {"almacen_carpetas": 0, "almacen_materiales": 1, "almacen_movimientos": 2}
+            orden = {"almacen_responsables": 0, "almacen_carpetas": 0, "almacen_materiales": 1, "almacen_movimientos": 2}
             for sentencia in sorted(sql, key=lambda s: orden[s.split()[2]]):
                 db.execute(sentencia.replace("CREATE TABLE ", "CREATE TEMP TABLE ", 1))
             db.execute("SET LOCAL search_path TO pg_temp")
@@ -393,7 +472,11 @@ class AlmacenPostgresTests(unittest.TestCase):
             router = crear_almacen(lambda: wrapper, usuario, usuario)
             app.include_router(router)
             rutas = {r.path + ":" + next(iter(r.methods)): r.endpoint for r in router.routes}
-            from almacen import NuevoMaterial, Movimiento, NuevaCarpeta, RenombrarCarpeta, BorrarCarpeta
+            from almacen import NuevoMaterial, Movimiento, NuevaCarpeta, RenombrarCarpeta, BorrarCarpeta, BorrarMaterial
+            db.execute("INSERT INTO almacen_responsables(usuario_id) VALUES(42)")
+            self.assertTrue(rutas["/almacen/permisos:GET"]({"id": 42, "rol": "ayudante"})["gestionar"])
+            self.assertFalse(rutas["/almacen/permisos:GET"]({"id": 43, "rol": "ayudante"})["gestionar"])
+            self.assertTrue(db.execute("SELECT relrowsecurity FROM pg_class WHERE oid='pg_temp.almacen_responsables'::regclass").fetchone()["relrowsecurity"])
             carpeta = rutas["/almacen/carpetas:POST"](NuevaCarpeta(id=uuid4(), nombre="Siliconas"))
             ident = uuid4()
             material = rutas["/almacen/materiales:POST"](NuevoMaterial(id=ident, nombre="Blanca", cantidad="12", carpeta_id=carpeta["id"]), usuario())
@@ -405,6 +488,14 @@ class AlmacenPostgresTests(unittest.TestCase):
             self.assertEqual(salida["nombre"], "Siliconas / Blanca")
             self.assertEqual(material["carpeta_id"], carpeta["id"])
             self.assertTrue(db.execute("SELECT relrowsecurity FROM pg_class WHERE oid='pg_temp.almacen_materiales'::regclass").fetchone()["relrowsecurity"])
+            otro_id = uuid4()
+            rutas["/almacen/materiales:POST"](NuevoMaterial(id=otro_id, nombre="Negra", cantidad="8", carpeta_id=carpeta["id"]), usuario())
+            eliminada = rutas["/almacen/materiales/{ident}:DELETE"](
+                otro_id, BorrarMaterial(confirmar_nombre="Negra", version=1), usuario(),
+            )
+            self.assertTrue(eliminada["eliminado"])
+            self.assertEqual(db.execute("SELECT COUNT(*) AS n FROM almacen_materiales").fetchone()["n"], 1)
+            self.assertEqual(db.execute("SELECT COUNT(*) AS n FROM almacen_movimientos WHERE material_id=%s", (str(otro_id),)).fetchone()["n"], 0)
             rutas["/almacen/carpetas/{ident}:PUT"](
                 UUID(carpeta["id"]), RenombrarCarpeta(nombre="Selladores", nombre_anterior="Siliconas"), usuario(),
             )

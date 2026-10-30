@@ -84,6 +84,10 @@ class BorrarCarpeta(BaseModel):
     confirmar_nombre: str = Field(min_length=1, max_length=160)
 
 
+class BorrarMaterial(BorrarCarpeta):
+    version: int = Field(gt=0)
+
+
 def unidades(valor):
     return int(valor * 1000)
 
@@ -101,6 +105,7 @@ def firma(datos):
 
 
 def inicializar_almacen(db):
+    db.execute("CREATE TABLE IF NOT EXISTS almacen_responsables (usuario_id BIGINT PRIMARY KEY)")
     db.execute(
         "CREATE TABLE IF NOT EXISTS almacen_carpetas (id TEXT PRIMARY KEY, "
         "nombre TEXT NOT NULL, nombre_clave TEXT NOT NULL UNIQUE, creado_en TEXT NOT NULL)"
@@ -129,6 +134,7 @@ def inicializar_almacen(db):
         if "carpeta_id" not in columnas:
             db.execute("ALTER TABLE almacen_materiales ADD COLUMN carpeta_id TEXT REFERENCES almacen_carpetas(id)")
     if hasattr(db, "db"):
+        db.execute("ALTER TABLE almacen_responsables ENABLE ROW LEVEL SECURITY")
         db.execute("ALTER TABLE almacen_carpetas ENABLE ROW LEVEL SECURITY")
         db.execute("ALTER TABLE almacen_materiales ENABLE ROW LEVEL SECURITY")
         db.execute("ALTER TABLE almacen_movimientos ENABLE ROW LEVEL SECURITY")
@@ -177,6 +183,19 @@ def crear_almacen(conexion, usuario_actual, administrador):
             raise HTTPException(403, "No tienes acceso al almacen.")
         return usuario
 
+    def puede_gestionar(usuario):
+        if usuario["rol"] == "administrador":
+            return True
+        with transaccion() as db:
+            return db.execute(
+                "SELECT usuario_id FROM almacen_responsables WHERE usuario_id=?", (usuario["id"],),
+            ).fetchone() is not None
+
+    def responsable(usuario=Depends(acceso)):
+        if not puede_gestionar(usuario):
+            raise HTTPException(403, "Solo el administrador o un responsable del almacen puede modificar o eliminar.")
+        return usuario
+
     def iniciar():
         with transaccion() as db:
             inicializar_almacen(db)
@@ -214,6 +233,10 @@ def crear_almacen(conexion, usuario_actual, administrador):
 
     router = APIRouter(dependencies=[Depends(acceso)], on_startup=[iniciar])
 
+    @router.get("/almacen/permisos")
+    def permisos(usuario=Depends(acceso)):
+        return {"gestionar": puede_gestionar(usuario)}
+
     @router.get("/almacen/carpetas")
     def carpetas():
         with transaccion() as db:
@@ -241,7 +264,7 @@ def crear_almacen(conexion, usuario_actual, administrador):
             return {"id": ident, "nombre": datos.nombre}
 
     @router.put("/almacen/carpetas/{ident}")
-    def renombrar_carpeta(ident: UUID, datos: RenombrarCarpeta, usuario=Depends(administrador)):
+    def renombrar_carpeta(ident: UUID, datos: RenombrarCarpeta, usuario=Depends(responsable)):
         ident = str(ident)
         with transaccion(True) as db:
             fila = db.execute("SELECT id,nombre FROM almacen_carpetas WHERE id=?", (ident,)).fetchone()
@@ -259,7 +282,7 @@ def crear_almacen(conexion, usuario_actual, administrador):
             return {"id": ident, "nombre": datos.nombre}
 
     @router.delete("/almacen/carpetas/{ident}")
-    def borrar_carpeta(ident: UUID, datos: BorrarCarpeta, usuario=Depends(administrador)):
+    def borrar_carpeta(ident: UUID, datos: BorrarCarpeta, usuario=Depends(responsable)):
         ident = str(ident)
         with transaccion(True) as db:
             fila = db.execute("SELECT nombre FROM almacen_carpetas WHERE id=?", (ident,)).fetchone()
@@ -320,7 +343,7 @@ def crear_almacen(conexion, usuario_actual, administrador):
             return publico_material(material(db, ident))
 
     @router.put("/almacen/materiales/{ident}")
-    def editar(ident: UUID, datos: EditarMaterial, usuario=Depends(administrador)):
+    def editar(ident: UUID, datos: EditarMaterial, usuario=Depends(responsable)):
         ident = str(ident)
         with transaccion(True) as db:
             fila = material(db, ident, True)
@@ -339,6 +362,19 @@ def crear_almacen(conexion, usuario_actual, administrador):
                  int(datos.activo), datetime.now(timezone.utc).isoformat(), carpeta, ident),
             )
             return publico_material(material(db, ident))
+
+    @router.delete("/almacen/materiales/{ident}")
+    def borrar_material(ident: UUID, datos: BorrarMaterial, usuario=Depends(responsable)):
+        ident = str(ident)
+        with transaccion(True) as db:
+            fila = db.execute("SELECT nombre,version FROM almacen_materiales WHERE id=?", (ident,)).fetchone()
+            if not fila:
+                return {"eliminado": True, "id": ident}
+            if datos.confirmar_nombre != fila["nombre"] or datos.version != fila["version"]:
+                raise HTTPException(409, "El nombre o el stock del material cambio. Actualiza el listado y confirma de nuevo.")
+            db.execute("DELETE FROM almacen_movimientos WHERE material_id=?", (ident,))
+            db.execute("DELETE FROM almacen_materiales WHERE id=?", (ident,))
+            return {"eliminado": True, "id": ident}
 
     @router.post("/almacen/materiales/{ident}/movimientos", status_code=201)
     def mover(ident: UUID, datos: Movimiento, usuario=Depends(acceso)):

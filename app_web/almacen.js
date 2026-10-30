@@ -6,7 +6,7 @@
   let usuario, materiales = [], editado, seleccionado, tipoMovimiento, siguiente;
   let ocupado = false, pendiente = null, clavePendiente, listo = false;
   let carpetas = [], carpetaActual = null;
-  let gestionCarpeta = null;
+  let gestionCarpeta = null, puedeGestionar = false;
   const nombreCarpeta = id => carpetas.find(c => c.id === id)?.nombre || 'Sin carpeta';
   const nombreMaterial = m => m.carpeta_id ? `${nombreCarpeta(m.carpeta_id)} / ${m.nombre}` : m.nombre;
   const normalizar = texto => texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es');
@@ -89,8 +89,8 @@
     if (!grupos.length) $('carpetas').textContent = 'Todavía no hay carpetas. Pulsa «Nuevo material» para crear la primera.';
     $('titulo-carpeta').textContent = carpetaActual === null ? 'Selecciona una carpeta' : nombreCarpeta(carpetaActual);
     $('anadir-variante').hidden = !carpetaActual;
-    $('renombrar-carpeta').hidden = !carpetaActual || usuario.rol !== 'administrador';
-    $('borrar-carpeta').hidden = !carpetaActual || usuario.rol !== 'administrador';
+    $('renombrar-carpeta').hidden = !carpetaActual || !puedeGestionar;
+    $('borrar-carpeta').hidden = !carpetaActual || !puedeGestionar;
     if (carpetaActual !== null) $('panel-carpeta').setAttribute('aria-labelledby', 'pestana-' + (carpetaActual || 'sin-carpeta'));
     else $('panel-carpeta').setAttribute('aria-labelledby', 'titulo-carpeta');
     const visibles = materiales.filter(m =>
@@ -114,10 +114,14 @@
         ['Añadir', () => abrirMovimiento(material, 'entrada')],
         ['Corregir cantidad', () => abrirMovimiento(material, 'recuento')]
       ] : [];
-      if (usuario.rol === 'administrador') botones.push(['Editar', () => abrirMaterial(material)]);
+      if (puedeGestionar) botones.push(
+        ['Editar', () => abrirMaterial(material)],
+        ['Eliminar material', () => gestionarCarpeta(true, material)]
+      );
       for (const [texto, accion] of botones) {
         const boton = document.createElement('button');
         boton.textContent = texto;
+        if (texto === 'Eliminar material') boton.className = 'peligro';
         boton.disabled = ocupado;
         boton.onclick = accion;
         acciones.append(boton);
@@ -220,6 +224,7 @@
     bloquear(true);
     let confirmada = false;
     const borrando = pendiente.metodo === 'DELETE';
+    const borrandoMaterial = borrando && pendiente.url.startsWith('/almacen/materiales/');
     try {
       const resultado = await api(pendiente.url, { method: pendiente.metodo, body: JSON.stringify(pendiente.datos) });
       if (pendiente.url === '/almacen/carpetas') carpetaActual = resultado.id;
@@ -230,7 +235,8 @@
       $('editor-carpeta').close();
       $('gestionar-carpeta').close();
       await actualizar();
-      mensaje(borrando ? 'Carpeta eliminada definitivamente con sus variantes, stock e historial.' : 'Operación guardada. Stock actualizado.');
+      mensaje(borrandoMaterial ? 'Material eliminado definitivamente con su stock e historial.'
+        : borrando ? 'Carpeta eliminada definitivamente con sus variantes, stock e historial.' : 'Operación guardada. Stock actualizado.');
     } catch (error) {
       // Un rechazo de validacion/conflicto confirma que esta solicitud no se aplico.
       if ([403, 404, 409, 422].includes(error.estado)) guardarPendiente(null);
@@ -293,11 +299,13 @@
     preparar('/almacen/carpetas', 'POST', { id: crypto.randomUUID(), nombre });
   };
   $('anadir-variante').onclick = () => abrirMaterial();
-  function gestionarCarpeta(borrar) {
-    if (!disponible() || !carpetaActual) return;
-    gestionCarpeta = { ...carpetas.find(c => c.id === carpetaActual), borrar };
-    $('titulo-gestionar').textContent = borrar ? 'Eliminar carpeta completa' : 'Cambiar nombre de carpeta';
-    $('aviso-gestionar').textContent = borrar
+  function gestionarCarpeta(borrar, material = null) {
+    if (!puedeGestionar || !disponible() || (!material && !carpetaActual)) return;
+    gestionCarpeta = { ...(material || carpetas.find(c => c.id === carpetaActual)), borrar, material: Boolean(material) };
+    $('titulo-gestionar').textContent = material ? 'Eliminar material' : borrar ? 'Eliminar carpeta completa' : 'Cambiar nombre de carpeta';
+    $('aviso-gestionar').textContent = material
+      ? `Se eliminará definitivamente «${nombreMaterial(material)}», sus ${numero(material.cantidad)} ${material.unidad} y TODO su historial. La carpeta y las demás variantes se conservan. No se puede deshacer. Escribe el nombre exacto de la variante «${material.nombre}» para confirmar.`
+      : borrar
       ? `Se eliminará definitivamente «${gestionCarpeta.nombre}», con TODAS sus variantes, cantidades e historial, aunque tenga stock. No se puede deshacer. Escribe su nombre exacto para confirmar.`
       : `Nuevo nombre para «${gestionCarpeta.nombre}». Sus cantidades e historial no se modificarán.`;
     $('valor-gestionar').value = borrar ? '' : gestionCarpeta.nombre;
@@ -313,12 +321,14 @@
     evento.preventDefault();
     const valor = $('valor-gestionar').value;
     if (gestionCarpeta.borrar && valor !== gestionCarpeta.nombre) {
-      $('error-gestionar').textContent = 'El nombre no coincide. Escribe el nombre exacto para borrar la carpeta.';
+      $('error-gestionar').textContent = 'El nombre no coincide. Escribe el nombre exacto para confirmar el borrado.';
       return;
     }
     if (!valor.trim()) { $('error-gestionar').textContent = 'Escribe el nombre.'; return; }
-    preparar('/almacen/carpetas/' + gestionCarpeta.id, gestionCarpeta.borrar ? 'DELETE' : 'PUT',
-      gestionCarpeta.borrar ? { confirmar_nombre: valor } : { nombre: valor.trim(), nombre_anterior: gestionCarpeta.nombre });
+    const datos = gestionCarpeta.borrar ? { confirmar_nombre: valor } : { nombre: valor.trim(), nombre_anterior: gestionCarpeta.nombre };
+    if (gestionCarpeta.material) datos.version = gestionCarpeta.version;
+    preparar((gestionCarpeta.material ? '/almacen/materiales/' : '/almacen/carpetas/') + gestionCarpeta.id,
+      gestionCarpeta.borrar ? 'DELETE' : 'PUT', datos);
   };
   async function refrescarHistorial() {
     try { await cargarHistorial(); }
@@ -353,8 +363,9 @@
     try {
       usuario = await api('/yo');
       if (!['administrador', 'ayudante'].includes(usuario.rol)) throw new Error('No tienes acceso al almacén.');
+      puedeGestionar = (await api('/almacen/permisos')).gestionar === true;
       $('volver').href = usuario.rol === 'administrador' ? '/app/inicio.html' : '/app/inicio_ayudante.html';
-      $('filtro').querySelector('[value="inactivos"]').hidden = usuario.rol !== 'administrador';
+      $('filtro').querySelector('[value="inactivos"]').hidden = !puedeGestionar;
       clavePendiente = 'alucarpin_almacen_pendiente_' + usuario.id;
       const guardada = localStorage.getItem(clavePendiente);
       if (guardada) {
