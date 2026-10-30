@@ -68,6 +68,22 @@ class NuevaCarpeta(BaseModel):
         return DatosMaterial.nombre_limpio(valor)
 
 
+class RenombrarCarpeta(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    nombre: str = Field(min_length=1, max_length=160)
+    nombre_anterior: str = Field(min_length=1, max_length=160)
+
+    @field_validator("nombre")
+    @classmethod
+    def nombre_limpio(cls, valor):
+        return DatosMaterial.nombre_limpio(valor)
+
+
+class BorrarCarpeta(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    confirmar_nombre: str = Field(min_length=1, max_length=160)
+
+
 def unidades(valor):
     return int(valor * 1000)
 
@@ -145,6 +161,9 @@ def crear_almacen(conexion, usuario_actual, administrador):
                 with db:
                     if escritura and isinstance(db, sqlite3.Connection):
                         db.execute("BEGIN IMMEDIATE")
+                    elif escritura and hasattr(db, "db"):
+                        # Borrar una carpeta y sus variantes debe excluir entradas/salidas simultaneas.
+                        db.execute("SELECT pg_advisory_xact_lock(hashtextextended('almacen-escritura',0))")
                     yield db
             finally:
                 if isinstance(db, sqlite3.Connection):
@@ -220,6 +239,41 @@ def crear_almacen(conexion, usuario_actual, administrador):
                 (ident, datos.nombre, clave, datetime.now(timezone.utc).isoformat()),
             )
             return {"id": ident, "nombre": datos.nombre}
+
+    @router.put("/almacen/carpetas/{ident}")
+    def renombrar_carpeta(ident: UUID, datos: RenombrarCarpeta, usuario=Depends(administrador)):
+        ident = str(ident)
+        with transaccion(True) as db:
+            fila = db.execute("SELECT id,nombre FROM almacen_carpetas WHERE id=?", (ident,)).fetchone()
+            if not fila:
+                raise HTTPException(404, "La carpeta ya no existe.")
+            if fila["nombre"] == datos.nombre:
+                return dict(fila)
+            if fila["nombre"] != datos.nombre_anterior:
+                raise HTTPException(409, "La carpeta cambio de nombre. Actualiza antes de modificarla.")
+            clave = clave_nombre(datos.nombre)
+            otra = db.execute("SELECT id FROM almacen_carpetas WHERE nombre_clave=?", (clave,)).fetchone()
+            if otra and otra["id"] != ident:
+                raise HTTPException(409, "Ya existe otra carpeta con ese nombre.")
+            db.execute("UPDATE almacen_carpetas SET nombre=?,nombre_clave=? WHERE id=?", (datos.nombre, clave, ident))
+            return {"id": ident, "nombre": datos.nombre}
+
+    @router.delete("/almacen/carpetas/{ident}")
+    def borrar_carpeta(ident: UUID, datos: BorrarCarpeta, usuario=Depends(administrador)):
+        ident = str(ident)
+        with transaccion(True) as db:
+            fila = db.execute("SELECT nombre FROM almacen_carpetas WHERE id=?", (ident,)).fetchone()
+            if not fila:
+                return {"eliminada": True, "id": ident}
+            if datos.confirmar_nombre != fila["nombre"]:
+                raise HTTPException(409, "Escribe el nombre exacto de la carpeta para confirmar. Si ha cambiado, actualiza el listado.")
+            db.execute(
+                "DELETE FROM almacen_movimientos WHERE material_id IN "
+                "(SELECT id FROM almacen_materiales WHERE carpeta_id=?)", (ident,),
+            )
+            db.execute("DELETE FROM almacen_materiales WHERE carpeta_id=?", (ident,))
+            db.execute("DELETE FROM almacen_carpetas WHERE id=?", (ident,))
+            return {"eliminada": True, "id": ident}
 
     @router.get("/almacen/materiales")
     def listar():

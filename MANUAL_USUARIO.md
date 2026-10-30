@@ -32,7 +32,20 @@ Contabilidad. La unidad queda fija: no mezcles cajas con
 unidades. Admite hasta tres decimales (por ejemplo, metros de cable).
 Administradores y ayudantes pueden dar de alta material y registrar movimientos.
 Solo el administrador puede editar nombre/minimo o desactivar/reactivar.
-No se borran materiales ni movimientos. Los materiales anteriores aparecen en
+Las carpetas se muestran como **pestanas horizontales**, desplazables en movil.
+Selecciona una pestana (tambien con flechas izquierda/derecha desde el teclado)
+para ver sus variantes. El administrador dispone de **Cambiar nombre de carpeta**:
+no modifica stock ni movimientos historicos; los nuevos movimientos usan el
+nombre actualizado.
+
+**Eliminar carpeta completa** es exclusivo del administrador y requiere escribir
+su nombre exacto. **Borra definitivamente la carpeta, todas sus variantes, sus
+cantidades y todo su historial, incluso con stock disponible. No se puede
+deshacer desde la app.** No afecta a otras carpetas ni a materiales sin carpeta.
+El borrado es una unica transaccion; si falla, no se elimina una parte suelta.
+Los ayudantes no pueden renombrar ni eliminar carpetas.
+
+Los materiales anteriores aparecen en
 **Sin carpeta** sin cambiar cantidades ni historial. El administrador puede
 usar **Editar** para elegir una carpeta y, si lo desea, abreviar el nombre de
 la variante. El identificador y los movimientos anteriores no cambian.

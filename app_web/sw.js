@@ -1,4 +1,4 @@
-const CACHE = 'alucarpin-app-v17-carpetas-almacen';
+const CACHE = 'alucarpin-app-v18-pestanas-almacen';
 const ARCHIVOS = [
   '/app/login.html',
   '/app/administrador.html',

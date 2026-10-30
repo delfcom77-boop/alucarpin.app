@@ -6,7 +6,7 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import psycopg
 from psycopg.rows import dict_row
@@ -301,6 +301,67 @@ class AlmacenTests(unittest.TestCase):
             self.assertEqual(self.cliente.get("/almacen/carpetas").status_code, esperado)
             self.assertEqual(self.carpeta("Prueba").status_code, esperado)
 
+    def test_renombrar_carpeta_conserva_stock_y_movimientos(self):
+        carpeta = self.carpeta().json()
+        material = self.alta(nombre="Blanca", carpeta_id=carpeta["id"]).json()
+        self.movimiento(material, "salida", "3")
+        anteriores = self.cliente.get("/almacen/movimientos").json()
+        self.cliente.headers["Authorization"] = "Bearer administrador"
+        url = "/almacen/carpetas/" + carpeta["id"]
+        datos = {"nombre": "Selladores", "nombre_anterior": "Siliconas"}
+        self.assertEqual(self.cliente.put(url, json=datos).status_code, 200)
+        self.assertEqual(self.cliente.put(url, json=datos).status_code, 200)
+        self.assertEqual(self.materiales()[0]["cantidad"], "9")
+        self.assertEqual(self.cliente.get("/almacen/movimientos").json(), anteriores)
+        self.assertEqual(self.movimiento(material, "salida", "1").json()["nombre"], "Selladores / Blanca")
+        self.carpeta("Tornillos")
+        self.assertEqual(self.cliente.put(url, json={"nombre": "Tornillos", "nombre_anterior": "Selladores"}).status_code, 409)
+        self.assertEqual(self.cliente.put(url, json={"nombre": "Otro", "nombre_anterior": "Siliconas"}).status_code, 409)
+        self.assertEqual(self.cliente.put(url, json={"nombre": " ", "nombre_anterior": "Selladores"}).status_code, 422)
+
+    def test_borrado_definitivo_completo_y_acotado_con_stock(self):
+        carpeta = self.carpeta().json()
+        otra = self.carpeta("Tornillos").json()
+        material = self.alta(nombre="Blanca", carpeta_id=carpeta["id"]).json()
+        self.alta(nombre="Negra", carpeta_id=carpeta["id"])
+        fuera = self.alta(nombre="4 x 30", carpeta_id=otra["id"]).json()
+        libre = self.alta(nombre="Sin carpeta").json()
+        self.movimiento(material, "salida", "3")
+        self.cliente.headers["Authorization"] = "Bearer administrador"
+        url = "/almacen/carpetas/" + carpeta["id"]
+        self.assertEqual(self.cliente.request("DELETE", url, json={"confirmar_nombre": "Error"}).status_code, 409)
+        self.assertEqual(len(self.materiales()), 4)
+        respuesta = self.cliente.request("DELETE", url, json={"confirmar_nombre": "Siliconas"})
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(self.cliente.request("DELETE", url, json={"confirmar_nombre": "Siliconas"}).json(), respuesta.json())
+        self.assertEqual({m["id"] for m in self.materiales()}, {fuera["id"], libre["id"]})
+        historial = self.cliente.get("/almacen/movimientos").json()["movimientos"]
+        self.assertEqual({m["material_id"] for m in historial}, {fuera["id"], libre["id"]})
+        self.assertEqual(self.cliente.get("/almacen/carpetas").json(), [otra])
+        self.assertEqual(self.movimiento(material, "salida", "1").status_code, 404)
+        self.assertEqual(self.alta(nombre="Nueva", carpeta_id=carpeta["id"]).status_code, 404)
+
+    def test_solo_administrador_puede_renombrar_y_borrar(self):
+        carpeta = self.carpeta().json()
+        url = "/almacen/carpetas/" + carpeta["id"]
+        self.assertEqual(self.cliente.put(url, json={"nombre": "Otro", "nombre_anterior": "Siliconas"}).status_code, 403)
+        self.assertEqual(self.cliente.request("DELETE", url, json={"confirmar_nombre": "Siliconas"}).status_code, 403)
+        self.assertEqual(self.cliente.get("/almacen/carpetas").json(), [carpeta])
+
+    def test_borrado_revierte_completo_si_falla_una_parte(self):
+        carpeta = self.carpeta().json()
+        self.alta(nombre="Blanca", carpeta_id=carpeta["id"])
+        with closing(self.conexion()) as db:
+            db.execute("CREATE TRIGGER impedir_borrado BEFORE DELETE ON almacen_materiales BEGIN SELECT RAISE(ABORT,'fallo de prueba'); END")
+            db.commit()
+        self.cliente.headers["Authorization"] = "Bearer administrador"
+        with self.assertLogs("almacen", level="ERROR"):
+            respuesta = self.cliente.request("DELETE", "/almacen/carpetas/" + carpeta["id"], json={"confirmar_nombre": "Siliconas"})
+        self.assertEqual(respuesta.status_code, 503)
+        self.assertEqual(len(self.materiales()), 1)
+        self.assertEqual(len(self.cliente.get("/almacen/movimientos").json()["movimientos"]), 1)
+        self.assertEqual(self.cliente.get("/almacen/carpetas").json(), [carpeta])
+
 
 @unittest.skipUnless(os.getenv("DATABASE_URL"), "Requiere PostgreSQL; solo tablas temporales")
 class AlmacenPostgresTests(unittest.TestCase):
@@ -332,7 +393,7 @@ class AlmacenPostgresTests(unittest.TestCase):
             router = crear_almacen(lambda: wrapper, usuario, usuario)
             app.include_router(router)
             rutas = {r.path + ":" + next(iter(r.methods)): r.endpoint for r in router.routes}
-            from almacen import NuevoMaterial, Movimiento, NuevaCarpeta
+            from almacen import NuevoMaterial, Movimiento, NuevaCarpeta, RenombrarCarpeta, BorrarCarpeta
             carpeta = rutas["/almacen/carpetas:POST"](NuevaCarpeta(id=uuid4(), nombre="Siliconas"))
             ident = uuid4()
             material = rutas["/almacen/materiales:POST"](NuevoMaterial(id=ident, nombre="Blanca", cantidad="12", carpeta_id=carpeta["id"]), usuario())
@@ -344,3 +405,12 @@ class AlmacenPostgresTests(unittest.TestCase):
             self.assertEqual(salida["nombre"], "Siliconas / Blanca")
             self.assertEqual(material["carpeta_id"], carpeta["id"])
             self.assertTrue(db.execute("SELECT relrowsecurity FROM pg_class WHERE oid='pg_temp.almacen_materiales'::regclass").fetchone()["relrowsecurity"])
+            rutas["/almacen/carpetas/{ident}:PUT"](
+                UUID(carpeta["id"]), RenombrarCarpeta(nombre="Selladores", nombre_anterior="Siliconas"), usuario(),
+            )
+            borrada = rutas["/almacen/carpetas/{ident}:DELETE"](
+                UUID(carpeta["id"]), BorrarCarpeta(confirmar_nombre="Selladores"), usuario(),
+            )
+            self.assertTrue(borrada["eliminada"])
+            self.assertEqual(db.execute("SELECT COUNT(*) AS n FROM almacen_materiales").fetchone()["n"], 0)
+            self.assertEqual(db.execute("SELECT COUNT(*) AS n FROM almacen_movimientos").fetchone()["n"], 0)

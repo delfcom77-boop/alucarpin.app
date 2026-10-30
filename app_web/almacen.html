@@ -17,13 +17,14 @@
     </section>
     <section>
       <h2>Carpetas de materiales</h2>
-      <p>Nuevo material crea una carpeta. Ábrela para añadir colores, medidas o variantes.</p>
-      <div id="carpetas" class="carpetas"></div>
+      <p>Nuevo material crea una pestaña. Selecciónala para ver sus colores, medidas o variantes.</p>
+      <div id="carpetas" class="carpetas" role="tablist" aria-label="Carpetas de materiales"></div>
     </section>
-    <section>
+    <section id="panel-carpeta" role="tabpanel" aria-labelledby="titulo-carpeta">
       <h2 id="titulo-carpeta">Selecciona una carpeta</h2>
       <button id="anadir-variante" hidden>Añadir variante</button>
-      <button id="cerrar-carpeta" hidden>Volver a carpetas</button>
+      <button id="renombrar-carpeta" hidden>Cambiar nombre de carpeta</button>
+      <button id="borrar-carpeta" class="peligro" hidden>Eliminar carpeta completa</button>
       <div class="filtros">
         <label>Buscar material<input id="buscar" type="search" placeholder="Silicona, tornillos, cable…"></label>
         <label>Mostrar<select id="filtro"><option value="todos">Todos los activos</option><option value="reponer">Falta reponer</option><option value="agotados">Agotados</option><option value="inactivos" hidden>Desactivados</option></select></label>
@@ -40,6 +41,15 @@
         <div class="acciones"><button type="submit">Crear carpeta</button><button type="button" data-cerrar="editor-carpeta">Cancelar</button></div>
       </form>
       <p id="error-carpeta" class="error" role="alert"></p>
+    </dialog>
+    <dialog id="gestionar-carpeta" aria-labelledby="titulo-gestionar">
+      <h2 id="titulo-gestionar">Cambiar nombre de carpeta</h2>
+      <p id="aviso-gestionar"></p>
+      <form id="form-gestionar">
+        <label id="etiqueta-gestionar">Nombre<input id="valor-gestionar" required maxlength="160" autocomplete="off"></label>
+        <div class="acciones"><button id="confirmar-gestionar" type="submit">Guardar nombre</button><button type="button" data-cerrar="gestionar-carpeta">Cancelar</button></div>
+      </form>
+      <p id="error-gestionar" class="error" role="alert"></p>
     </dialog>
     <section>
       <h2>Movimientos</h2>

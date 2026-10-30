@@ -6,6 +6,7 @@
   let usuario, materiales = [], editado, seleccionado, tipoMovimiento, siguiente;
   let ocupado = false, pendiente = null, clavePendiente, listo = false;
   let carpetas = [], carpetaActual = null;
+  let gestionCarpeta = null;
   const nombreCarpeta = id => carpetas.find(c => c.id === id)?.nombre || 'Sin carpeta';
   const nombreMaterial = m => m.carpeta_id ? `${nombreCarpeta(m.carpeta_id)} / ${m.nombre}` : m.nombre;
   const normalizar = texto => texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es');
@@ -55,6 +56,7 @@
     $('carpetas').replaceChildren();
     const grupos = [...carpetas];
     if (materiales.some(m => !m.carpeta_id)) grupos.push({ id: '', nombre: 'Sin carpeta · materiales anteriores' });
+    if (!grupos.some(c => c.id === carpetaActual)) carpetaActual = grupos[0]?.id ?? null;
     for (const carpeta of grupos) {
       const variantes = materiales.filter(m => (m.carpeta_id || '') === carpeta.id);
       const coincidencias = variantes.filter(m =>
@@ -62,18 +64,35 @@
         && (filtro !== 'reponer' || m.situacion !== 'Hay')
         && (filtro !== 'agotados' || m.situacion === 'Agotado')
         && normalizar(nombreMaterial(m)).includes(consulta));
-      if ((consulta || filtro !== 'todos') && !coincidencias.length && !normalizar(carpeta.nombre).includes(consulta || '\0')) continue;
       const boton = document.createElement('button');
       boton.textContent = `${carpeta.nombre} · ${coincidencias.length} variantes`;
-      boton.setAttribute('aria-pressed', String(carpetaActual === carpeta.id));
+      boton.id = 'pestana-' + (carpeta.id || 'sin-carpeta');
+      boton.setAttribute('role', 'tab');
+      boton.setAttribute('aria-selected', String(carpetaActual === carpeta.id));
+      boton.setAttribute('aria-controls', 'panel-carpeta');
+      boton.tabIndex = carpetaActual === carpeta.id ? 0 : -1;
       boton.disabled = ocupado;
-      boton.onclick = () => { carpetaActual = carpeta.id; $('historial-material').value = ''; pintar(); refrescarHistorial(); };
+      boton.onclick = () => {
+        carpetaActual = carpeta.id; $('historial-material').value = ''; pintar();
+        $(boton.id)?.focus(); refrescarHistorial();
+      };
+      boton.onkeydown = evento => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(evento.key)) return;
+        evento.preventDefault();
+        const indice = grupos.findIndex(c => c.id === carpeta.id);
+        const siguiente = evento.key === 'Home' ? 0 : evento.key === 'End' ? grupos.length - 1
+          : (indice + (evento.key === 'ArrowRight' ? 1 : -1) + grupos.length) % grupos.length;
+        $('pestana-' + (grupos[siguiente].id || 'sin-carpeta')).click();
+      };
       $('carpetas').append(boton);
     }
     if (!grupos.length) $('carpetas').textContent = 'Todavía no hay carpetas. Pulsa «Nuevo material» para crear la primera.';
     $('titulo-carpeta').textContent = carpetaActual === null ? 'Selecciona una carpeta' : nombreCarpeta(carpetaActual);
     $('anadir-variante').hidden = !carpetaActual;
-    $('cerrar-carpeta').hidden = carpetaActual === null;
+    $('renombrar-carpeta').hidden = !carpetaActual || usuario.rol !== 'administrador';
+    $('borrar-carpeta').hidden = !carpetaActual || usuario.rol !== 'administrador';
+    if (carpetaActual !== null) $('panel-carpeta').setAttribute('aria-labelledby', 'pestana-' + (carpetaActual || 'sin-carpeta'));
+    else $('panel-carpeta').setAttribute('aria-labelledby', 'titulo-carpeta');
     const visibles = materiales.filter(m =>
       carpetaActual !== null && (m.carpeta_id || '') === carpetaActual
       && (filtro === 'inactivos' ? !m.activo : m.activo)
@@ -200,6 +219,7 @@
     if (!pendiente || ocupado) return;
     bloquear(true);
     let confirmada = false;
+    const borrando = pendiente.metodo === 'DELETE';
     try {
       const resultado = await api(pendiente.url, { method: pendiente.metodo, body: JSON.stringify(pendiente.datos) });
       if (pendiente.url === '/almacen/carpetas') carpetaActual = resultado.id;
@@ -208,8 +228,9 @@
       $('editor').close();
       $('operacion').close();
       $('editor-carpeta').close();
+      $('gestionar-carpeta').close();
       await actualizar();
-      mensaje('Operación guardada. Stock actualizado.');
+      mensaje(borrando ? 'Carpeta eliminada definitivamente con sus variantes, stock e historial.' : 'Operación guardada. Stock actualizado.');
     } catch (error) {
       // Un rechazo de validacion/conflicto confirma que esta solicitud no se aplico.
       if ([403, 404, 409, 422].includes(error.estado)) guardarPendiente(null);
@@ -218,6 +239,7 @@
       $('error-material').textContent = texto;
       $('error-movimiento').textContent = texto;
       $('error-carpeta').textContent = texto;
+      $('error-gestionar').textContent = texto;
     } finally { bloquear(false); }
   }
   function preparar(url, metodo, datos) {
@@ -271,7 +293,33 @@
     preparar('/almacen/carpetas', 'POST', { id: crypto.randomUUID(), nombre });
   };
   $('anadir-variante').onclick = () => abrirMaterial();
-  $('cerrar-carpeta').onclick = () => { carpetaActual = null; $('historial-material').value = ''; pintar(); refrescarHistorial(); };
+  function gestionarCarpeta(borrar) {
+    if (!disponible() || !carpetaActual) return;
+    gestionCarpeta = { ...carpetas.find(c => c.id === carpetaActual), borrar };
+    $('titulo-gestionar').textContent = borrar ? 'Eliminar carpeta completa' : 'Cambiar nombre de carpeta';
+    $('aviso-gestionar').textContent = borrar
+      ? `Se eliminará definitivamente «${gestionCarpeta.nombre}», con TODAS sus variantes, cantidades e historial, aunque tenga stock. No se puede deshacer. Escribe su nombre exacto para confirmar.`
+      : `Nuevo nombre para «${gestionCarpeta.nombre}». Sus cantidades e historial no se modificarán.`;
+    $('valor-gestionar').value = borrar ? '' : gestionCarpeta.nombre;
+    $('confirmar-gestionar').textContent = borrar ? 'Eliminar definitivamente' : 'Guardar nombre';
+    $('confirmar-gestionar').className = borrar ? 'peligro' : '';
+    $('error-gestionar').textContent = '';
+    $('gestionar-carpeta').showModal();
+    $('valor-gestionar').focus();
+  }
+  $('renombrar-carpeta').onclick = () => gestionarCarpeta(false);
+  $('borrar-carpeta').onclick = () => gestionarCarpeta(true);
+  $('form-gestionar').onsubmit = evento => {
+    evento.preventDefault();
+    const valor = $('valor-gestionar').value;
+    if (gestionCarpeta.borrar && valor !== gestionCarpeta.nombre) {
+      $('error-gestionar').textContent = 'El nombre no coincide. Escribe el nombre exacto para borrar la carpeta.';
+      return;
+    }
+    if (!valor.trim()) { $('error-gestionar').textContent = 'Escribe el nombre.'; return; }
+    preparar('/almacen/carpetas/' + gestionCarpeta.id, gestionCarpeta.borrar ? 'DELETE' : 'PUT',
+      gestionCarpeta.borrar ? { confirmar_nombre: valor } : { nombre: valor.trim(), nombre_anterior: gestionCarpeta.nombre });
+  };
   async function refrescarHistorial() {
     try { await cargarHistorial(); }
     catch (error) { mensaje(error.message, true); }
@@ -311,7 +359,7 @@
       const guardada = localStorage.getItem(clavePendiente);
       if (guardada) {
         pendiente = JSON.parse(guardada);
-        if (!(pendiente.url?.startsWith('/almacen/materiales') || pendiente.url === '/almacen/carpetas') || !['POST', 'PUT'].includes(pendiente.metodo) || !pendiente.datos) {
+        if (!(pendiente.url?.startsWith('/almacen/materiales') || pendiente.url?.startsWith('/almacen/carpetas')) || !['POST', 'PUT', 'DELETE'].includes(pendiente.metodo) || !pendiente.datos) {
           throw new Error('La referencia de operación pendiente no es válida. No se enviará automáticamente; requiere revisión.');
         }
       }
