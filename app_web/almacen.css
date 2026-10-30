@@ -1,0 +1,35 @@
+:root { font-family: Segoe UI, sans-serif; color: #223238; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: #eef3f1; }
+main { width: min(1120px, 100%); margin: auto; padding: 20px 12px 40px; }
+header { background: #1d5e62; color: white; border-radius: 12px; padding: 20px; }
+h1, h2 { margin: 0 0 10px; }
+p { overflow-wrap: anywhere; }
+nav, .acciones { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+button, nav a { min-height: 44px; border: 0; border-radius: 8px; padding: 10px 12px; background: #18585c; color: white; font: inherit; font-weight: 600; cursor: pointer; text-decoration: none; }
+button:disabled { opacity: .6; cursor: wait; }
+section { background: white; border: 1px solid #cbd8dd; border-radius: 12px; padding: 14px; margin-top: 16px; }
+.filtros { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+label { display: grid; gap: 5px; font-weight: 600; min-width: 0; }
+input, select { width: 100%; min-width: 0; min-height: 44px; border: 1px solid #8a9e9d; border-radius: 7px; padding: 8px; font: inherit; color: inherit; background: white; }
+.lista { overflow-x: auto; margin: 12px 0; }
+table { width: 100%; min-width: 720px; border-collapse: collapse; }
+th, td { padding: 4px 8px; text-align: left; border-bottom: 1px solid #cbd8dd; white-space: nowrap; }
+th { background: #e7efee; }
+td { max-width: 360px; overflow: hidden; text-overflow: ellipsis; height: 54px; }
+td.acciones-fila { max-width: none; }
+.acciones-fila button + button { margin-left: 6px; }
+.agotado { background: #ffe4e4; }
+.reponer { background: #fff3df; }
+.hay { background: #e3f3e8; }
+.inactivo { background: #ececec; }
+#mensaje { min-height: 24px; font-weight: 600; }
+.error { color: #a12525; }
+dialog { width: min(540px, calc(100% - 24px)); max-height: calc(100dvh - 24px); overflow-y: auto; border: 1px solid #8a9e9d; border-radius: 12px; color: inherit; }
+dialog::backdrop { background: rgb(0 0 0 / 45%); }
+form { display: grid; gap: 12px; }
+:focus-visible { outline: 3px solid #d45d3f; outline-offset: 2px; }
+.menu-ayudante { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+.menu-ayudante a { display: grid; align-content: center; gap: 12px; min-height: 150px; padding: 24px; }
+.menu-ayudante strong { font-size: 1.6rem; }

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AlucarpinSamitier | Almacén</title>
+  <link rel="stylesheet" href="/app/almacen.css">
+</head>
+<body>
+  <main>
+    <header><h1>Almacén</h1><p>Lo que hay y lo que falta. Stock compartido.</p></header>
+    <nav><a id="volver" href="/app/login.html">Volver al menú</a><button id="nuevo" disabled>Nuevo material</button><button id="actualizar" disabled>Actualizar</button></nav>
+    <p id="mensaje" role="status" aria-live="polite">Comprobando acceso…</p>
+    <section id="pendiente" hidden>
+      <p>Hay una operación pendiente de confirmar. Reinténtala para comprobar si se guardó, sin duplicarla. No registres otra vez la misma entrada o salida.</p>
+      <button id="reintentar">Reintentar operación pendiente</button>
+    </section>
+    <section>
+      <h2>Materiales</h2>
+      <div class="filtros">
+        <label>Buscar material<input id="buscar" type="search" placeholder="Silicona, tornillos, cable…"></label>
+        <label>Mostrar<select id="filtro"><option value="todos">Todos los activos</option><option value="reponer">Falta reponer</option><option value="agotados">Agotados</option><option value="inactivos" hidden>Desactivados</option></select></label>
+      </div>
+      <p id="contador"></p>
+      <div class="lista" role="region" tabindex="0" aria-label="Materiales por líneas. Desliza lateralmente para ver las acciones.">
+        <table><thead><tr><th>Material</th><th>Hay</th><th>Unidad</th><th>Mínimo</th><th>Situación</th><th>Acciones</th></tr></thead><tbody id="materiales"><tr><td colspan="6">Cargando…</td></tr></tbody></table>
+      </div>
+    </section>
+    <section>
+      <h2>Movimientos</h2>
+      <label>Ver movimientos de<select id="historial-material"><option value="">Todos los materiales</option></select></label>
+      <div class="lista" role="region" tabindex="0" aria-label="Movimientos de almacén">
+        <table><thead><tr><th>Fecha y hora</th><th>Movimiento</th><th>Stock restante</th><th>Motivo del recuento</th></tr></thead><tbody id="movimientos"><tr><td colspan="4">Cargando…</td></tr></tbody></table>
+      </div>
+      <button id="mas" hidden>Ver movimientos anteriores</button>
+    </section>
+    <dialog id="editor" aria-labelledby="titulo-editor">
+      <h2 id="titulo-editor">Nuevo material</h2>
+      <form id="form-material">
+        <label>Nombre del material<input id="nombre" maxlength="160" required placeholder="Silicona blanca"></label>
+        <label>Unidad<select id="unidad"><option value="unidades">Unidades</option><option value="botes">Botes</option><option value="cartuchos">Cartuchos</option><option value="cajas">Cajas</option><option value="metros">Metros</option><option value="rollos">Rollos</option><option value="bolsas">Bolsas</option><option value="kg">Kg</option></select></label>
+        <label id="campo-inicial">Cantidad que hay ahora<input id="cantidad-inicial" type="number" min="0" max="1000000" step="0.001" value="0" required inputmode="decimal"></label>
+        <label>Cantidad mínima (opcional)<input id="minimo" type="number" min="0" max="1000000" step="0.001" inputmode="decimal"></label>
+        <label id="campo-activo" hidden>Estado<select id="activo"><option value="1">Activo</option><option value="0">Desactivado</option></select></label>
+        <p>La unidad queda fija para no mezclar cajas con unidades. Cada medida o color es un material distinto.</p>
+        <div class="acciones"><button type="submit">Guardar material</button><button type="button" data-cerrar="editor">Cancelar</button></div>
+      </form>
+      <p class="error" id="error-material" role="alert"></p>
+    </dialog>
+    <dialog id="operacion" aria-labelledby="titulo-operacion">
+      <h2 id="titulo-operacion">Sacar material</h2>
+      <p id="detalle-material"></p>
+      <form id="form-movimiento">
+        <label id="etiqueta-cantidad">Cantidad<input id="cantidad" type="number" min="0.001" max="1000000" step="0.001" required inputmode="decimal"></label>
+        <label id="campo-motivo" hidden>Motivo del recuento<input id="motivo" maxlength="300"></label>
+        <p id="ayuda-movimiento"></p>
+        <div class="acciones"><button id="confirmar-movimiento" type="submit">Sacar material</button><button type="button" data-cerrar="operacion">Cancelar</button></div>
+      </form>
+      <p class="error" id="error-movimiento" role="alert"></p>
+    </dialog>
+  </main>
+  <script src="/app/almacen.js"></script>
+  <script src="/app/pwa.js"></script>
+</body>
+</html>

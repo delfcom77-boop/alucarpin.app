@@ -18,6 +18,7 @@ from respaldo import ErrorRespaldo, crear_respaldo
 from resumen_privado import crear_acceso_privado
 from diario_trabajo import crear_diario
 from tareas_api import crear_tareas
+from almacen import crear_almacen
 from cuentas_reparaciones import inicializar_cuentas, resumenes_cuentas, movimientos, materializar_historico
 
 
@@ -440,6 +441,7 @@ router_resumen_privado, resumen_autorizado = crear_acceso_privado(conexion, admi
 app.include_router(router_resumen_privado)
 app.include_router(crear_diario(conexion, administrador))
 app.include_router(crear_tareas(conexion, administrador))
+app.include_router(crear_almacen(conexion, usuario_actual, administrador))
 
 
 @app.get("/copias-seguridad")

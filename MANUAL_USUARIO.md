@@ -18,6 +18,43 @@ Programa de escritorio -> Supabase -> Web
 
 ## 2. Aplicacion web
 
+### Almacen compartido y menu de ayudantes
+
+Al entrar como ayudante aparece un menu con **Fichajes** y **Almacen**.
+Fichajes conserva el funcionamiento anterior y tiene **Volver al menu**.
+El administrador accede al mismo Almacen desde su menu principal.
+
+**Nuevo material** permite guardar nombre, unidad, cantidad actual y un minimo
+opcional. No hay ubicacion, precios ni vinculacion con Contabilidad. Cada color
+o medida es un material distinto. La unidad queda fija: no mezcles cajas con
+unidades. Admite hasta tres decimales (por ejemplo, metros de cable).
+Administradores y ayudantes pueden dar de alta material y registrar movimientos.
+Solo el administrador puede editar nombre/minimo o desactivar/reactivar.
+No se borran materiales ni movimientos.
+
+Para una salida, busca el material, pulsa **Sacar**, escribe la cantidad y
+confirma **Sacar material**. Si habia 12 botes y sacas 3 quedan 9. No se piden
+persona, obra, destino ni explicaciones. El historial muestra **Salida de
+material: 3 botes de Silicona blanca**, con fecha/hora automatica y stock
+restante, sin nombres de personas. **Anadir** suma una entrada.
+**Corregir cantidad** registra el total real contado y exige un motivo breve;
+si el stock cambio mientras contabas, hay que actualizar antes de corregirlo.
+
+Los filtros permiten ver Todos los activos, Falta reponer (incluye agotados)
+y Agotados; el administrador tambien puede ver Desactivados. Con minimo vacio
+solo se avisa al agotarse. Con minimo definido se avisa al bajar de el.
+El historial se filtra por material y permite cargar movimientos anteriores.
+No se permite sacar mas cantidad de la disponible.
+
+Requiere conexion: el stock se comparte directamente en Supabase, no hay una
+copia offline ni sincronizacion de almacen con el programa Windows. Pulsa
+**Actualizar** para ver cambios de otro dispositivo. Si se pierde una respuesta,
+queda una operacion pendiente en ese navegador: usa **Reintentar operacion
+pendiente**. La misma referencia evita duplicar entradas o salidas incluso tras
+recargar. No vuelvas a registrar esa operacion desde otro dispositivo mientras
+no se haya confirmado. Los registros conservan internamente la referencia de
+usuario para control de integridad, pero no la exponen en el listado/API de stock.
+
 ### Tareas (app y programa)
 
 Abre **Tareas** en el menu. Crea una tarea con un titulo (llamar, preparar un

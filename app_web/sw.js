@@ -1,4 +1,4 @@
-const CACHE = 'alucarpin-app-v15-tareas';
+const CACHE = 'alucarpin-app-v16-almacen';
 const ARCHIVOS = [
   '/app/login.html',
   '/app/administrador.html',
@@ -20,6 +20,10 @@ const ARCHIVOS = [
   '/app/obra.js',
   '/app/exportar.js',
   '/app/ayudante.html',
+  '/app/inicio_ayudante.html',
+  '/app/almacen.html',
+  '/app/almacen.css',
+  '/app/almacen.js',
   '/app/manifest.json',
   '/app/icon.svg',
   '/app/icon-192.png',

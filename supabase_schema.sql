@@ -346,3 +346,36 @@ CREATE TABLE IF NOT EXISTS tareas (
     version INTEGER NOT NULL CHECK (version > 0)
 );
 ALTER TABLE tareas ENABLE ROW LEVEL SECURITY;
+
+-- Stock compartido: cantidades en milesimas para evitar errores de redondeo.
+CREATE TABLE IF NOT EXISTS almacen_materiales (
+    id TEXT PRIMARY KEY,
+    nombre TEXT NOT NULL,
+    nombre_clave TEXT NOT NULL UNIQUE,
+    unidad TEXT NOT NULL,
+    cantidad BIGINT NOT NULL CHECK(cantidad>=0 AND cantidad<=1000000000),
+    minimo BIGINT CHECK(minimo>=0 AND minimo<=1000000000),
+    activo INTEGER NOT NULL DEFAULT 1,
+    version INTEGER NOT NULL DEFAULT 1,
+    creado_en TEXT NOT NULL,
+    actualizado_en TEXT NOT NULL,
+    alta_firma TEXT NOT NULL,
+    alta_usuario BIGINT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS almacen_movimientos (
+    id TEXT PRIMARY KEY,
+    material_id TEXT NOT NULL REFERENCES almacen_materiales(id),
+    tipo TEXT NOT NULL,
+    cantidad BIGINT NOT NULL,
+    stock_anterior BIGINT NOT NULL,
+    stock_resultante BIGINT NOT NULL,
+    nombre TEXT NOT NULL,
+    unidad TEXT NOT NULL,
+    motivo TEXT NOT NULL,
+    creado_en TEXT NOT NULL,
+    solicitud_firma TEXT NOT NULL,
+    usuario_id BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_almacen_movimientos_fecha ON almacen_movimientos(creado_en, id);
+ALTER TABLE almacen_materiales ENABLE ROW LEVEL SECURITY;
+ALTER TABLE almacen_movimientos ENABLE ROW LEVEL SECURITY;

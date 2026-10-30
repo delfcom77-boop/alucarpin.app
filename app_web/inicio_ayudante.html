@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AlucarpinSamitier | Menú de ayudante</title>
+  <link rel="stylesheet" href="/app/almacen.css">
+</head>
+<body>
+  <main>
+    <header><h1>Menú principal</h1><p>¿Qué quieres hacer?</p></header>
+    <p id="mensaje" role="status">Comprobando acceso…</p>
+    <nav class="menu-ayudante" id="menu" hidden>
+      <a id="fichajes" href="/app/ayudante.html"><strong>FICHAJES</strong><span>Registrar y consultar mis días trabajados.</span></a>
+      <a href="/app/almacen.html"><strong>ALMACÉN</strong><span>Materiales, cantidades, entradas y salidas.</span></a>
+    </nav>
+    <a id="salir" href="/app/login.html">Cerrar sesión</a>
+  </main>
+  <script>
+    (async () => {
+      const token = localStorage.getItem('alucarpin_token');
+      if (!token) { location.replace('/app/login.html'); return; }
+      try {
+        const respuesta = await fetch('/yo', { cache: 'no-store', headers: { Authorization: `Bearer ${token}` } });
+        if (respuesta.status === 401) { location.replace('/app/login.html'); return; }
+        if (!respuesta.ok) throw new Error('No se pudo comprobar el acceso. Actualiza la página para reintentar.');
+        const usuario = await respuesta.json();
+        if (usuario.rol === 'administrador') { location.replace('/app/inicio.html'); return; }
+        if (usuario.rol !== 'ayudante' || !usuario.ayudante_id) throw new Error('No hay un ayudante asociado a este acceso.');
+        document.querySelector('#fichajes').href = `/app/ayudante.html?ayudante_id=${encodeURIComponent(usuario.ayudante_id)}`;
+        document.querySelector('#menu').hidden = false;
+        document.querySelector('#mensaje').textContent = '';
+      } catch (error) { document.querySelector('#mensaje').textContent = error.message; }
+    })();
+    document.querySelector('#salir').onclick = event => {
+      event.preventDefault();
+      localStorage.removeItem('alucarpin_token');
+      location.replace('/app/login.html');
+    };
+  </script>
+  <script src="/app/pwa.js"></script>
+</body>
+</html>

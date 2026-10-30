@@ -176,7 +176,7 @@
           localStorage.removeItem('alucarpin_credenciales');
         }
         localStorage.setItem('alucarpin_token', resultado.token);
-        location.href = resultado.rol === 'administrador' ? '/app/inicio.html' : `/app/ayudante.html?ayudante_id=${resultado.ayudante_id}`;
+        location.href = resultado.rol === 'administrador' ? '/app/inicio.html' : '/app/inicio_ayudante.html';
       } catch (error) {
         mensaje.textContent = error.name === 'AbortError'
           ? 'El servidor tarda demasiado en responder. Inténtalo de nuevo.'
