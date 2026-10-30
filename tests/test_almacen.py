@@ -18,9 +18,9 @@ from almacen import crear_almacen
 
 class AlmacenTests(unittest.TestCase):
     def setUp(self):
-        self.carpeta = tempfile.TemporaryDirectory()
-        self.addCleanup(self.carpeta.cleanup)
-        self.ruta = Path(self.carpeta.name) / "almacen.db"
+        self.directorio = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directorio.cleanup)
+        self.ruta = Path(self.directorio.name) / "almacen.db"
         def conexion():
             db = sqlite3.connect(self.ruta, timeout=15)
             db.row_factory = sqlite3.Row
@@ -219,6 +219,88 @@ class AlmacenTests(unittest.TestCase):
         self.assertIn('href="/app/ayudante.html"', menu)
         self.assertIn('href="/app/inicio_ayudante.html">Volver al menú', fichajes)
 
+    def carpeta(self, nombre="Siliconas", **datos):
+        return self.cliente.post("/almacen/carpetas", json={"id": str(uuid4()), "nombre": nombre, **datos})
+
+    def test_carpetas_y_variantes_con_stock_independiente(self):
+        carpeta = self.carpeta().json()
+        blanca = self.alta(nombre="Blanca", carpeta_id=carpeta["id"]).json()
+        negra = self.alta(nombre="Negra", carpeta_id=carpeta["id"], cantidad="4").json()
+        salida = self.movimiento(blanca, "salida", "3").json()
+        stocks = {m["id"]: m["cantidad"] for m in self.materiales()}
+        self.assertEqual(stocks, {blanca["id"]: "9", negra["id"]: "4"})
+        self.assertEqual(salida["nombre"], "Siliconas / Blanca")
+        self.assertEqual(self.cliente.get("/almacen/carpetas").json(), [carpeta])
+        self.assertEqual(self.alta(nombre="BLANCA", carpeta_id=carpeta["id"]).status_code, 409)
+        otra = self.carpeta("Pinturas").json()
+        self.assertEqual(self.alta(nombre="Blanca", carpeta_id=otra["id"]).status_code, 201)
+        historial = self.cliente.get("/almacen/movimientos", params={"carpeta_id": carpeta["id"]}).json()["movimientos"]
+        self.assertEqual(len(historial), 3)
+        self.assertEqual({m["material_id"] for m in historial}, {blanca["id"], negra["id"]})
+
+    def test_carpeta_reintento_y_validacion(self):
+        ident = str(uuid4())
+        primera = self.carpeta(id=ident)
+        self.assertEqual(primera.status_code, 201)
+        self.assertEqual(self.carpeta(id=ident).json(), primera.json())
+        self.assertEqual(self.carpeta("Otro", id=ident).status_code, 409)
+        self.assertEqual(self.carpeta(" SILICONAS ").status_code, 409)
+        self.assertEqual(self.carpeta("  ").status_code, 422)
+        self.assertEqual(self.alta(carpeta_id=str(uuid4())).status_code, 404)
+        self.assertEqual(self.materiales(), [])
+
+    def test_reubicar_material_anterior_conserva_stock_e_historial(self):
+        material = self.alta().json()
+        self.movimiento(material, "salida", "3")
+        antes = self.cliente.get("/almacen/movimientos").json()
+        carpeta = self.carpeta().json()
+        self.cliente.headers["Authorization"] = "Bearer administrador"
+        datos = {"nombre": "Blanca", "unidad": "botes", "minimo": "5", "version": 2, "carpeta_id": carpeta["id"]}
+        actual = self.cliente.put("/almacen/materiales/" + material["id"], json=datos)
+        self.assertEqual(actual.status_code, 200)
+        self.assertEqual(actual.json()["cantidad"], "9")
+        self.assertEqual(actual.json()["id"], material["id"])
+        self.assertEqual(actual.json()["carpeta_id"], carpeta["id"])
+        self.assertEqual(self.cliente.get("/almacen/movimientos").json(), antes)
+        # Clientes antiguos que no envian carpeta no deben desasignarla.
+        datos.pop("carpeta_id")
+        datos["version"] = actual.json()["version"]
+        actual = self.cliente.put("/almacen/materiales/" + material["id"], json=datos)
+        self.assertEqual(actual.json()["carpeta_id"], carpeta["id"])
+        self.assertEqual(self.movimiento(actual.json(), "salida", "1").json()["nombre"], "Siliconas / Blanca")
+
+    def test_migracion_legacy_no_modifica_materiales_ni_movimientos(self):
+        from almacen import inicializar_almacen
+        material = self.alta().json()
+        self.movimiento(material, "salida", "3")
+        with closing(self.conexion()) as db:
+            db.execute("ALTER TABLE almacen_materiales DROP COLUMN carpeta_id")
+            db.execute("DROP TABLE almacen_carpetas")
+            db.commit()
+            materiales = [tuple(f) for f in db.execute("SELECT * FROM almacen_materiales")]
+            movimientos = [tuple(f) for f in db.execute("SELECT * FROM almacen_movimientos")]
+            inicializar_almacen(db)
+            inicializar_almacen(db)
+            db.commit()
+            self.assertEqual([tuple(f)[:-1] for f in db.execute("SELECT * FROM almacen_materiales")], materiales)
+            self.assertEqual([tuple(f) for f in db.execute("SELECT * FROM almacen_movimientos")], movimientos)
+        self.assertIsNone(self.materiales()[0]["carpeta_id"])
+
+    def test_permisos_carpetas_y_reintento_alta_legacy(self):
+        ident = str(uuid4())
+        material = self.alta(id=ident).json()
+        carpeta = self.carpeta().json()
+        self.cliente.headers["Authorization"] = "Bearer administrador"
+        self.cliente.put("/almacen/materiales/" + ident, json={
+            "nombre": "Blanca", "unidad": "botes", "minimo": "5", "version": 1, "carpeta_id": carpeta["id"],
+        })
+        self.cliente.headers["Authorization"] = "Bearer ayudante"
+        self.assertEqual(self.alta(id=ident).json()["carpeta_id"], carpeta["id"])
+        for rol, esperado in (("", 401), ("otro", 403)):
+            self.cliente.headers["Authorization"] = "Bearer " + rol
+            self.assertEqual(self.cliente.get("/almacen/carpetas").status_code, esperado)
+            self.assertEqual(self.carpeta("Prueba").status_code, esperado)
+
 
 @unittest.skipUnless(os.getenv("DATABASE_URL"), "Requiere PostgreSQL; solo tablas temporales")
 class AlmacenPostgresTests(unittest.TestCase):
@@ -228,8 +310,8 @@ class AlmacenPostgresTests(unittest.TestCase):
             with closing(sqlite3.connect(":memory:")) as esquema:
                 inicializar_almacen(esquema)
                 sql = [f[0] for f in esquema.execute("SELECT sql FROM sqlite_master WHERE type='table' ORDER BY name DESC")]
-            # Material primero, ambos nombres quedan ocultos por tablas temporales.
-            for sentencia in sorted(sql, key=lambda s: "CREATE TABLE almacen_materiales" not in s):
+            orden = {"almacen_carpetas": 0, "almacen_materiales": 1, "almacen_movimientos": 2}
+            for sentencia in sorted(sql, key=lambda s: orden[s.split()[2]]):
                 db.execute(sentencia.replace("CREATE TABLE ", "CREATE TEMP TABLE ", 1))
             db.execute("SET LOCAL search_path TO pg_temp")
             class Conexion:
@@ -250,12 +332,15 @@ class AlmacenPostgresTests(unittest.TestCase):
             router = crear_almacen(lambda: wrapper, usuario, usuario)
             app.include_router(router)
             rutas = {r.path + ":" + next(iter(r.methods)): r.endpoint for r in router.routes}
-            from almacen import NuevoMaterial, Movimiento
+            from almacen import NuevoMaterial, Movimiento, NuevaCarpeta
+            carpeta = rutas["/almacen/carpetas:POST"](NuevaCarpeta(id=uuid4(), nombre="Siliconas"))
             ident = uuid4()
-            material = rutas["/almacen/materiales:POST"](NuevoMaterial(id=ident, nombre="Temporal", cantidad="12"), usuario())
+            material = rutas["/almacen/materiales:POST"](NuevoMaterial(id=ident, nombre="Blanca", cantidad="12", carpeta_id=carpeta["id"]), usuario())
             salida = rutas["/almacen/materiales/{ident}/movimientos:POST"](
                 ident, Movimiento(id=uuid4(), tipo="salida", cantidad="3"), usuario(),
             )
             self.assertEqual(material["cantidad"], "12")
             self.assertEqual(salida["stock_resultante"], "9")
+            self.assertEqual(salida["nombre"], "Siliconas / Blanca")
+            self.assertEqual(material["carpeta_id"], carpeta["id"])
             self.assertTrue(db.execute("SELECT relrowsecurity FROM pg_class WHERE oid='pg_temp.almacen_materiales'::regclass").fetchone()["relrowsecurity"])

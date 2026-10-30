@@ -22,6 +22,7 @@ class DatosMaterial(BaseModel):
     nombre: str = Field(min_length=1, max_length=160)
     unidad: Literal["unidades", "botes", "cartuchos", "cajas", "metros", "rollos", "bolsas", "kg"] = "unidades"
     minimo: Decimal | None = Field(default=None, ge=0, le=1_000_000, decimal_places=3, allow_inf_nan=False)
+    carpeta_id: UUID | None = None
 
     @field_validator("nombre")
     @classmethod
@@ -56,6 +57,17 @@ class Movimiento(BaseModel):
         return valor.strip()
 
 
+class NuevaCarpeta(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: UUID
+    nombre: str = Field(min_length=1, max_length=160)
+
+    @field_validator("nombre")
+    @classmethod
+    def nombre_limpio(cls, valor):
+        return DatosMaterial.nombre_limpio(valor)
+
+
 def unidades(valor):
     return int(valor * 1000)
 
@@ -74,6 +86,10 @@ def firma(datos):
 
 def inicializar_almacen(db):
     db.execute(
+        "CREATE TABLE IF NOT EXISTS almacen_carpetas (id TEXT PRIMARY KEY, "
+        "nombre TEXT NOT NULL, nombre_clave TEXT NOT NULL UNIQUE, creado_en TEXT NOT NULL)"
+    )
+    db.execute(
         "CREATE TABLE IF NOT EXISTS almacen_materiales ("
         "id TEXT PRIMARY KEY, nombre TEXT NOT NULL, nombre_clave TEXT NOT NULL UNIQUE, "
         "unidad TEXT NOT NULL, cantidad BIGINT NOT NULL CHECK(cantidad>=0 AND cantidad<=1000000000), "
@@ -91,6 +107,13 @@ def inicializar_almacen(db):
     )
     db.execute("CREATE INDEX IF NOT EXISTS idx_almacen_movimientos_fecha ON almacen_movimientos(creado_en, id)")
     if hasattr(db, "db"):
+        db.execute("ALTER TABLE almacen_materiales ADD COLUMN IF NOT EXISTS carpeta_id TEXT REFERENCES almacen_carpetas(id)")
+    else:
+        columnas = {f[1] for f in db.execute("PRAGMA table_info(almacen_materiales)")}
+        if "carpeta_id" not in columnas:
+            db.execute("ALTER TABLE almacen_materiales ADD COLUMN carpeta_id TEXT REFERENCES almacen_carpetas(id)")
+    if hasattr(db, "db"):
+        db.execute("ALTER TABLE almacen_carpetas ENABLE ROW LEVEL SECURITY")
         db.execute("ALTER TABLE almacen_materiales ENABLE ROW LEVEL SECURITY")
         db.execute("ALTER TABLE almacen_movimientos ENABLE ROW LEVEL SECURITY")
 
@@ -101,6 +124,7 @@ def publico_material(fila):
         "cantidad": cantidad_texto(fila["cantidad"]),
         "minimo": cantidad_texto(fila["minimo"]) if fila["minimo"] is not None else None,
         "activo": bool(fila["activo"]), "version": fila["version"],
+        "carpeta_id": fila["carpeta_id"],
         "situacion": "Agotado" if fila["cantidad"] == 0 else
         "Falta reponer" if fila["minimo"] is not None and fila["cantidad"] < fila["minimo"] else "Hay",
     }
@@ -151,14 +175,51 @@ def crear_almacen(conexion, usuario_actual, administrador):
             raise HTTPException(404, "El material no existe.")
         return fila
 
-    def comprobar_nombre(db, nombre, ident):
+    def clave_variante(nombre, carpeta):
+        return carpeta + ":" + clave_nombre(nombre) if carpeta else clave_nombre(nombre)
+
+    def nombre_completo(db, nombre, carpeta):
+        if not carpeta:
+            return nombre
+        fila = db.execute("SELECT nombre FROM almacen_carpetas WHERE id=?", (carpeta,)).fetchone()
+        if not fila:
+            raise HTTPException(404, "La carpeta no existe.")
+        return fila["nombre"] + " / " + nombre
+
+    def comprobar_nombre(db, nombre, ident, carpeta=None):
         fila = db.execute(
-            "SELECT id FROM almacen_materiales WHERE nombre_clave=?", (clave_nombre(nombre),),
+            "SELECT id FROM almacen_materiales WHERE nombre_clave=?", (clave_variante(nombre, carpeta),),
         ).fetchone()
         if fila and fila["id"] != ident:
             raise HTTPException(409, "Ya existe ese material, tambien puede estar desactivado. Buscalo antes de crear otro.")
 
     router = APIRouter(dependencies=[Depends(acceso)], on_startup=[iniciar])
+
+    @router.get("/almacen/carpetas")
+    def carpetas():
+        with transaccion() as db:
+            return [dict(f) for f in db.execute(
+                "SELECT id,nombre FROM almacen_carpetas ORDER BY nombre_clave,id"
+            ).fetchall()]
+
+    @router.post("/almacen/carpetas", status_code=201)
+    def crear_carpeta(datos: NuevaCarpeta):
+        ident, clave = str(datos.id), clave_nombre(datos.nombre)
+        with transaccion(True) as db:
+            bloquear_solicitud(db, "almacen-carpeta:" + ident)
+            bloquear_solicitud(db, "almacen-carpeta-nombre:" + clave)
+            anterior = db.execute("SELECT id,nombre FROM almacen_carpetas WHERE id=?", (ident,)).fetchone()
+            if anterior:
+                if anterior["nombre"] != datos.nombre:
+                    raise HTTPException(409, "La referencia ya se utilizo para otra carpeta.")
+                return dict(anterior)
+            if db.execute("SELECT id FROM almacen_carpetas WHERE nombre_clave=?", (clave,)).fetchone():
+                raise HTTPException(409, "Ya existe esa carpeta. Abrela para anadir variantes.")
+            db.execute(
+                "INSERT INTO almacen_carpetas(id,nombre,nombre_clave,creado_en) VALUES(?,?,?,?)",
+                (ident, datos.nombre, clave, datetime.now(timezone.utc).isoformat()),
+            )
+            return {"id": ident, "nombre": datos.nombre}
 
     @router.get("/almacen/materiales")
     def listar():
@@ -172,30 +233,35 @@ def crear_almacen(conexion, usuario_actual, administrador):
         ident = str(datos.id)
         cantidad = unidades(datos.cantidad)
         minimo = unidades(datos.minimo) if datos.minimo is not None else None
-        contenido = firma({"nombre": datos.nombre, "unidad": datos.unidad, "cantidad": cantidad, "minimo": minimo})
+        carpeta = str(datos.carpeta_id) if datos.carpeta_id else None
+        contenido_alta = {"nombre": datos.nombre, "unidad": datos.unidad, "cantidad": cantidad, "minimo": minimo}
+        if carpeta:
+            contenido_alta["carpeta_id"] = carpeta
+        contenido = firma(contenido_alta)
         sello = datetime.now(timezone.utc).isoformat()
         with transaccion(True) as db:
             bloquear_solicitud(db, ident)
             # Serializa nombres iguales incluso cuando las altas usan UUID distintos.
-            bloquear_solicitud(db, "almacen-nombre:" + clave_nombre(datos.nombre))
+            bloquear_solicitud(db, "almacen-nombre:" + clave_variante(datos.nombre, carpeta))
             anterior = db.execute("SELECT * FROM almacen_materiales WHERE id=?", (ident,)).fetchone()
             if anterior:
                 if anterior["alta_firma"] != contenido or anterior["alta_usuario"] != usuario["id"]:
                     raise HTTPException(409, "Esta referencia ya se utilizo para otra alta.")
                 return publico_material(anterior)
-            comprobar_nombre(db, datos.nombre, ident)
+            nombre = nombre_completo(db, datos.nombre, carpeta)
+            comprobar_nombre(db, datos.nombre, ident, carpeta)
             db.execute(
                 "INSERT INTO almacen_materiales "
-                "(id,nombre,nombre_clave,unidad,cantidad,minimo,activo,version,creado_en,actualizado_en,alta_firma,alta_usuario) "
-                "VALUES (?,?,?,?,?,?,1,1,?,?,?,?)",
-                (ident, datos.nombre, clave_nombre(datos.nombre), datos.unidad, cantidad, minimo,
-                 sello, sello, contenido, usuario["id"]),
+                "(id,nombre,nombre_clave,unidad,cantidad,minimo,activo,version,creado_en,actualizado_en,alta_firma,alta_usuario,carpeta_id) "
+                "VALUES (?,?,?,?,?,?,1,1,?,?,?,?,?)",
+                (ident, datos.nombre, clave_variante(datos.nombre, carpeta), datos.unidad, cantidad, minimo,
+                 sello, sello, contenido, usuario["id"], carpeta),
             )
             db.execute(
                 "INSERT INTO almacen_movimientos "
                 "(id,material_id,tipo,cantidad,stock_anterior,stock_resultante,nombre,unidad,motivo,creado_en,solicitud_firma,usuario_id) "
                 "VALUES (?,?, 'inicial',?,0,?,?,?,'',?,?,?)",
-                (ident, ident, cantidad, cantidad, datos.nombre, datos.unidad, sello, contenido, usuario["id"]),
+                (ident, ident, cantidad, cantidad, nombre, datos.unidad, sello, contenido, usuario["id"]),
             )
             return publico_material(material(db, ident))
 
@@ -208,13 +274,15 @@ def crear_almacen(conexion, usuario_actual, administrador):
                 raise HTTPException(409, "El material cambio. Actualiza el listado antes de editar.")
             if datos.unidad != fila["unidad"]:
                 raise HTTPException(422, "La unidad no se cambia: crea otro material para no mezclar cajas con unidades.")
-            bloquear_solicitud(db, "almacen-nombre:" + clave_nombre(datos.nombre))
-            comprobar_nombre(db, datos.nombre, ident)
+            carpeta = (str(datos.carpeta_id) if datos.carpeta_id else None) if "carpeta_id" in datos.model_fields_set else fila["carpeta_id"]
+            nombre_completo(db, datos.nombre, carpeta)
+            bloquear_solicitud(db, "almacen-nombre:" + clave_variante(datos.nombre, carpeta))
+            comprobar_nombre(db, datos.nombre, ident, carpeta)
             db.execute(
                 "UPDATE almacen_materiales SET nombre=?,nombre_clave=?,minimo=?,activo=?,"
-                "version=version+1,actualizado_en=? WHERE id=?",
-                (datos.nombre, clave_nombre(datos.nombre), unidades(datos.minimo) if datos.minimo is not None else None,
-                 int(datos.activo), datetime.now(timezone.utc).isoformat(), ident),
+                "version=version+1,actualizado_en=?,carpeta_id=? WHERE id=?",
+                (datos.nombre, clave_variante(datos.nombre, carpeta), unidades(datos.minimo) if datos.minimo is not None else None,
+                 int(datos.activo), datetime.now(timezone.utc).isoformat(), carpeta, ident),
             )
             return publico_material(material(db, ident))
 
@@ -254,19 +322,22 @@ def crear_almacen(conexion, usuario_actual, administrador):
                 "INSERT INTO almacen_movimientos "
                 "(id,material_id,tipo,cantidad,stock_anterior,stock_resultante,nombre,unidad,motivo,creado_en,solicitud_firma,usuario_id) "
                 "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-                (solicitud, ident, datos.tipo, cantidad, stock, nuevo, fila["nombre"], fila["unidad"],
+                (solicitud, ident, datos.tipo, cantidad, stock, nuevo, nombre_completo(db, fila["nombre"], fila["carpeta_id"]), fila["unidad"],
                  datos.motivo, sello, contenido, usuario["id"]),
             )
             return publico_movimiento(db.execute("SELECT * FROM almacen_movimientos WHERE id=?", (solicitud,)).fetchone())
 
     @router.get("/almacen/movimientos")
     def historial(material_id: UUID | None = None, limite: int = Query(50, ge=1, le=100),
-                  antes: str | None = Query(None, max_length=100)):
+                  antes: str | None = Query(None, max_length=100), carpeta_id: UUID | None = None):
         with transaccion() as db:
             condiciones, parametros = [], []
             if material_id:
                 condiciones.append("material_id=?")
                 parametros.append(str(material_id))
+            if carpeta_id:
+                condiciones.append("material_id IN (SELECT id FROM almacen_materiales WHERE carpeta_id=?)")
+                parametros.append(str(carpeta_id))
             if antes:
                 condiciones.append("(creado_en || '|' || id) < ?")
                 parametros.append(antes)

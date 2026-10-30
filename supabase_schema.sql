@@ -348,6 +348,12 @@ CREATE TABLE IF NOT EXISTS tareas (
 ALTER TABLE tareas ENABLE ROW LEVEL SECURITY;
 
 -- Stock compartido: cantidades en milesimas para evitar errores de redondeo.
+CREATE TABLE IF NOT EXISTS almacen_carpetas (
+    id TEXT PRIMARY KEY,
+    nombre TEXT NOT NULL,
+    nombre_clave TEXT NOT NULL UNIQUE,
+    creado_en TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS almacen_materiales (
     id TEXT PRIMARY KEY,
     nombre TEXT NOT NULL,
@@ -379,3 +385,5 @@ CREATE TABLE IF NOT EXISTS almacen_movimientos (
 CREATE INDEX IF NOT EXISTS idx_almacen_movimientos_fecha ON almacen_movimientos(creado_en, id);
 ALTER TABLE almacen_materiales ENABLE ROW LEVEL SECURITY;
 ALTER TABLE almacen_movimientos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE almacen_materiales ADD COLUMN IF NOT EXISTS carpeta_id TEXT REFERENCES almacen_carpetas(id);
+ALTER TABLE almacen_carpetas ENABLE ROW LEVEL SECURITY;

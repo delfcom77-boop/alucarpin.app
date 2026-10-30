@@ -33,3 +33,6 @@ form { display: grid; gap: 12px; }
 .menu-ayudante { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
 .menu-ayudante a { display: grid; align-content: center; gap: 12px; min-height: 150px; padding: 24px; }
 .menu-ayudante strong { font-size: 1.6rem; }
+.carpetas { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.carpetas button { text-align: left; min-height: 64px; overflow-wrap: anywhere; }
+.carpetas button[aria-pressed="true"] { background: #d45d3f; }

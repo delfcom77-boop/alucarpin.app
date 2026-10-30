@@ -5,6 +5,9 @@
   if (!token) { location.replace('/app/login.html'); return; }
   let usuario, materiales = [], editado, seleccionado, tipoMovimiento, siguiente;
   let ocupado = false, pendiente = null, clavePendiente, listo = false;
+  let carpetas = [], carpetaActual = null;
+  const nombreCarpeta = id => carpetas.find(c => c.id === id)?.nombre || 'Sin carpeta';
+  const nombreMaterial = m => m.carpeta_id ? `${nombreCarpeta(m.carpeta_id)} / ${m.nombre}` : m.nombre;
   const normalizar = texto => texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es');
   const numero = texto => Number(texto).toLocaleString('es-ES', { maximumFractionDigits: 3 });
   const fecha = texto => new Date(texto).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
@@ -49,11 +52,34 @@
   }
   function pintar() {
     const consulta = normalizar($('buscar').value.trim()), filtro = $('filtro').value;
+    $('carpetas').replaceChildren();
+    const grupos = [...carpetas];
+    if (materiales.some(m => !m.carpeta_id)) grupos.push({ id: '', nombre: 'Sin carpeta · materiales anteriores' });
+    for (const carpeta of grupos) {
+      const variantes = materiales.filter(m => (m.carpeta_id || '') === carpeta.id);
+      const coincidencias = variantes.filter(m =>
+        (filtro === 'inactivos' ? !m.activo : m.activo)
+        && (filtro !== 'reponer' || m.situacion !== 'Hay')
+        && (filtro !== 'agotados' || m.situacion === 'Agotado')
+        && normalizar(nombreMaterial(m)).includes(consulta));
+      if ((consulta || filtro !== 'todos') && !coincidencias.length && !normalizar(carpeta.nombre).includes(consulta || '\0')) continue;
+      const boton = document.createElement('button');
+      boton.textContent = `${carpeta.nombre} · ${coincidencias.length} variantes`;
+      boton.setAttribute('aria-pressed', String(carpetaActual === carpeta.id));
+      boton.disabled = ocupado;
+      boton.onclick = () => { carpetaActual = carpeta.id; $('historial-material').value = ''; pintar(); refrescarHistorial(); };
+      $('carpetas').append(boton);
+    }
+    if (!grupos.length) $('carpetas').textContent = 'Todavía no hay carpetas. Pulsa «Nuevo material» para crear la primera.';
+    $('titulo-carpeta').textContent = carpetaActual === null ? 'Selecciona una carpeta' : nombreCarpeta(carpetaActual);
+    $('anadir-variante').hidden = !carpetaActual;
+    $('cerrar-carpeta').hidden = carpetaActual === null;
     const visibles = materiales.filter(m =>
-      (filtro === 'inactivos' ? !m.activo : m.activo)
+      carpetaActual !== null && (m.carpeta_id || '') === carpetaActual
+      && (filtro === 'inactivos' ? !m.activo : m.activo)
       && (filtro !== 'reponer' || m.situacion !== 'Hay')
       && (filtro !== 'agotados' || m.situacion === 'Agotado')
-      && normalizar(m.nombre).includes(consulta)
+      && normalizar(nombreMaterial(m)).includes(consulta)
     );
     $('materiales').replaceChildren();
     $('contador').textContent = `${visibles.length} materiales · ${materiales.filter(m => m.activo && m.situacion !== 'Hay').length} por reponer o agotados`;
@@ -83,20 +109,22 @@
       const fila = $('materiales').insertRow();
       const td = fila.insertCell();
       td.colSpan = 6;
-      td.textContent = 'No hay materiales con este filtro. Puedes añadirlos con «Nuevo material».';
+      td.textContent = carpetaActual === null ? 'Abre una carpeta para ver sus variantes.' : 'No hay variantes con este filtro. Usa «Añadir variante» dentro de una carpeta.';
     }
   }
   async function cargarMateriales() {
+    carpetas = await api('/almacen/carpetas');
     materiales = await api('/almacen/materiales');
     const elegido = $('historial-material').value;
     $('historial-material').replaceChildren(new Option('Todos los materiales', ''));
-    materiales.forEach(m => $('historial-material').add(new Option(m.nombre + (m.activo ? '' : ' (desactivado)'), m.id)));
+    materiales.forEach(m => $('historial-material').add(new Option(nombreMaterial(m) + (m.activo ? '' : ' (desactivado)'), m.id)));
     $('historial-material').value = elegido;
     pintar();
   }
   async function cargarHistorial(ampliar = false) {
     const parametros = new URLSearchParams({ limite: '50' });
     if ($('historial-material').value) parametros.set('material_id', $('historial-material').value);
+    else if (carpetaActual) parametros.set('carpeta_id', carpetaActual);
     if (ampliar && siguiente) parametros.set('antes', siguiente);
     const datos = await api('/almacen/movimientos?' + parametros);
     if (!ampliar) $('movimientos').replaceChildren();
@@ -132,7 +160,12 @@
     if (!disponible()) return;
     editado = material;
     $('form-material').reset();
-    $('titulo-editor').textContent = material ? 'Editar material' : 'Nuevo material';
+    $('titulo-editor').textContent = material ? 'Editar variante' : 'Añadir variante';
+    $('carpeta-variante').replaceChildren();
+    if (material && !material.carpeta_id) $('carpeta-variante').add(new Option('Sin carpeta', ''));
+    carpetas.forEach(c => $('carpeta-variante').add(new Option(c.nombre, c.id)));
+    $('carpeta-variante').value = material ? material.carpeta_id || '' : carpetaActual;
+    $('carpeta-variante').required = !material;
     $('nombre').value = material?.nombre || '';
     $('unidad').value = material?.unidad || 'unidades';
     $('unidad').disabled = Boolean(material);
@@ -152,7 +185,7 @@
     const texto = { salida: 'Sacar material', entrada: 'Añadir material', recuento: 'Corregir cantidad' }[tipo];
     $('titulo-operacion').textContent = texto;
     $('confirmar-movimiento').textContent = texto;
-    $('detalle-material').textContent = `${material.nombre} · Hay ${numero(material.cantidad)} ${material.unidad}`;
+    $('detalle-material').textContent = `${nombreMaterial(material)} · Hay ${numero(material.cantidad)} ${material.unidad}`;
     $('campo-motivo').hidden = tipo !== 'recuento';
     $('motivo').required = tipo === 'recuento';
     $('cantidad').min = tipo === 'recuento' ? '0' : '0.001';
@@ -168,11 +201,13 @@
     bloquear(true);
     let confirmada = false;
     try {
-      await api(pendiente.url, { method: pendiente.metodo, body: JSON.stringify(pendiente.datos) });
+      const resultado = await api(pendiente.url, { method: pendiente.metodo, body: JSON.stringify(pendiente.datos) });
+      if (pendiente.url === '/almacen/carpetas') carpetaActual = resultado.id;
       confirmada = true;
       guardarPendiente(null);
       $('editor').close();
       $('operacion').close();
+      $('editor-carpeta').close();
       await actualizar();
       mensaje('Operación guardada. Stock actualizado.');
     } catch (error) {
@@ -182,6 +217,7 @@
       mensaje(texto, true);
       $('error-material').textContent = texto;
       $('error-movimiento').textContent = texto;
+      $('error-carpeta').textContent = texto;
     } finally { bloquear(false); }
   }
   function preparar(url, metodo, datos) {
@@ -198,7 +234,8 @@
     evento.preventDefault();
     const datos = {
       nombre: $('nombre').value.trim(), unidad: $('unidad').value,
-      minimo: $('minimo').value === '' ? null : $('minimo').value
+      minimo: $('minimo').value === '' ? null : $('minimo').value,
+      carpeta_id: $('carpeta-variante').value || null
     };
     if (!datos.nombre) { $('error-material').textContent = 'Escribe el nombre del material.'; return; }
     if (editado) {
@@ -221,7 +258,24 @@
     }
     preparar(`/almacen/materiales/${seleccionado.id}/movimientos`, 'POST', datos);
   };
-  $('nuevo').onclick = () => abrirMaterial();
+  $('nuevo').onclick = () => {
+    if (!disponible()) return;
+    $('form-carpeta').reset();
+    $('error-carpeta').textContent = '';
+    $('editor-carpeta').showModal();
+  };
+  $('form-carpeta').onsubmit = evento => {
+    evento.preventDefault();
+    const nombre = $('nombre-carpeta').value.trim();
+    if (!nombre) { $('error-carpeta').textContent = 'Escribe el nombre de la carpeta.'; return; }
+    preparar('/almacen/carpetas', 'POST', { id: crypto.randomUUID(), nombre });
+  };
+  $('anadir-variante').onclick = () => abrirMaterial();
+  $('cerrar-carpeta').onclick = () => { carpetaActual = null; $('historial-material').value = ''; pintar(); refrescarHistorial(); };
+  async function refrescarHistorial() {
+    try { await cargarHistorial(); }
+    catch (error) { mensaje(error.message, true); }
+  }
   $('reintentar').onclick = enviarPendiente;
   $('actualizar').onclick = async () => {
     if (!listo) { await iniciar(); return; }
@@ -257,7 +311,7 @@
       const guardada = localStorage.getItem(clavePendiente);
       if (guardada) {
         pendiente = JSON.parse(guardada);
-        if (!pendiente.url?.startsWith('/almacen/materiales') || !['POST', 'PUT'].includes(pendiente.metodo) || !pendiente.datos) {
+        if (!(pendiente.url?.startsWith('/almacen/materiales') || pendiente.url === '/almacen/carpetas') || !['POST', 'PUT'].includes(pendiente.metodo) || !pendiente.datos) {
           throw new Error('La referencia de operación pendiente no es válida. No se enviará automáticamente; requiere revisión.');
         }
       }

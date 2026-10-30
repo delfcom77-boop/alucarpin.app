@@ -16,7 +16,14 @@
       <button id="reintentar">Reintentar operación pendiente</button>
     </section>
     <section>
-      <h2>Materiales</h2>
+      <h2>Carpetas de materiales</h2>
+      <p>Nuevo material crea una carpeta. Ábrela para añadir colores, medidas o variantes.</p>
+      <div id="carpetas" class="carpetas"></div>
+    </section>
+    <section>
+      <h2 id="titulo-carpeta">Selecciona una carpeta</h2>
+      <button id="anadir-variante" hidden>Añadir variante</button>
+      <button id="cerrar-carpeta" hidden>Volver a carpetas</button>
       <div class="filtros">
         <label>Buscar material<input id="buscar" type="search" placeholder="Silicona, tornillos, cable…"></label>
         <label>Mostrar<select id="filtro"><option value="todos">Todos los activos</option><option value="reponer">Falta reponer</option><option value="agotados">Agotados</option><option value="inactivos" hidden>Desactivados</option></select></label>
@@ -26,6 +33,14 @@
         <table><thead><tr><th>Material</th><th>Hay</th><th>Unidad</th><th>Mínimo</th><th>Situación</th><th>Acciones</th></tr></thead><tbody id="materiales"><tr><td colspan="6">Cargando…</td></tr></tbody></table>
       </div>
     </section>
+    <dialog id="editor-carpeta" aria-labelledby="titulo-nueva-carpeta">
+      <h2 id="titulo-nueva-carpeta">Nuevo material · Crear carpeta</h2>
+      <form id="form-carpeta">
+        <label>Nombre de la carpeta<input id="nombre-carpeta" required maxlength="160" placeholder="Siliconas, Tornillos, Cable…"></label>
+        <div class="acciones"><button type="submit">Crear carpeta</button><button type="button" data-cerrar="editor-carpeta">Cancelar</button></div>
+      </form>
+      <p id="error-carpeta" class="error" role="alert"></p>
+    </dialog>
     <section>
       <h2>Movimientos</h2>
       <label>Ver movimientos de<select id="historial-material"><option value="">Todos los materiales</option></select></label>
@@ -35,15 +50,16 @@
       <button id="mas" hidden>Ver movimientos anteriores</button>
     </section>
     <dialog id="editor" aria-labelledby="titulo-editor">
-      <h2 id="titulo-editor">Nuevo material</h2>
+      <h2 id="titulo-editor">Añadir variante</h2>
       <form id="form-material">
-        <label>Nombre del material<input id="nombre" maxlength="160" required placeholder="Silicona blanca"></label>
+        <label>Variante / color / medida<input id="nombre" maxlength="160" required placeholder="Blanca, Negra, 4 × 30…"></label>
+        <label>Carpeta<select id="carpeta-variante" required></select></label>
         <label>Unidad<select id="unidad"><option value="unidades">Unidades</option><option value="botes">Botes</option><option value="cartuchos">Cartuchos</option><option value="cajas">Cajas</option><option value="metros">Metros</option><option value="rollos">Rollos</option><option value="bolsas">Bolsas</option><option value="kg">Kg</option></select></label>
         <label id="campo-inicial">Cantidad que hay ahora<input id="cantidad-inicial" type="number" min="0" max="1000000" step="0.001" value="0" required inputmode="decimal"></label>
         <label>Cantidad mínima (opcional)<input id="minimo" type="number" min="0" max="1000000" step="0.001" inputmode="decimal"></label>
         <label id="campo-activo" hidden>Estado<select id="activo"><option value="1">Activo</option><option value="0">Desactivado</option></select></label>
         <p>La unidad queda fija para no mezclar cajas con unidades. Cada medida o color es un material distinto.</p>
-        <div class="acciones"><button type="submit">Guardar material</button><button type="button" data-cerrar="editor">Cancelar</button></div>
+        <div class="acciones"><button type="submit">Guardar variante</button><button type="button" data-cerrar="editor">Cancelar</button></div>
       </form>
       <p class="error" id="error-material" role="alert"></p>
     </dialog>

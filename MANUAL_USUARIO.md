@@ -24,18 +24,25 @@ Al entrar como ayudante aparece un menu con **Fichajes** y **Almacen**.
 Fichajes conserva el funcionamiento anterior y tiene **Volver al menu**.
 El administrador accede al mismo Almacen desde su menu principal.
 
-**Nuevo material** permite guardar nombre, unidad, cantidad actual y un minimo
-opcional. No hay ubicacion, precios ni vinculacion con Contabilidad. Cada color
-o medida es un material distinto. La unidad queda fija: no mezcles cajas con
+**Nuevo material** crea una carpeta, por ejemplo Siliconas o Tornillos. Abrela
+y pulsa **Anadir variante** para introducir Blanca, Negra, 4 x 30, etc., con
+unidad, cantidad actual y minimo opcional. Cada variante tiene su stock
+independiente. No hay subcarpetas, ubicacion, precios ni vinculacion con
+Contabilidad. La unidad queda fija: no mezcles cajas con
 unidades. Admite hasta tres decimales (por ejemplo, metros de cable).
 Administradores y ayudantes pueden dar de alta material y registrar movimientos.
 Solo el administrador puede editar nombre/minimo o desactivar/reactivar.
-No se borran materiales ni movimientos.
+No se borran materiales ni movimientos. Los materiales anteriores aparecen en
+**Sin carpeta** sin cambiar cantidades ni historial. El administrador puede
+usar **Editar** para elegir una carpeta y, si lo desea, abreviar el nombre de
+la variante. El identificador y los movimientos anteriores no cambian.
+Ambos roles pueden crear carpetas y variantes. No se repite una variante dentro
+de su carpeta, pero puede haber Blanca en distintas carpetas.
 
 Para una salida, busca el material, pulsa **Sacar**, escribe la cantidad y
 confirma **Sacar material**. Si habia 12 botes y sacas 3 quedan 9. No se piden
 persona, obra, destino ni explicaciones. El historial muestra **Salida de
-material: 3 botes de Silicona blanca**, con fecha/hora automatica y stock
+material: 3 botes de Siliconas / Blanca**, con fecha/hora automatica y stock
 restante, sin nombres de personas. **Anadir** suma una entrada.
 **Corregir cantidad** registra el total real contado y exige un motivo breve;
 si el stock cambio mientras contabas, hay que actualizar antes de corregirlo.
