@@ -199,6 +199,8 @@ CREATE TABLE IF NOT EXISTS citas_agenda (
 CREATE INDEX IF NOT EXISTS idx_citas_agenda_fecha_hora
     ON citas_agenda (fecha, hora);
 
+ALTER TABLE citas_agenda ADD COLUMN IF NOT EXISTS convertida_en TIMESTAMP;
+
 CREATE TABLE IF NOT EXISTS seguimientos_agenda (
     id BIGSERIAL PRIMARY KEY,
     fecha_llamada DATE NOT NULL DEFAULT CURRENT_DATE,

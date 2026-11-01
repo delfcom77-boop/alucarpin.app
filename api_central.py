@@ -323,6 +323,7 @@ def inicializar_base_datos():
             db.execute("SELECT 1")
             inicializar_importes(db, True)
             inicializar_usuarios(db)
+            db.execute("ALTER TABLE citas_agenda ADD COLUMN IF NOT EXISTS convertida_en TIMESTAMP")
         return
 
     db = sqlite3.connect(str(DATABASE_PATH), timeout=30)
@@ -337,6 +338,8 @@ def inicializar_base_datos():
     db.execute("CREATE TABLE IF NOT EXISTS fichajes_ayudantes (id INTEGER PRIMARY KEY AUTOINCREMENT, ayudante_id INTEGER NOT NULL, fecha TEXT NOT NULL, tipo_destino TEXT NOT NULL DEFAULT 'pendiente', cliente TEXT NOT NULL, obra TEXT NOT NULL, ubicacion TEXT NOT NULL DEFAULT '', poblacion TEXT NOT NULL DEFAULT '', num_presupuesto TEXT, trabajo_propio_id INTEGER, presupuesto_id INTEGER, estado_revision TEXT NOT NULL DEFAULT 'Pendiente de revisar', confirmado_ayudante INTEGER NOT NULL DEFAULT 0, sincronizado INTEGER NOT NULL DEFAULT 0, creado_en TEXT DEFAULT CURRENT_TIMESTAMP, actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP)")
     db.execute("CREATE TABLE IF NOT EXISTS trabajos_propios (id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT NOT NULL, fecha_inicio TEXT NOT NULL, fecha_fin TEXT, cliente TEXT NOT NULL, obra TEXT NOT NULL, ubicacion TEXT NOT NULL DEFAULT '', poblacion TEXT NOT NULL DEFAULT '', observaciones TEXT NOT NULL DEFAULT '', num_presupuesto TEXT, importe REAL NOT NULL DEFAULT 0, estado_cobro TEXT NOT NULL DEFAULT 'No cobrado', forma_pago TEXT NOT NULL DEFAULT '', fecha_cobro TEXT, estado_revision TEXT NOT NULL DEFAULT 'Validado', creado_en TEXT DEFAULT CURRENT_TIMESTAMP, actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP)")
     db.execute("CREATE TABLE IF NOT EXISTS citas_agenda (id INTEGER PRIMARY KEY AUTOINCREMENT, fecha TEXT NOT NULL, hora TEXT NOT NULL, duracion_minutos INTEGER NOT NULL DEFAULT 60, tipo TEXT NOT NULL DEFAULT 'visita', cliente TEXT NOT NULL DEFAULT '', ubicacion TEXT NOT NULL DEFAULT '', poblacion TEXT NOT NULL DEFAULT '', telefono TEXT NOT NULL DEFAULT '', observaciones TEXT NOT NULL DEFAULT '', estado TEXT NOT NULL DEFAULT 'Pendiente', creado_en TEXT DEFAULT CURRENT_TIMESTAMP, actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP)")
+    if "convertida_en" not in {fila["name"] for fila in db.execute("PRAGMA table_info(citas_agenda)")}:
+        db.execute("ALTER TABLE citas_agenda ADD COLUMN convertida_en TIMESTAMP")
     db.execute("CREATE TABLE IF NOT EXISTS seguimientos_agenda (id INTEGER PRIMARY KEY AUTOINCREMENT, fecha_llamada TEXT, fecha_recordatorio TEXT, hora TEXT NOT NULL, cliente TEXT NOT NULL DEFAULT '', telefono TEXT NOT NULL DEFAULT '', ubicacion TEXT NOT NULL DEFAULT '', poblacion TEXT NOT NULL DEFAULT '', motivo TEXT NOT NULL, observaciones TEXT NOT NULL DEFAULT '', estado TEXT NOT NULL DEFAULT 'Pendiente', creado_en TEXT DEFAULT CURRENT_TIMESTAMP, actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP)")
     db.execute("CREATE TABLE IF NOT EXISTS pagos_jornadas (id INTEGER PRIMARY KEY AUTOINCREMENT, fichaje_id INTEGER NOT NULL UNIQUE, importe REAL NOT NULL DEFAULT 0, importe_pagado REAL NOT NULL DEFAULT 0, forma_pago TEXT NOT NULL DEFAULT 'Efectivo', estado_pago TEXT NOT NULL DEFAULT 'No pagado', fecha_pago TEXT, creado_en TEXT DEFAULT CURRENT_TIMESTAMP, actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP)")
     db.execute("CREATE TABLE IF NOT EXISTS notas_usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, usuario_id INTEGER NOT NULL, titulo TEXT NOT NULL, contenido TEXT NOT NULL, fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP, fecha_actualizacion TEXT DEFAULT CURRENT_TIMESTAMP, completada INTEGER NOT NULL DEFAULT 0)")
@@ -1252,9 +1255,20 @@ def borrar_cita(cita_id: int, usuario=Depends(administrador)):
 def convertir_cita(cita_id: int, usuario=Depends(administrador)):
     try:
         with conexion() as db:
-            cita = db.execute("SELECT * FROM citas_agenda WHERE id = ?", (cita_id,)).fetchone()
+            cita = db.execute(
+                "UPDATE citas_agenda SET estado = 'Realizada', "
+                "convertida_en = CURRENT_TIMESTAMP, actualizado_en = CURRENT_TIMESTAMP "
+                "WHERE id = ? AND estado = 'Pendiente' AND convertida_en IS NULL "
+                "RETURNING *", (cita_id,),
+            ).fetchone()
             if not cita:
-                raise HTTPException(status_code=404, detail="Cita no encontrada")
+                if not db.execute("SELECT id FROM citas_agenda WHERE id = ?", (cita_id,)).fetchone():
+                    raise HTTPException(status_code=404, detail="Cita no encontrada")
+                raise HTTPException(
+                    status_code=409,
+                    detail="Solo se puede convertir una cita pendiente que no se haya convertido antes. "
+                    "Revisa el listado y Mi control antes de continuar.",
+                )
             tipo = cita["tipo"]
             if tipo not in {"faena", "presupuesto", "reparacion"}:
                 raise HTTPException(status_code=400, detail="Esta cita es de planificación y no se convierte en un trabajo contable")
@@ -1278,7 +1292,6 @@ def convertir_cita(cita_id: int, usuario=Depends(administrador)):
                     (cita["fecha"], cliente, obra, cita["ubicacion"] or "", cita["poblacion"] or "", cita["observaciones"] or ""),
                 ).fetchone()
                 origen = "propio"
-            db.execute("UPDATE citas_agenda SET estado = 'Realizada', actualizado_en = CURRENT_TIMESTAMP WHERE id = ?", (cita_id,))
         return {"origen": origen, "origen_id": fila["id"], "trabajo": dict(fila)}
     except HTTPException:
         raise

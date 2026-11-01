@@ -384,12 +384,13 @@
         fila.querySelector('.editar-cita').onclick = () => editarCita(cita);
         const busqueda = document.querySelector('#buscar-citas').value.trim().toLowerCase();
         fila.hidden = Boolean(busqueda) && !fila.textContent.toLowerCase().includes(busqueda);
-        if (cita.estado !== 'Realizada' && ['faena', 'presupuesto', 'reparacion'].includes(cita.tipo)) {
+        if (cita.estado === 'Pendiente' && !cita.convertida_en && ['faena', 'presupuesto', 'reparacion'].includes(cita.tipo)) {
           const convertir = document.createElement('button');
           convertir.type = 'button';
           convertir.className = 'convertir-cita';
           convertir.textContent = 'Convertir en trabajo';
           convertir.onclick = async () => {
+            if (convertir.disabled) return;
             if (!confirm('¿Crear el trabajo en Mi control y marcar esta cita como realizada? Tu día trabajado se registra aparte.')) return;
             convertir.disabled = true;
             let guardado = false;

@@ -325,6 +325,13 @@ Los presupuestos en estado Presupuesto o Rechazado no generan estos recordatorio
 
 ### Notas y conversion a citas
 
+**Convertir en trabajo** solo admite citas pendientes que no se hayan convertido
+antes. Una cita cancelada o realizada no se convierte. Tras la conversion, la
+cita queda realizada y conserva una marca que impide crear otro trabajo, incluso
+si vuelves a ponerla pendiente. Si se pierde la respuesta, revisa Mi control:
+repetir la peticion no crea un segundo trabajo. Los trabajos y citas anteriores
+a esta proteccion no se vinculan automaticamente.
+
 Los listados de notas y citas usan una linea compacta por registro, con los botones
 en horizontal. Desliza la tabla lateralmente para consultar todos los datos y
 acciones; no se recorta el texto. Tambien puedes enfocarla con el teclado.

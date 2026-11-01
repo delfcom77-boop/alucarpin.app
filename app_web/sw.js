@@ -1,4 +1,4 @@
-const CACHE = 'alucarpin-app-v21-agenda-lineal';
+const CACHE = 'alucarpin-app-v22-conversion-citas';
 const ARCHIVOS = [
   '/app/login.html',
   '/app/administrador.html',
