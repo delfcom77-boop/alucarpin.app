@@ -1,4 +1,4 @@
-const CACHE = 'alucarpin-app-v19-responsables-almacen';
+const CACHE = 'alucarpin-app-v20-todos-trabajos';
 const ARCHIVOS = [
   '/app/login.html',
   '/app/administrador.html',

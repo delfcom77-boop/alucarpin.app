@@ -235,6 +235,11 @@ La pantalla se divide en apartados: **Fichajes**, **Pagos**, **Liquidaciones**, 
 
 Los botones superiores permiten seleccionar el ayudante activo, cuyo nombre se muestra debajo de los apartados. En **Ayudantes** aparecen tambien las acciones para modificar y borrar ayudantes. En **Configuracion** se gestionan los usuarios y las contrasenas. Los contadores de estado de pago abren **Fichajes** con el filtro correspondiente.
 
+**TODOS LOS TRABAJOS** abre el listado de **Fichajes** de todos los ayudantes,
+limpia sus filtros de tipo, cliente, obra, fechas y estado de pago y desplaza
+la pantalla hasta el listado. El boton queda seleccionado. No cambia los filtros
+del resumen de gastos ni modifica fichajes o pagos.
+
 En el movil, los formularios y los botones se ajustan al ancho de la pantalla. Las tablas se desplazan horizontalmente dentro de su propio recuadro, sin desplazar toda la pagina. Tambien puedes enfocar una tabla con el teclado y desplazarla con las flechas. El formulario de edicion de fichajes solo aparece al seleccionar un registro; la pantalla se desplaza hasta el formulario. **Cancelar edicion** descarta ese borrador sin modificar el fichaje.
 
 Esta reorganizacion no modifica los datos ni las reglas de pago y liquidacion.

@@ -673,7 +673,7 @@
             pintarListadoGeneral();
           });
         });
-        document.querySelector('#listado-limpiar').addEventListener('click', () => {
+        function limpiarFiltrosFichajes() {
           ['tipo', 'cliente', 'ayudante', 'obra', 'desde', 'hasta'].forEach(nombre => {
             document.querySelector(`#listado-${nombre}`).value = '';
           });
@@ -683,7 +683,8 @@
           document.querySelector('#listado-estado').value = 'Todos';
           actualizarSeleccionEstado();
           pintarListadoGeneral();
-        });
+        }
+        document.querySelector('#listado-limpiar').addEventListener('click', limpiarFiltrosFichajes);
 
         function actualizarSeleccionEstado() {
           document.querySelectorAll('[data-filtro-estado]').forEach(boton => {
@@ -1053,10 +1054,10 @@
       botonTodos.className = 'ayudante';
       botonTodos.textContent = 'TODOS LOS TRABAJOS';
       botonTodos.onclick = () => {
-        filtroAyudanteGeneral = null;
-        document.querySelector('#listado-ayudante').value = '';
-        marcarAyudante(null);
-        pintarListadoGeneral();
+        limpiarFiltrosFichajes();
+        mostrarApartado('fichajes');
+        location.hash = 'fichajes';
+        document.querySelector('#apartado-fichajes').scrollIntoView({ block: 'start' });
       };
       contenedorAyudantes.appendChild(botonTodos);
       lista.forEach(ayudante => {
@@ -1121,7 +1122,8 @@
     function marcarAyudante(id) {
       ayudanteId = id === null ? null : Number(id);
       document.querySelectorAll('.ayudante').forEach(item => {
-        item.classList.toggle('seleccionado', Number(item.dataset.ayudanteId) === ayudanteId);
+        item.classList.toggle('seleccionado', item.dataset.ayudanteId
+          ? Number(item.dataset.ayudanteId) === ayudanteId : ayudanteId === null);
       });
       const seleccionado = Array.from(document.querySelectorAll('.ayudante')).find(item =>
         item.dataset.ayudanteId && Number(item.dataset.ayudanteId) === ayudanteId
