@@ -99,6 +99,8 @@
     .borrar { background: #f4d5d5; color: #7b2020; box-shadow: none; }
     #lista tr.realizada { background: #eaf8ee; }
     #lista tr.pendiente { background: #fff3eb; }
+    #lista tr.cancelada { background: #f0f2f3; }
+    .estado-badge.cancelada { background: #e5e7eb; color: #42545c; }
     #lista tr.realizada td { border-bottom-color: rgba(29, 122, 87, 0.22); }
     #lista tr.pendiente td { border-bottom-color: rgba(242, 139, 66, 0.2); }
     #lista-seguimientos tr.realizado { background: #eaf8ee; }
@@ -243,6 +245,7 @@
           <select id="filtro-citas">
             <option value="pendientes">Pendientes</option>
             <option value="realizadas">Realizadas</option>
+            <option value="canceladas">Canceladas</option>
             <option value="todas">Todas</option>
           </select>
         </label>
@@ -335,8 +338,9 @@
       const tipo = document.querySelector('#filtro-tipo-citas').value;
       citas = citas.filter(cita => !tipo || cita.tipo === tipo);
       if (filtro === 'realizadas') return citas.filter(cita => cita.estado === 'Realizada');
+      if (filtro === 'canceladas') return citas.filter(cita => cita.estado === 'Cancelada');
       if (filtro === 'todas') return citas;
-      return citas.filter(cita => cita.estado !== 'Realizada');
+      return citas.filter(cita => cita.estado === 'Pendiente');
     }
 
     function textoDetalleError(detalle) {
@@ -370,7 +374,9 @@
       if (!citas.length) {
         const mensajeVacio = document.querySelector('#filtro-citas')?.value === 'realizadas'
           ? 'No hay citas realizadas.'
-          : document.querySelector('#filtro-citas')?.value === 'todas'
+          : document.querySelector('#filtro-citas')?.value === 'canceladas'
+            ? 'No hay citas canceladas.'
+            : document.querySelector('#filtro-citas')?.value === 'todas'
             ? 'No hay citas registradas.'
             : 'No hay citas pendientes.';
         cuerpo.innerHTML = `<tr><td colspan="8">${mensajeVacio}</td></tr>`;
@@ -378,12 +384,17 @@
       }
       citas.forEach(cita => {
         const fila = document.createElement('tr');
-        fila.className = cita.estado === 'Realizada' ? 'realizada' : 'pendiente';
-        const estadoClase = cita.estado === 'Realizada' ? 'realizada' : 'pendiente';
-        const estadoLabel = cita.estado === 'Realizada' ? 'Realizada' : 'Pendiente';
+        const estadoClase = cita.estado === 'Realizada' ? 'realizada'
+          : cita.estado === 'Cancelada' ? 'cancelada'
+          : cita.estado === 'Pendiente' ? 'pendiente' : '';
+        fila.className = estadoClase;
+        const estadoLabel = cita.estado || 'Sin estado';
         const telefonoCita = cita.telefono ? `<a class="telefono-link" href="tel:${cita.telefono}">${cita.telefono}</a>` : '—';
-        fila.innerHTML = `<td>${fechaTexto(cita.fecha)}</td><td>${cita.hora}</td><td>${tipos[cita.tipo] || cita.tipo}</td><td>${cita.cliente || '-'}</td><td>${telefonoCita}</td><td>${[cita.ubicacion, cita.poblacion].filter(Boolean).join(', ') || '-'}</td><td><span class="estado-badge ${estadoClase}">${estadoLabel}</span></td><td class="acciones"><button type="button" class="editar-cita">Modificar</button>${cita.estado === 'Realizada' ? '' : '<button type="button" class="cal">Calendario</button>'}<button type="button" class="realizada" ${cita.estado === 'Realizada' ? 'disabled' : ''}>${cita.estado === 'Realizada' ? 'Realizada' : 'Marcar realizada'}</button><button type="button" class="borrar">Borrar</button></td>`;
-        fila.querySelector('.editar-cita').onclick = () => editarCita(cita);
+        fila.innerHTML = `<td>${fechaTexto(cita.fecha)}</td><td>${cita.hora}</td><td>${tipos[cita.tipo] || cita.tipo}</td><td>${cita.cliente || '-'}</td><td>${telefonoCita}</td><td>${[cita.ubicacion, cita.poblacion].filter(Boolean).join(', ') || '-'}</td><td><span class="estado-badge ${estadoClase}">${estadoLabel}</span></td><td class="acciones"><button type="button" class="editar-cita">Modificar</button>${cita.estado === 'Pendiente' ? '<button type="button" class="cal">Calendario</button>' : ''}<button type="button" class="realizada" ${cita.estado !== 'Pendiente' ? 'disabled' : ''}>${cita.estado === 'Pendiente' ? 'Marcar realizada' : estadoLabel}</button><button type="button" class="borrar">Borrar</button></td>`;
+        fila.querySelector('.editar-cita').onclick = () => {
+          editarCita(cita);
+          formulario.dataset.estado = cita.estado;
+        };
         const busqueda = document.querySelector('#buscar-citas').value.trim().toLowerCase();
         fila.hidden = Boolean(busqueda) && !fila.textContent.toLowerCase().includes(busqueda);
         if (cita.estado === 'Pendiente' && !cita.convertida_en && ['faena', 'presupuesto', 'reparacion'].includes(cita.tipo)) {
@@ -623,7 +634,7 @@
       const boton = document.querySelector('#guardar-cita');
       if (boton.disabled) return;
       boton.disabled = true;
-      const datos = { fecha: valor('fecha'), hora: valor('hora'), tipo: valor('tipo'), cliente: valor('cliente'), ubicacion: valor('ubicacion'), poblacion: valor('poblacion'), telefono: valor('telefono'), observaciones: valor('observaciones'), estado: 'Pendiente' };
+      const datos = { fecha: valor('fecha'), hora: valor('hora'), tipo: valor('tipo'), cliente: valor('cliente'), ubicacion: valor('ubicacion'), poblacion: valor('poblacion'), telefono: valor('telefono'), observaciones: valor('observaciones'), estado: formulario.dataset.id ? formulario.dataset.estado : 'Pendiente' };
       const idCita = formulario.dataset.id;
       const seguimientoId = formulario.dataset.seguimientoId;
       let guardado = false;

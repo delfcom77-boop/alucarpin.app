@@ -1,4 +1,4 @@
-const CACHE = 'alucarpin-app-v23-notas-calendario';
+const CACHE = 'alucarpin-app-v24-citas-canceladas';
 const ARCHIVOS = [
   '/app/login.html',
   '/app/administrador.html',

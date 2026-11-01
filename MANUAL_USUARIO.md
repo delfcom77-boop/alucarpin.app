@@ -325,6 +325,12 @@ Los presupuestos en estado Presupuesto o Rechazado no generan estos recordatorio
 
 ### Notas y conversion a citas
 
+En el listado de citas, **Pendientes** solo muestra citas pendientes.
+**Canceladas** permite consultar las canceladas, identificadas en gris y con
+su estado escrito. **Todas** incluye tambien las realizadas y canceladas.
+Las canceladas no ofrecen Calendario, Marcar realizada ni Convertir en trabajo.
+Modificar sus datos conserva el estado; no las vuelve a poner pendientes.
+
 Al guardar una nota, el guardado y la descarga del recordatorio son operaciones
 separadas. Si falla la descarga, la nota permanece guardada y el formulario se
 limpia. Usa **Reintentar descarga del recordatorio de la nota guardada**, o
