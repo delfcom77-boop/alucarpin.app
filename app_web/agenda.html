@@ -283,7 +283,13 @@
     [['#cliente', mensaje], ['#seguimiento-cliente', mensajeSeguimiento]].forEach(([selector, aviso]) => {
       AlucarpinCatalogo.sugerencias({ cliente: document.querySelector(selector), obra: null, mensaje: aviso, apiFetch });
     });
-    const aplicarBusqueda = (selector, tablaSelector) => document.querySelector(selector).addEventListener('input', event => { const texto = event.target.value.trim().toLowerCase(); document.querySelectorAll(`${tablaSelector} tr`).forEach(fila => { fila.hidden = Boolean(texto) && !fila.textContent.toLowerCase().includes(texto); }); });
+    const filtrarFilaBusqueda = (selector, fila) => {
+      const texto = document.querySelector(selector).value.trim().toLowerCase();
+      fila.hidden = Boolean(texto) && !fila.textContent.toLowerCase().includes(texto);
+    };
+    const aplicarBusqueda = (selector, tablaSelector) => document.querySelector(selector).addEventListener('input', () => {
+      document.querySelectorAll(`${tablaSelector} tr`).forEach(fila => filtrarFilaBusqueda(selector, fila));
+    });
     aplicarBusqueda('#buscar-citas', '#lista');
     aplicarBusqueda('#buscar-notas', '#lista-seguimientos');
     const refrescarCitas = () => cargar().catch(error => {
@@ -292,7 +298,9 @@
     });
     document.querySelector('#filtro-citas').addEventListener('change', refrescarCitas);
     document.querySelector('#filtro-tipo-citas').addEventListener('change', refrescarCitas);
-    document.querySelector('#filtro-notas')?.addEventListener('change', cargarSeguimientos);
+    document.querySelector('#filtro-notas')?.addEventListener('change', () => {
+      cargarSeguimientos().catch(error => mostrarErrorSeguimiento(error.message));
+    });
     document.querySelectorAll('[data-seccion-agenda]').forEach(boton => boton.onclick = () => {
       const seccion = boton.dataset.seccionAgenda;
       document.querySelectorAll('[data-seccion-contenido]').forEach(elemento => { elemento.hidden = elemento.dataset.seccionContenido !== seccion; });
@@ -395,8 +403,7 @@
           editarCita(cita);
           formulario.dataset.estado = cita.estado;
         };
-        const busqueda = document.querySelector('#buscar-citas').value.trim().toLowerCase();
-        fila.hidden = Boolean(busqueda) && !fila.textContent.toLowerCase().includes(busqueda);
+        filtrarFilaBusqueda('#buscar-citas', fila);
         if (cita.estado === 'Pendiente' && !cita.convertida_en && ['faena', 'presupuesto', 'reparacion'].includes(cita.tipo)) {
           const convertir = document.createElement('button');
           convertir.type = 'button';
@@ -509,6 +516,7 @@
         fila.querySelector('.borrar-seguimiento').onclick = () => {
           if (confirm('¿Archivar este recordatorio?')) cambiarEstadoNota(seguimiento.id, 'Archivado', fila);
         };
+        filtrarFilaBusqueda('#buscar-notas', fila);
         cuerpo.appendChild(fila);
       });
     }

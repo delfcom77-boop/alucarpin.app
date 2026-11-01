@@ -325,6 +325,10 @@ Los presupuestos en estado Presupuesto o Rechazado no generan estos recordatorio
 
 ### Notas y conversion a citas
 
+La busqueda de notas se conserva al actualizar el listado, guardar o modificar
+una nota, cambiar su estado y cambiar el filtro de estado. Vaciar el buscador
+vuelve a mostrar todas las notas del estado seleccionado.
+
 En el listado de citas, **Pendientes** solo muestra citas pendientes.
 **Canceladas** permite consultar las canceladas, identificadas en gris y con
 su estado escrito. **Todas** incluye tambien las realizadas y canceladas.
