@@ -325,6 +325,10 @@ Los presupuestos en estado Presupuesto o Rechazado no generan estos recordatorio
 
 ### Notas y conversion a citas
 
+Los listados de notas y citas usan una linea compacta por registro, con los botones
+en horizontal. Desliza la tabla lateralmente para consultar todos los datos y
+acciones; no se recorta el texto. Tambien puedes enfocarla con el teclado.
+
 En Agenda, **Archivar** y **Marcar realizada** cambian solo el estado de la nota y conservan telefono, fechas, motivo y observaciones. **Crear cita** prepara el formulario; puedes cancelar sin archivar la nota. Al guardar, la cita y el archivo de la nota se realizan juntos: si falla, no se guarda solo una parte. Una nota ya archivada no se convierte otra vez. Si falla la descarga del calendario despues de guardar, utiliza Calendario en la cita, sin crear otra.
 
 ### Panel resumen al entrar

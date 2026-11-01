@@ -91,6 +91,11 @@
     th { background: #edf7f7; }
     .acciones { display: flex; flex-wrap: wrap; gap: 8px; }
     .acciones button { min-height: 38px; padding: 7px 12px; }
+    .lista th, .lista td { padding: 4px 8px; white-space: nowrap; vertical-align: middle; }
+    .lista .acciones { flex-wrap: nowrap; gap: 6px; }
+    .lista .acciones button { flex-shrink: 0; min-height: 44px; padding: 6px 10px; border-radius: 6px; box-shadow: none; }
+    .lista .telefono-link { display: inline-flex; align-items: center; min-height: 44px; }
+    .lista-ayuda { color: var(--muted); font-size: 14px; margin: 8px 0; }
     .borrar { background: #f4d5d5; color: #7b2020; box-shadow: none; }
     #lista tr.realizada { background: #eaf8ee; }
     #lista tr.pendiente { background: #fff3eb; }
@@ -225,7 +230,8 @@
         </label>
       </div>
       <input id="buscar-notas" placeholder="Buscar notas por cliente, teléfono, dirección o texto">
-      <div class="lista"><table><thead><tr><th>Recordatorio</th><th>Cliente</th><th>Teléfono</th><th>Dirección / población</th><th>Qué me ha pedido</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista-seguimientos"><tr><td colspan="7">Cargando...</td></tr></tbody></table></div>
+      <p class="lista-ayuda">Una línea por nota. Desliza la tabla lateralmente para ver todos los datos y botones.</p>
+      <div class="lista" tabindex="0" role="region" aria-label="Listado de notas, desplazamiento horizontal"><table><thead><tr><th>Recordatorio</th><th>Cliente</th><th>Teléfono</th><th>Dirección / población</th><th>Qué me ha pedido</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista-seguimientos"><tr><td colspan="7">Cargando...</td></tr></tbody></table></div>
     </section>
     <section data-seccion-contenido="citas">
       <h2>Citas pendientes e historial</h2>
@@ -254,7 +260,8 @@
       </div>
       <input id="buscar-citas" placeholder="Buscar citas por cliente, teléfono, dirección o población">
       <div id="mensaje-citas" class="mensaje" aria-live="polite"></div>
-      <div class="lista"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Tipo</th><th>Cliente</th><th>Teléfono</th><th>Dirección</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista"><tr><td colspan="8">Cargando...</td></tr></tbody></table></div>
+      <p class="lista-ayuda">Una línea por cita. Desliza la tabla lateralmente para ver todos los datos y botones.</p>
+      <div class="lista" tabindex="0" role="region" aria-label="Listado de citas, desplazamiento horizontal"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Tipo</th><th>Cliente</th><th>Teléfono</th><th>Dirección</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="lista"><tr><td colspan="8">Cargando...</td></tr></tbody></table></div>
     </section>
   </main>
   <script src="/app/catalogo.js"></script>
@@ -480,7 +487,7 @@
         fila.className = estado;
         const estadoLabel = seguimiento.estado === 'Realizado' ? 'Realizada' : 'Pendiente';
         const telefonoNota = seguimiento.telefono ? `<a class="telefono-link" href="tel:${seguimiento.telefono}">${seguimiento.telefono}</a>` : '—';
-        fila.innerHTML = `<td>Llamada: ${fechaTexto(seguimiento.fecha_llamada)}<br>Recordatorio diario: ${seguimiento.hora}</td><td>${seguimiento.cliente || '-'}</td><td>${telefonoNota}</td><td>${seguimiento.ubicacion || '-'}${seguimiento.poblacion ? `, ${seguimiento.poblacion}` : ''}</td><td>${seguimiento.motivo}</td><td><span class="estado-badge ${estado}">${estadoLabel}</span></td><td class="acciones"><button type="button" class="editar-nota">Modificar</button><button type="button" class="crear-cita-seguimiento">Crear cita</button>${seguimiento.estado === 'Realizado' ? '' : '<button type="button" class="cal-seguimiento">Alarma</button>'}<button type="button" class="realizado-seguimiento" ${seguimiento.estado === 'Realizado' ? 'disabled' : ''}>${seguimiento.estado === 'Realizado' ? 'Realizada' : 'Marcar realizada'}</button><button type="button" class="borrar-seguimiento borrar">Archivar</button></td>`;
+        fila.innerHTML = `<td>Llamada: ${fechaTexto(seguimiento.fecha_llamada)} · Recordatorio diario: ${seguimiento.hora}</td><td>${seguimiento.cliente || '-'}</td><td>${telefonoNota}</td><td>${seguimiento.ubicacion || '-'}${seguimiento.poblacion ? `, ${seguimiento.poblacion}` : ''}</td><td>${seguimiento.motivo}</td><td><span class="estado-badge ${estado}">${estadoLabel}</span></td><td class="acciones"><button type="button" class="editar-nota">Modificar</button><button type="button" class="crear-cita-seguimiento">Crear cita</button>${seguimiento.estado === 'Realizado' ? '' : '<button type="button" class="cal-seguimiento">Alarma</button>'}<button type="button" class="realizado-seguimiento" ${seguimiento.estado === 'Realizado' ? 'disabled' : ''}>${seguimiento.estado === 'Realizado' ? 'Realizada' : 'Marcar realizada'}</button><button type="button" class="borrar-seguimiento borrar">Archivar</button></td>`;
         fila.querySelector('.editar-nota').onclick = () => editarNota(seguimiento);
         fila.querySelector('.crear-cita-seguimiento').onclick = () => prepararCitaDesdeSeguimiento(seguimiento);
         fila.querySelector('.cal-seguimiento')?.addEventListener('click', () => calendarioSeguimiento(seguimiento.id).catch(error => mostrarErrorSeguimiento(error.message)));
