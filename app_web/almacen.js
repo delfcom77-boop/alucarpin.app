@@ -90,7 +90,7 @@
     $('titulo-carpeta').textContent = carpetaActual === null ? 'Selecciona una carpeta' : nombreCarpeta(carpetaActual);
     $('anadir-variante').hidden = !carpetaActual;
     $('renombrar-carpeta').hidden = !carpetaActual || !puedeGestionar;
-    $('borrar-carpeta').hidden = !carpetaActual || !puedeGestionar;
+    $('borrar-carpeta').hidden = carpetaActual === null || !puedeGestionar;
     if (carpetaActual !== null) $('panel-carpeta').setAttribute('aria-labelledby', 'pestana-' + (carpetaActual || 'sin-carpeta'));
     else $('panel-carpeta').setAttribute('aria-labelledby', 'titulo-carpeta');
     const visibles = materiales.filter(m =>
@@ -300,8 +300,10 @@
   };
   $('anadir-variante').onclick = () => abrirMaterial();
   function gestionarCarpeta(borrar, material = null) {
-    if (!puedeGestionar || !disponible() || (!material && !carpetaActual)) return;
-    gestionCarpeta = { ...(material || carpetas.find(c => c.id === carpetaActual)), borrar, material: Boolean(material) };
+    if (!puedeGestionar || !disponible() || (!material && (carpetaActual === null || (!borrar && !carpetaActual)))) return;
+    const sinCarpeta = !material && carpetaActual === '';
+    gestionCarpeta = { ...(material || (sinCarpeta ? { id: 'sin-carpeta', nombre: 'Sin carpeta' } : carpetas.find(c => c.id === carpetaActual))), borrar, material: Boolean(material), sinCarpeta };
+    if (sinCarpeta) gestionCarpeta.materiales = materiales.filter(m => !m.carpeta_id).map(m => ({ id: m.id, version: m.version }));
     $('titulo-gestionar').textContent = material ? 'Eliminar material' : borrar ? 'Eliminar carpeta completa' : 'Cambiar nombre de carpeta';
     $('aviso-gestionar').textContent = material
       ? `Se eliminará definitivamente «${nombreMaterial(material)}», sus ${numero(material.cantidad)} ${material.unidad} y TODO su historial. La carpeta y las demás variantes se conservan. No se puede deshacer. Escribe el nombre exacto de la variante «${material.nombre}» para confirmar.`
@@ -327,6 +329,7 @@
     if (!valor.trim()) { $('error-gestionar').textContent = 'Escribe el nombre.'; return; }
     const datos = gestionCarpeta.borrar ? { confirmar_nombre: valor } : { nombre: valor.trim(), nombre_anterior: gestionCarpeta.nombre };
     if (gestionCarpeta.material) datos.version = gestionCarpeta.version;
+    if (gestionCarpeta.sinCarpeta) datos.materiales = gestionCarpeta.materiales;
     preparar((gestionCarpeta.material ? '/almacen/materiales/' : '/almacen/carpetas/') + gestionCarpeta.id,
       gestionCarpeta.borrar ? 'DELETE' : 'PUT', datos);
   };

@@ -319,6 +319,62 @@ class AlmacenTests(unittest.TestCase):
         self.assertEqual(self.cliente.put(url, json={"nombre": "Otro", "nombre_anterior": "Siliconas"}).status_code, 409)
         self.assertEqual(self.cliente.put(url, json={"nombre": " ", "nombre_anterior": "Selladores"}).status_code, 422)
 
+    def test_borrar_sin_carpeta_conserva_carpetas_y_reintento_no_borra_nuevos(self):
+        self.cliente.headers["Authorization"] = "Bearer administrador"
+        carpeta = self.carpeta().json()
+        conservado = self.alta(nombre="En carpeta", carpeta_id=carpeta["id"]).json()
+        legacy = self.alta(nombre="Anterior").json()
+        self.movimiento(legacy, "salida", "1")
+        with closing(self.conexion()) as db:
+            db.execute("UPDATE almacen_materiales SET activo=0 WHERE id=?", (legacy["id"],))
+            db.commit()
+        legacy = next(m for m in self.materiales() if m["id"] == legacy["id"])
+        url = "/almacen/carpetas/sin-carpeta"
+        datos = {"confirmar_nombre": "Sin carpeta", "materiales": [{"id": legacy["id"], "version": legacy["version"]}]}
+        self.assertEqual(self.cliente.request("DELETE", url, json={**datos, "confirmar_nombre": "otro"}).status_code, 409)
+        self.cliente.headers["Authorization"] = "Bearer ayudante"
+        self.assertEqual(self.cliente.request("DELETE", url, json=datos).status_code, 403)
+        with closing(self.conexion()) as db:
+            db.execute("INSERT INTO almacen_responsables(usuario_id) VALUES(2)")
+            db.commit()
+        self.assertEqual(self.cliente.request("DELETE", url, json=datos).status_code, 200)
+        nuevo = self.alta(nombre="Nuevo sin carpeta").json()
+        self.assertEqual(self.cliente.request("DELETE", url, json=datos).status_code, 200)
+        self.assertEqual({m["id"] for m in self.materiales()}, {conservado["id"], nuevo["id"]})
+        self.assertEqual(len(self.cliente.get("/almacen/carpetas").json()), 1)
+        movimientos = self.cliente.get("/almacen/movimientos").json()["movimientos"]
+        self.assertFalse(any(m["material_id"] == legacy["id"] for m in movimientos))
+        self.assertTrue(any(m["material_id"] == conservado["id"] for m in movimientos))
+
+    def test_borrar_sin_carpeta_rechaza_version_o_lista_obsoleta(self):
+        self.cliente.headers["Authorization"] = "Bearer administrador"
+        material = self.alta().json()
+        url = "/almacen/carpetas/sin-carpeta"
+        datos = {"confirmar_nombre": "Sin carpeta", "materiales": [{"id": material["id"], "version": material["version"]}]}
+        self.movimiento(material, "entrada", "2")
+        self.assertEqual(self.cliente.request("DELETE", url, json=datos).status_code, 409)
+        material = self.materiales()[0]
+        datos["materiales"][0]["version"] = material["version"]
+        self.alta(nombre="Otra variante")
+        self.assertEqual(self.cliente.request("DELETE", url, json=datos).status_code, 409)
+        self.assertEqual(len(self.materiales()), 2)
+        datos["materiales"] *= 2
+        self.assertEqual(self.cliente.request("DELETE", url, json=datos).status_code, 422)
+
+    def test_borrar_sin_carpeta_fallo_revierte_materiales_e_historial(self):
+        self.cliente.headers["Authorization"] = "Bearer administrador"
+        material = self.alta().json()
+        datos = {"confirmar_nombre": "Sin carpeta", "materiales": [{"id": material["id"], "version": material["version"]}]}
+        historial = self.cliente.get("/almacen/movimientos").json()
+        with closing(self.conexion()) as db:
+            db.execute("CREATE TRIGGER fallo_borrado BEFORE DELETE ON almacen_materiales BEGIN SELECT RAISE(ABORT,'Fallo simulado'); END")
+            db.commit()
+        with self.assertLogs("almacen", level="ERROR"):
+            respuesta = self.cliente.request("DELETE", "/almacen/carpetas/sin-carpeta", json=datos)
+        self.assertEqual(respuesta.status_code, 503)
+        self.assertEqual(len(self.materiales()), 1)
+        self.assertEqual(self.cliente.get("/almacen/movimientos").json(), historial)
+
     def test_borrado_definitivo_completo_y_acotado_con_stock(self):
         carpeta = self.carpeta().json()
         otra = self.carpeta("Tornillos").json()

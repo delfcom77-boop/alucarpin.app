@@ -88,6 +88,16 @@ class BorrarMaterial(BorrarCarpeta):
     version: int = Field(gt=0)
 
 
+class MaterialSinCarpeta(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: UUID
+    version: int = Field(gt=0)
+
+
+class BorrarSinCarpeta(BorrarCarpeta):
+    materiales: list[MaterialSinCarpeta] = Field(min_length=1)
+
+
 def unidades(valor):
     return int(valor * 1000)
 
@@ -280,6 +290,32 @@ def crear_almacen(conexion, usuario_actual, administrador):
                 raise HTTPException(409, "Ya existe otra carpeta con ese nombre.")
             db.execute("UPDATE almacen_carpetas SET nombre=?,nombre_clave=? WHERE id=?", (datos.nombre, clave, ident))
             return {"id": ident, "nombre": datos.nombre}
+
+    @router.delete("/almacen/carpetas/sin-carpeta")
+    def borrar_sin_carpeta(datos: BorrarSinCarpeta, usuario=Depends(responsable)):
+        if datos.confirmar_nombre != "Sin carpeta":
+            raise HTTPException(409, "Escribe Sin carpeta para confirmar el borrado definitivo.")
+        esperados = {str(m.id): m.version for m in datos.materiales}
+        if len(esperados) != len(datos.materiales):
+            raise HTTPException(422, "La lista de materiales contiene referencias repetidas.")
+        with transaccion(True) as db:
+            actuales = {f["id"]: f["version"] for f in db.execute(
+                "SELECT id,version FROM almacen_materiales WHERE carpeta_id IS NULL"
+            ).fetchall()}
+            if actuales != esperados:
+                restantes = db.execute(
+                    "SELECT id FROM almacen_materiales WHERE id IN ("
+                    + ",".join("?" for _ in esperados) + ")", tuple(esperados),
+                ).fetchall()
+                if not restantes:
+                    return {"eliminada": True, "id": "sin-carpeta"}
+                raise HTTPException(409, "Los materiales de Sin carpeta han cambiado. Actualiza el listado y confirma de nuevo; no se ha borrado nada.")
+            db.execute(
+                "DELETE FROM almacen_movimientos WHERE material_id IN "
+                "(SELECT id FROM almacen_materiales WHERE carpeta_id IS NULL)"
+            )
+            db.execute("DELETE FROM almacen_materiales WHERE carpeta_id IS NULL")
+            return {"eliminada": True, "id": "sin-carpeta"}
 
     @router.delete("/almacen/carpetas/{ident}")
     def borrar_carpeta(ident: UUID, datos: BorrarCarpeta, usuario=Depends(responsable)):

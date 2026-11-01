@@ -60,6 +60,13 @@ Los materiales anteriores aparecen en
 **Sin carpeta** sin cambiar cantidades ni historial. El administrador o un responsable puede
 usar **Editar** para elegir una carpeta y, si lo desea, abreviar el nombre de
 la variante. El identificador y los movimientos anteriores no cambian.
+Tambien pueden pulsar **Eliminar carpeta** en **Sin carpeta** y escribir
+**Sin carpeta** para confirmar. Elimina definitivamente todos los materiales
+sin carpeta, incluidos los desactivados u ocultos por filtros, sus cantidades
+y todo su historial. Las carpetas normales y sus materiales se conservan.
+Si los materiales cambian durante la confirmacion, debes actualizar y confirmar
+de nuevo. No se puede deshacer. La agrupacion desaparece al quedar vacia y
+puede volver a aparecer si se registra otro material sin carpeta.
 Ambos roles pueden crear carpetas y variantes. No se repite una variante dentro
 de su carpeta, pero puede haber Blanca en distintas carpetas.
 
