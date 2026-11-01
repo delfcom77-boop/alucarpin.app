@@ -325,6 +325,12 @@ Los presupuestos en estado Presupuesto o Rechazado no generan estos recordatorio
 
 ### Notas y conversion a citas
 
+Al guardar una nota, el guardado y la descarga del recordatorio son operaciones
+separadas. Si falla la descarga, la nota permanece guardada y el formulario se
+limpia. Usa **Reintentar descarga del recordatorio de la nota guardada**, o
+**Alarma** en su fila: solo descarga el archivo, sin crear otra nota. Si falla
+la actualizacion del listado, recarga; no vuelvas a guardar la misma nota.
+
 **Convertir en trabajo** solo admite citas pendientes que no se hayan convertido
 antes. Una cita cancelada o realizada no se convierte. Tras la conversion, la
 cita queda realizada y conserva una marca que impide crear otro trabajo, incluso

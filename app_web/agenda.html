@@ -215,8 +215,10 @@
         <div class="fila"><label>Dirección <input id="seguimiento-ubicacion"></label><label>Población <input id="seguimiento-poblacion"></label></div>
         <label>Qué me ha pedido <input id="seguimiento-motivo" required placeholder="Tomarle medidas"></label>
         <label>Qué le he dicho <input id="seguimiento-observaciones" placeholder="Tengo que mirar cuándo puedo ir y llamarle"></label>
-        <button id="guardar-nota" type="submit">Guardar nota y añadir recordatorio diario</button><button id="cancelar-edicion-nota" type="button" hidden>Cancelar modificación</button><div id="mensaje-seguimiento" class="mensaje"></div>
+        <button id="guardar-nota" type="submit">Guardar nota y añadir recordatorio diario</button><button id="cancelar-edicion-nota" type="button" hidden>Cancelar modificación</button><div id="mensaje-seguimiento" class="mensaje" role="status" aria-live="polite"></div>
       </form>
+      <button id="reintentar-alarma-nota" type="button" hidden>Reintentar descarga del recordatorio de la nota guardada</button>
+      <p id="mensaje-descarga-nota" class="mensaje" role="status" aria-live="polite" hidden></p>
     </section>
     <section data-seccion-contenido="notas" hidden>
       <h2>Notas pendientes</h2>
@@ -553,7 +555,69 @@
       mensaje.textContent = 'Cita preparada desde la nota. Completa la fecha y la hora: la nota se archivará solo al guardar la cita.';
       mensaje.className = 'mensaje';
     }
-    formularioSeguimiento.onsubmit = async event => { event.preventDefault(); const datos = { fecha_llamada: valor('seguimiento-fecha-llamada'), hora: valor('seguimiento-hora'), cliente: valor('seguimiento-cliente'), telefono: valor('seguimiento-telefono'), ubicacion: valor('seguimiento-ubicacion'), poblacion: valor('seguimiento-poblacion'), motivo: valor('seguimiento-motivo'), observaciones: valor('seguimiento-observaciones'), estado: 'Pendiente' }; const idNota = formularioSeguimiento.dataset.id; const respuesta = await apiFetch(idNota ? `/seguimientos/${idNota}` : '/seguimientos', { method: idNota ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) }); const resultado = await respuesta.json(); if (!respuesta.ok) { mostrarErrorSeguimiento(resultado.detail || 'No se pudo guardar la nota.'); return; } if (!idNota) await calendarioSeguimiento(resultado.id); mensajeSeguimiento.textContent = idNota ? 'Nota actualizada.' : 'Nota guardada con recordatorio diario.'; mensajeSeguimiento.className = 'mensaje exito'; limpiarEdicionNota(); await cargarSeguimientos(); };
+    const reintentarAlarmaNota = document.querySelector('#reintentar-alarma-nota');
+    const mensajeDescargaNota = document.querySelector('#mensaje-descarga-nota');
+    reintentarAlarmaNota.onclick = async () => {
+      if (reintentarAlarmaNota.disabled) return;
+      reintentarAlarmaNota.disabled = true;
+      const guardar = document.querySelector('#guardar-nota');
+      const guardadoBloqueado = guardar.disabled;
+      guardar.disabled = true;
+      mensajeDescargaNota.hidden = false;
+      try {
+        await calendarioSeguimiento(reintentarAlarmaNota.dataset.notaId);
+        mensajeDescargaNota.textContent = 'Recordatorio descargado. No se ha creado otra nota.';
+        mensajeDescargaNota.className = 'mensaje exito';
+        reintentarAlarmaNota.hidden = true;
+      } catch (error) {
+        mensajeDescargaNota.textContent = `La nota sigue guardada, pero no se pudo descargar el recordatorio: ${error.message}. Puedes reintentar la descarga, sin guardar otra nota.`;
+        mensajeDescargaNota.className = 'mensaje error';
+      } finally {
+        reintentarAlarmaNota.disabled = false;
+        guardar.disabled = guardadoBloqueado;
+      }
+    };
+    formularioSeguimiento.onsubmit = async event => {
+      event.preventDefault();
+      const boton = document.querySelector('#guardar-nota');
+      if (boton.disabled) return;
+      boton.disabled = true;
+      const datos = { fecha_llamada: valor('seguimiento-fecha-llamada'), hora: valor('seguimiento-hora'), cliente: valor('seguimiento-cliente'), telefono: valor('seguimiento-telefono'), ubicacion: valor('seguimiento-ubicacion'), poblacion: valor('seguimiento-poblacion'), motivo: valor('seguimiento-motivo'), observaciones: valor('seguimiento-observaciones'), estado: 'Pendiente' };
+      const idNota = formularioSeguimiento.dataset.id;
+      let guardado = false;
+      try {
+        const respuesta = await apiFetch(idNota ? `/seguimientos/${idNota}` : '/seguimientos', {
+          method: idNota ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(datos),
+        });
+        if (!respuesta.ok) {
+          const resultado = await respuesta.json().catch(() => null);
+          throw new Error(textoDetalleError(resultado?.detail) || `No se pudo guardar la nota (HTTP ${respuesta.status}).`);
+        }
+        guardado = true;
+        limpiarEdicionNota();
+        mensajeSeguimiento.textContent = idNota ? 'Nota actualizada.' : 'Nota guardada con recordatorio diario.';
+        mensajeSeguimiento.className = 'mensaje exito';
+        const resultado = await respuesta.json();
+        if (!idNota && (!Number.isInteger(resultado.id) || resultado.id <= 0)) {
+          throw new Error('El servidor no devolvió el identificador de la nota guardada.');
+        }
+        try {
+          await cargarSeguimientos();
+        } catch (error) {
+          mostrarErrorSeguimiento(`Nota guardada, pero no se pudo actualizar la lista: ${error.message}. Recarga el listado; no la guardes de nuevo.`);
+        }
+        if (!idNota) {
+          reintentarAlarmaNota.dataset.notaId = resultado.id;
+          reintentarAlarmaNota.hidden = false;
+          await reintentarAlarmaNota.onclick();
+        }
+      } catch (error) {
+        mostrarErrorSeguimiento(guardado
+          ? `Nota guardada, pero no se pudo completar la operación: ${error.message}. Revisa el listado y utiliza Alarma; no la guardes de nuevo.`
+          : `No se pudo confirmar el guardado: ${error.message}. Comprueba el listado antes de reintentarlo.`);
+      } finally { boton.disabled = false; }
+    };
     formulario.onsubmit = async event => {
       event.preventDefault();
       const boton = document.querySelector('#guardar-cita');
