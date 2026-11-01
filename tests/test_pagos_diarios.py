@@ -316,6 +316,7 @@ class AlarmasTrabajoTests(unittest.TestCase):
             INSERT INTO trabajos_propios VALUES
                 (1,'2020-01-01','Cliente','Calle','Jaca','Reparación','No cobrado',50),
                 (2,'2020-01-01','Otro','Calle','Jaca','Puerta','Cobrado',50);
+            ALTER TABLE trabajos_propios ADD COLUMN tipo TEXT DEFAULT 'reparacion';
             CREATE TABLE estados_ejecucion_trabajos (
                 trabajo_id INTEGER PRIMARY KEY, estado TEXT, actualizado_en TEXT
             );
@@ -341,16 +342,21 @@ class AlarmasTrabajoTests(unittest.TestCase):
             );
         """)
 
+        from cuentas_reparaciones import inicializar_cuentas
+        inicializar_cuentas(self.db)
+        from importes_faenas import inicializar_importes, inicializar_beneficiarios
+        inicializar_importes(self.db)
+        inicializar_beneficiarios(self.db)
+
         @contextlib.contextmanager
         def conexion():
             with self.db:
                 yield self.db
 
-        self.cambio = patch.object(api, "conexion", conexion)
-        self.cambio.start()
+        self.enterContext(patch.object(api, "conexion", conexion))
+        self.enterContext(patch.object(api, "DATABASE_URL", None))
 
     def tearDown(self):
-        self.cambio.stop()
         self.db.close()
 
     def test_trabajos_antiguos_y_cobros_separados(self):
@@ -387,11 +393,11 @@ class AlarmasTrabajoTests(unittest.TestCase):
 
     def cargar_obras(self):
         self.db.executescript("""
-            INSERT INTO faenas VALUES
+            INSERT INTO faenas (id,fecha,cliente,obra,ubicacion,poblacion,precio) VALUES
                 (1,'2020-01-01','Faena parcial','Puerta','Calle','Jaca',100),
                 (2,'2020-01-01','Faena cobrada','Ventana','Calle','Jaca',100),
                 (3,NULL,'Medidas','Visita','Calle','Jaca',0);
-            INSERT INTO pagos_faenas VALUES (1,1,20,10), (2,2,100,0);
+            INSERT INTO pagos_faenas (id,faena_id,importe_iva,importe_b) VALUES (1,1,20,10), (2,2,100,0);
             INSERT INTO presupuestos VALUES
                 (1,'2020-01-01','Aceptado parcial','P1',100,'Aceptado'),
                 (2,'2020-01-01','Aceptado cobrado','P2',100,'Aceptado'),
@@ -400,9 +406,6 @@ class AlarmasTrabajoTests(unittest.TestCase):
                 (5,'2020-01-01','Completado antiguo','P5',100,'Completado');
             INSERT INTO pagos_ingresos VALUES (1,'P1',25,0), (2,'P2',100,0);
         """)
-        from importes_faenas import inicializar_importes, inicializar_beneficiarios
-        inicializar_importes(self.db)
-        inicializar_beneficiarios(self.db)
 
     def test_faenas_presupuestos_aceptados_y_cobros_parciales(self):
         self.cargar_obras()
@@ -447,7 +450,7 @@ class AlarmasTrabajoTests(unittest.TestCase):
 
     def test_mi_control_comparte_estados_y_cobros_con_alarmas(self):
         self.cargar_obras()
-        for columna in ("fecha_fin", "tipo", "observaciones", "num_presupuesto",
+        for columna in ("fecha_fin", "observaciones", "num_presupuesto",
                         "forma_pago", "fecha_cobro", "estado_revision"):
             self.db.execute(f"ALTER TABLE trabajos_propios ADD COLUMN {columna} TEXT")
         self.db.execute("UPDATE trabajos_propios SET tipo='reparacion'")

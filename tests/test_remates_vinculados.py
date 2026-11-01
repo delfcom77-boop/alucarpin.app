@@ -2,6 +2,7 @@ import contextlib
 import sqlite3
 import unittest
 from unittest.mock import patch
+from fastapi.routing import APIRoute
 
 import api_central as api
 
@@ -124,7 +125,7 @@ class RematesVinculadosTests(unittest.TestCase):
 
     def test_rutas_exigen_administrador(self):
         for nombre in ("listar_remates", "crear_remate", "vincular_remate", "borrar_remate"):
-            ruta = next(r for r in api.app.routes if r.name == nombre)
+            ruta = next(r for r in api.app.routes if isinstance(r, APIRoute) and r.name == nombre)
             self.assertIn(api.administrador, [d.call for d in ruta.dependant.dependencies])
 
 

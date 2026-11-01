@@ -3,6 +3,7 @@ import sqlite3
 import unittest
 from datetime import date
 from unittest.mock import patch
+from fastapi.routing import APIRoute
 
 import api_central as api
 
@@ -90,7 +91,7 @@ class NotasCitasTests(unittest.TestCase):
         self.assertEqual(cita["id"], 2)
 
     def test_conversion_requiere_administrador(self):
-        ruta = next(r for r in api.app.routes if r.path == "/seguimientos/{seguimiento_id}/cita")
+        ruta = next(r for r in api.app.routes if isinstance(r, APIRoute) and r.path == "/seguimientos/{seguimiento_id}/cita")
         self.assertIn(api.administrador, [d.call for d in ruta.dependant.dependencies])
 
 

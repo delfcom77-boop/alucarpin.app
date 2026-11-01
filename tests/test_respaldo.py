@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 import zipfile
+from fastapi.routing import APIRoute
 
 import api_central as api
 import respaldo
@@ -161,7 +162,7 @@ class RespaldoTests(unittest.TestCase):
         self.assertIn("attachment", respuesta.headers["content-disposition"])
         self.copia.write_bytes(respuesta.body)
         respaldo.verificar_sqlite(self.copia, self.carpeta / "endpoint.sqlite")
-        ruta = next(r for r in api.app.routes if r.name == "descargar_copia_seguridad")
+        ruta = next(r for r in api.app.routes if isinstance(r, APIRoute) and r.name == "descargar_copia_seguridad")
         self.assertIn(api.administrador, [d.call for d in ruta.dependant.dependencies])
 
     def test_endpoint_permite_copia_completa_separada(self):
