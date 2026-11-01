@@ -876,7 +876,7 @@
       filtrada.forEach(gasto => {
         const fila = document.createElement('tr');
         fila.className = gasto.estado_pago === 'Pagado' ? 'pagado' : gasto.estado_pago === 'Parcial' ? 'parcial' : 'pendiente';
-        if (gasto.tipo === 'jornada' && !gasto.gasto_historico) {
+        if (gasto.tipo === 'jornada' && (!gasto.gasto_historico || gasto.imputacion)) {
           const dinero = valor => gasto.revision ? 'Revisar' : `${Number(valor || 0).toFixed(2)} €`;
           ['Jornada de ayudante', mostrarFecha(gasto.fecha), gasto.proveedor,
             gasto.concepto, dinero(gasto.importe), dinero(gasto.importe_pagado),
@@ -903,6 +903,10 @@
             }
           };
           acciones.appendChild(boton);
+          const destino = document.createElement('a');
+          destino.href = `/app/mi_control.html?costes_fecha=${encodeURIComponent(gasto.fecha)}#costes-dia`;
+          destino.textContent = 'Destino en Mi control';
+          acciones.appendChild(destino);
           fila.appendChild(acciones);
           cuerpo.appendChild(fila);
           return;

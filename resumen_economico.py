@@ -3,6 +3,7 @@
 from calendar import monthrange
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+from costes_ayudantes import agrupar_costes
 
 
 def periodo_actual(hoy):
@@ -161,41 +162,19 @@ def calcular_resumen(db, desde, hasta, hoy, postgres=False):
             gastos.append({**movimiento, "tipo": "reparacion",
                            "referencia_destino": movimiento["trabajo_id"],
                            "registrado": True, "revision": False})
-    grupos = {}
     fichajes = leer("fichajes_ayudantes")
-    por_id = {fila["id"]: fila for fila in fichajes}
     nombres = {fila["id"]: fila["nombre"] for fila in leer("ayudantes")}
-    pagos = {}
-    for pago in leer("pagos_jornadas"):
-        fichaje = por_id.get(pago["fichaje_id"])
-        if not fichaje:
+    pagos = leer("pagos_jornadas")
+    ids_fichajes = {f["id"] for f in fichajes}
+    for pago in pagos:
+        if pago["fichaje_id"] not in ids_fichajes:
             avisos.append(f"Pago de jornada #{pago['fichaje_id']}: fichaje inexistente.")
-            continue
-        pagos.setdefault((fichaje["ayudante_id"], str(fichaje["fecha"])), []).append(pago)
-    for fila in fichajes:
-        grupos.setdefault((fila["ayudante_id"], str(fila["fecha"])), []).append(fila)
-    usados = set()
-    for clave, filas in grupos.items():
-        nombre = nombres.get(clave[0])
-        historicos = [g for g in gastos if g.get("categoria") == "Ayudantes"
-                      and g.get("proveedor") == nombre and str(g.get("fecha")) == clave[1]
-                      and any(g["referencia_destino"] == f.get(
-                          "faena_id_vinculada" if g["tipo"] == "faena" else "num_presupuesto")
-                              for f in filas)]
-        usados.update((g["tipo"], g["id"]) for g in historicos)
-        candidatos = pagos.get(clave) or historicos
-        revision = len(candidatos) > 1
-        if revision:
-            avisos.append(f"{nombre or clave[0]} | {clave[1]}: varios pagos de jornada, excluidos.")
-        pago = candidatos[0] if len(candidatos) == 1 else {}
-        gastos.append({
-            "id": min(f["id"] for f in filas), "tipo": "jornada", "fecha": clave[1],
-            "proveedor": nombre or f"Ayudante #{clave[0]}", "concepto": "Jornada de ayudante",
-            "importe": pago.get("importe", 50),
-            "importe_pagado": pago.get("importe_pagado") if pago.get("importe_pagado") is not None
-            else pago.get("pagado", 0),
-            "registrado": bool(candidatos), "revision": revision,
-        })
+    imputaciones = leer("imputaciones_ayudantes") if "imputaciones_ayudantes" in tablas else []
+    jornadas, usados = agrupar_costes(fichajes, pagos, gastos, nombres, imputaciones)
+    for jornada in jornadas:
+        if jornada["revision"]:
+            avisos.append(f"{jornada['proveedor']} | {jornada['fecha']}: varios pagos de jornada, excluidos.")
+    gastos += jornadas
     gastos = [g for g in gastos if (g["tipo"], g["id"]) not in usados]
 
     periodo = dict(cobros_recibidos=Decimal(0), gastos_registrados=Decimal(0),

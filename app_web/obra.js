@@ -62,12 +62,13 @@
       }
       const r = ficha.resumen;
       texto('#resumen', `${r.dias_ayudantes} días de ayudantes en ${r.fechas_trabajadas} fechas, con ${r.ayudantes} ayudantes. ${r.dias_obra_registrados} días propios registrados.`);
-      texto('#importe-resumen', `Gastos vinculados: ${euros(r.gastos)} · Gastos pagados: ${euros(r.gastos_pagados)} · Cobros registrados: ${euros(r.cobros_registrados)}.`);
+      texto('#importe-resumen', `Gastos vinculados: ${euros(r.gastos)} · Gastos pagados: ${euros(r.gastos_pagados)} · Cobros registrados: ${euros(r.cobros_registrados)}.${r.costes_ayudantes_revision ? ' Hay costes de ayudantes con pagos duplicados excluidos: total incompleto.' : ''}`);
       texto('#limitaciones', origen === 'propio'
         ? 'Cobros y gastos vinculados a esta reparación. Los cobros parciales se registran desde Contabilidad → Ingresos del programa. Un cobro histórico sin fecha no se atribuye a un mes inventado.'
         : origen === 'presupuesto'
           ? 'Los gastos y cobros se vinculan por número de presupuesto. Un estado histórico Completado puede indicar cobrado sin movimientos de cobro independientes; no se inventan esos movimientos.'
           : 'Los gastos y cobros se vinculan al identificador de la faena. Los días propios y los días de ayudantes son recuentos separados.');
+      document.querySelector('#limitaciones').textContent += ' El gasto diario imputado desde Mi control es el mismo coste de la empresa, no otro gasto. Las jornadas sin pago se señalan como estimadas.';
       tabla('ayudantes', ficha.jornadas_ayudantes.map(j => [
         fecha(j.fecha), j.ayudante, j.revision ? 'Revisión necesaria' : j.sin_registro ? 'Sin pago registrado' : j.estado_pago,
         j.sin_registro ? 'Sin pago registrado' : euros(j.importe_dia),

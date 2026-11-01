@@ -79,8 +79,8 @@ class FichaObraTests(unittest.TestCase):
         self.db.execute("UPDATE fichajes_ayudantes SET presupuesto_id=25 WHERE id=1")
         self.db.commit()
         gastos = [
-            {"num_presupuesto": "P1", "importe": 30, "importe_pagado": 10},
-            {"num_presupuesto": "P2", "importe": 999, "importe_pagado": 999},
+            {"id": 1, "num_presupuesto": "P1", "importe": 30, "importe_pagado": 10},
+            {"id": 2, "num_presupuesto": "P2", "importe": 999, "importe_pagado": 999},
         ]
         ficha = self.consultar("presupuesto", gastos)
         self.assertEqual(ficha["resumen"]["gastos"], 30)
@@ -91,8 +91,8 @@ class FichaObraTests(unittest.TestCase):
     def test_gastos_de_faenas_distintas_no_se_mezclan(self):
         self.preparar()
         ficha = self.consultar(gastos=[
-            {"faena_id": 25, "importe": 20, "importe_pagado": 10},
-            {"faena_id": 26, "importe": 999, "importe_pagado": 999},
+            {"id": 1, "faena_id": 25, "importe": 20, "importe_pagado": 10},
+            {"id": 2, "faena_id": 26, "importe": 999, "importe_pagado": 999},
         ])
         self.assertEqual(ficha["resumen"]["gastos"], 20)
         self.assertEqual(ficha["resumen"]["gastos_pagados"], 10)

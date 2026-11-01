@@ -17,6 +17,8 @@ from autenticacion import crear_token, inicializar_usuarios, password_valida, us
 from respaldo import ErrorRespaldo, crear_respaldo
 from resumen_privado import crear_acceso_privado
 from diario_trabajo import crear_diario
+from imputaciones_api import crear_imputaciones
+from costes_ayudantes import costes_destino, consultar_costes
 from tareas_api import crear_tareas
 from almacen import crear_almacen
 from cuentas_reparaciones import inicializar_cuentas, resumenes_cuentas, movimientos, materializar_historico
@@ -443,6 +445,7 @@ def administrador(usuario=Depends(usuario_actual)):
 router_resumen_privado, resumen_autorizado = crear_acceso_privado(conexion, administrador)
 app.include_router(router_resumen_privado)
 app.include_router(crear_diario(conexion, administrador))
+app.include_router(crear_imputaciones(conexion, administrador, bool(DATABASE_URL)))
 app.include_router(crear_tareas(conexion, administrador))
 app.include_router(crear_almacen(conexion, usuario_actual, administrador))
 
@@ -2097,6 +2100,15 @@ def ficha_obra(
               if (origen == "faena" and g["faena_id"] == obra_id) or
               (origen == "presupuesto" and obra["num_presupuesto"]
                and g["num_presupuesto"] == obra["num_presupuesto"])] if origen != "propio" else gastos_reparacion
+    with conexion() as db:
+        imputados, usados = costes_destino(db, origen, obra_id, bool(DATABASE_URL))
+    gastos = [g for g in gastos if (origen, g["id"]) not in usados]
+    if imputados:
+        gastos += [
+            {**g, "concepto": "Gasto diario de ayudante imputado a esta obra"
+             + (" (estimado; sin pago registrado)" if not g["registrado"] else "")}
+            for g in imputados if not g["revision"]
+        ]
     for cobro in cobros:
         cobro["importe"] = round(float(cobro["importe_iva"] or 0) + float(cobro["importe_b"] or 0), 2)
     if origen == "propio" and obra.get("historico"):
@@ -2112,6 +2124,7 @@ def ficha_obra(
             "dias_obra_registrados": len(dias_obra),
             "gastos": round(sum(float(g["importe"] or 0) for g in gastos), 2),
             "gastos_pagados": round(sum(float(g["importe_pagado"] or 0) for g in gastos), 2),
+            "costes_ayudantes_revision": sum(g["revision"] for g in imputados),
             "cobros_registrados": round(sum(float(c["importe"] or 0) for c in cobros
                                           if not (c.get("beneficiario") or "").strip()), 2),
             "cobros_terceros": round(sum(float(c["importe"] or 0) for c in cobros
@@ -2787,29 +2800,38 @@ def incluir_gastos_jornadas(db, gastos):
         grupos.setdefault((fichaje["ayudante_id"], fichaje["fecha"]), []).append(fichaje)
     vinculados = set()
     jornadas = []
+    costes, historicos_usados = consultar_costes(db, bool(DATABASE_URL))
+    por_dia = {(c["ayudante_id"], c["fecha"]): c for c in costes}
     for (ayudante_id, fecha), grupo in grupos.items():
         jornada = agrupar_pagos_dia(db, grupo, pagos)
         vinculados.update((pago["tabla_gasto"], pago["gasto_id"])
                           for pago in jornada["gastos_obra"])
-        pago = jornada["pago"]
+        coste = por_dia[(ayudante_id, str(fecha))]
+        pago = coste
         importe = pago["importe"]
-        pagado = pago["importe_pagado"]
+        pagado = coste["importe_pagado"]
         historico = next((gasto for gasto in gastos
-                          if gasto.get("tabla_gasto") == pago.get("tabla_gasto")
-                          and gasto["id"] == pago.get("gasto_id")), None)
+                          if not coste["pago_directo"]
+                          and (gasto["tipo"], gasto["id"]) in coste["historicos"]), None)
+        imputacion = coste["imputacion"]
+        destino_coste = ("Alucarpin" if imputacion["destino"] == "alucarpin" else
+                        f"{imputacion['destino']} #{imputacion['faena_id'] or imputacion['presupuesto_id'] or imputacion['trabajo_id']}") if imputacion else ""
         jornadas.append({
             "id": jornada["id"], "tipo": "jornada", "fecha": fecha,
             "ayudante_id": ayudante_id, "proveedor": grupo[0]["nombre_ayudante"],
-            "concepto": "Jornada de ayudante", "categoria": "Ayudantes",
+            "concepto": "Jornada de ayudante" + (f" · Gasto imputado a {destino_coste}" if destino_coste else "")
+            + (" · Estimado; sin importe registrado" if not coste["registrado"] else ""), "categoria": "Ayudantes",
             "obra": jornada["obra"], "fichajes_ids": jornada["fichajes_ids"],
             "importe": importe, "importe_pagado": pagado,
-            "pendiente": None if jornada["revision"] else round(max(importe - pagado, 0), 2),
+            "pendiente": coste["pendiente"],
             "estado_pago": pago["estado_pago"], "forma_pago": pago["forma_pago"],
-            "revision": jornada["revision"],
+            "revision": coste["revision"],
             "gasto_historico": historico,
+            "imputacion": coste["imputacion"],
         })
     return [gasto for gasto in gastos
-            if (gasto.get("tabla_gasto"), gasto["id"]) not in vinculados] + jornadas
+            if (gasto.get("tabla_gasto"), gasto["id"]) not in vinculados
+            and (gasto["tipo"], gasto["id"]) not in historicos_usados] + jornadas
 
 
 @app.get("/ayudantes/{ayudante_id}/jornadas-pago")

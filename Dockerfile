@@ -11,6 +11,7 @@ RUN pip install --no-cache-dir -r requirements-api.txt
 COPY api_central.py autenticacion.py base_datos.py respaldo.py resumen_economico.py ./
 COPY resumen_privado.py ./
 COPY diario_trabajo.py ./
+COPY costes_ayudantes.py imputaciones_api.py ./
 COPY cuentas_reparaciones.py ./
 COPY importes_faenas.py ./
 COPY tareas.py tareas_api.py ./
@@ -22,6 +23,7 @@ COPY app_web/catalogo.js ./app_web/
 COPY app_web/panel.js app_web/economia.js ./app_web/
 COPY app_web/resumen.html app_web/resumen_privado.js ./app_web/
 COPY app_web/diario.js app_web/diario.css ./app_web/
+COPY app_web/costes_dia.js ./app_web/
 COPY app_web/obra.html app_web/obra.js app_web/exportar.js ./app_web/
 COPY app_web/tareas.html app_web/tareas.css app_web/tareas.js ./app_web/
 COPY app_web/inicio_ayudante.html app_web/almacen.html app_web/almacen.css app_web/almacen.js ./app_web/

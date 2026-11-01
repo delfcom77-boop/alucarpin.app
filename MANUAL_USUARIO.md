@@ -437,11 +437,28 @@ En **Tipo -> Alucarpin**, el desplegable **Trabajo** ofrece oficina
 y herramientas, compras/recoger material y **Otros** con descripcion libre.
 La fecha registra una actividad interna realizada, no una obra a cobrar.
 Aparece en Mi control y Agenda en morado, con etiqueta **Alucarpin**.
-No genera ingresos, gastos, cobros pendientes ni alarmas de ejecucion.
+No genera ingresos, gastos automaticamente, cobros pendientes ni alarmas de ejecucion.
 Cada actividad lleva su propio dia; varias actividades y una faena en la misma
 fecha cuentan como un solo dia distinto. **Registrar otro dia** reutiliza la
 actividad, no la fecha. Puedes editar o borrar la actividad en Mi control.
 Tambien se incluye en la descarga de dias propios a Google Calendar.
+
+Dentro de **Mi control -> Gasto de ayudantes del dia**, selecciona una fecha
+y el destino de cada ayudante: **Alucarpin** para un gasto general o una obra,
+presupuesto o reparacion. Tu actividad y el sitio del ayudante son independientes:
+puedes estar en oficina y enviar al ayudante a otra obra. Pulsa **Guardar destino**.
+Hay un solo coste por ayudante y fecha, aunque tenga varios fichajes o registres
+varias actividades propias. Cambiar el destino mueve ese mismo coste, no lo duplica
+en el total de empresa. Los gastos historicos equivalentes se sustituyen solo en
+la visualizacion; no se borran facturas ni pagos.
+
+La imputacion no paga la jornada ni cambia lo pagado: los pagos se gestionan
+en Ayudantes. Si falta un importe registrado, se muestra una estimacion de 50 EUR
+por jornada; no es un gasto pagado. Un pago parcial conserva su pendiente.
+Si hay pagos duplicados se pide revisar y el total se marca incompleto.
+**Resultado sin ingresos** muestra el gasto en negativo sin asignar cobros de
+otras fechas a ese dia. Los destinos guardados aparecen en los gastos de la ficha
+de obra. Solo el administrador puede modificar la imputacion.
 En el programa Windows utiliza **Mi control -> alucarpin** y el mismo listado
 de actividades. **Enviar datos / Recibir datos** las sincroniza con la app;
 no hace falta registrarlas dos veces. No se crean nuevas pestanas.

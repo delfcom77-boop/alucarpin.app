@@ -67,7 +67,7 @@
       <form id="formulario">
         <div class="fila"><label>Tipo <select id="tipo"><option value="faena">Faena a terceros</option><option value="presupuesto">Presupuesto</option><option value="reparacion">Reparación</option><option value="alucarpin">Alucarpin · trabajo interno</option></select></label><label>Día trabajado <input id="fecha-inicio" type="date" required></label></div>
         <label>Trabajo <select id="trabajo-destino" disabled><option value="">Cargando trabajos…</option></select></label>
-        <p id="aviso-alucarpin" hidden>Actividad interna no facturable: cuenta como día trabajado, sin generar cobros ni pendientes. Puedes registrar varias actividades en el mismo día; el calendario lo cuenta una sola vez.</p>
+        <p id="aviso-alucarpin" hidden>Actividad interna no facturable: cuenta como día trabajado, sin generar cobros pendientes. El gasto de ayudantes se imputa por separado en «Gasto de ayudantes del día». Puedes registrar varias actividades en el mismo día; el calendario lo cuenta una sola vez.</p>
         <label>Cliente <input id="cliente" required></label>
         <div class="fila"><label>Obra o reparación <input id="obra" required></label><label>Dirección / ubicación <input id="ubicacion"></label></div>
         <div class="fila"><label>Población <input id="poblacion"></label><label id="numero-presupuesto-campo" hidden>Número del presupuesto nuevo (opcional) <input id="numero-presupuesto"></label></div>
@@ -76,6 +76,14 @@
       </form>
     </section>
     <section data-diario data-diario-compacto id="mis-dias"></section>
+    <section id="costes-dia">
+      <h2>Gasto de ayudantes del día</h2>
+      <p>Elige Alucarpin para gasto general o una obra para imputarlo a esa obra. Tu actividad y la del ayudante son independientes. El gasto se cuenta una sola vez en la empresa y no se reparte por sitios. Guardar destino no marca el día como pagado.</p>
+      <label>Día <input id="costes-fecha" type="date" required></label>
+      <button type="button">Actualizar gastos del día</button>
+      <p id="costes-actividades"></p><p id="costes-resumen"></p><p role="status" aria-live="polite"></p>
+      <div class="lista" role="region" tabindex="0" aria-label="Gastos diarios de ayudantes"><table><thead><tr><th>Ayudante</th><th>Sitios del día</th><th>Gasto diario</th><th>Pago</th><th>Imputar gasto</th></tr></thead><tbody></tbody></table></div>
+    </section>
     <section>
       <h2>Mis trabajos</h2>
       <p>En faenas con un total acordado, ese importe incluye el IVA y no cambia al registrar días. Se modifica desde Faenas en el programa del ordenador; los cobros se registran por separado en Ingresos.</p>
@@ -573,5 +581,6 @@
     document.querySelector('#fecha-inicio').max = fechaLocalHoy();
     cargarTrabajos().catch(error => { mensaje.textContent = error.message; mensaje.className = 'mensaje error'; });
   </script>
+  <script src="/app/costes_dia.js"></script>
 </body>
 </html>

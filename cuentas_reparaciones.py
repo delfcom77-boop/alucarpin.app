@@ -2,6 +2,9 @@
 
 from decimal import Decimal, InvalidOperation
 from uuid import uuid4
+import sqlite3
+
+from costes_ayudantes import costes_destino
 
 
 COLUMNAS = (
@@ -97,9 +100,14 @@ def resumen_cuenta(db, trabajo, registros=None):
     gastos = [r for r in registros if r["clase"] == "gasto" and not r["eliminado"]]
     total = dinero(trabajo.get("importe") or 0)
     costes = sum(r["importe"] for r in gastos)
+    diarios, _ = costes_destino(db, "propio", trabajo["id"], not isinstance(db, sqlite3.Connection))
+    if any(c["revision"] for c in diarios):
+        raise ValueError("Hay pagos de ayudantes duplicados en esta reparacion. Revisa antes de calcular sus costes.")
+    costes += sum(c["importe"] for c in diarios)
     return {
         "cobrado": round(cobrado, 2), "gastos": round(costes, 2),
-        "gastos_pagados": round(sum(r["importe_pagado"] for r in gastos), 2),
+        "gastos_pagados": round(sum(r["importe_pagado"] for r in gastos) + sum(c["importe_pagado"] for c in diarios), 2),
+        "costes_ayudantes_estimados": sum(not c["registrado"] for c in diarios),
         "pendiente_cobro": round(max(total - cobrado, 0), 2),
         "beneficio": round(total - costes, 2), "historico": historico,
         "tiene_historial": bool(ingresos),
