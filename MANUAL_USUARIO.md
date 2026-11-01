@@ -325,6 +325,11 @@ Los presupuestos en estado Presupuesto o Rechazado no generan estos recordatorio
 
 ### Notas y conversion a citas
 
+Al borrar una cita, la app confirma el resultado o muestra el motivo del error.
+Si se pierde la conexion, comprueba el listado antes de reintentarlo. Si el
+borrado se confirma pero falla la actualizacion, la cita se retira de pantalla
+y se indica que debes recargar, sin borrarla de nuevo.
+
 La busqueda de notas se conserva al actualizar el listado, guardar o modificar
 una nota, cambiar su estado y cambiar el filtro de estado. Vaciar el buscador
 vuelve a mostrar todas las notas del estado seleccionado.

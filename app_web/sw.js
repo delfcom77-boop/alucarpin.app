@@ -1,4 +1,4 @@
-const CACHE = 'alucarpin-app-v25-busqueda-notas';
+const CACHE = 'alucarpin-app-v26-borrado-citas';
 const ARCHIVOS = [
   '/app/login.html',
   '/app/administrador.html',

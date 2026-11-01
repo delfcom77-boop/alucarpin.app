@@ -470,7 +470,34 @@
             boton.disabled = false;
           }
         };
-        fila.querySelector('.borrar').onclick = async () => { if (!confirm('¿Borrar esta cita?')) return; await apiFetch(`/citas/${cita.id}`, { method: 'DELETE' }); await cargar(); };
+        fila.querySelector('.borrar').onclick = async () => {
+          const boton = fila.querySelector('.borrar');
+          if (boton.disabled || !confirm('¿Borrar esta cita?')) return;
+          const estadosBotones = Array.from(fila.querySelectorAll('button'), elemento => [elemento, elemento.disabled]);
+          estadosBotones.forEach(([elemento]) => { elemento.disabled = true; });
+          mensajeCitas.textContent = '';
+          mensajeCitas.className = 'mensaje';
+          let eliminada = false;
+          try {
+            const respuesta = await apiFetch(`/citas/${cita.id}`, { method: 'DELETE' });
+            if (!respuesta.ok) {
+              const resultado = await respuesta.json().catch(() => null);
+              throw new Error(textoDetalleError(resultado?.detail) || `Error del servidor (HTTP ${respuesta.status}).`);
+            }
+            eliminada = true;
+            fila.remove();
+            mensajeCitas.textContent = 'Cita borrada correctamente.';
+            mensajeCitas.className = 'mensaje exito';
+            await cargar();
+          } catch (error) {
+            mensajeCitas.textContent = eliminada
+              ? `Cita borrada, pero no se pudo actualizar el listado: ${error.message}. Recarga el listado; no la borres de nuevo.`
+              : `No se ha confirmado el borrado de la cita: ${error.message}. Comprueba el listado antes de reintentarlo.`;
+            mensajeCitas.className = 'mensaje error';
+          } finally {
+            if (!eliminada) estadosBotones.forEach(([elemento, deshabilitado]) => { elemento.disabled = deshabilitado; });
+          }
+        };
         cuerpo.appendChild(fila);
       });
     }
