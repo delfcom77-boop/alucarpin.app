@@ -8,6 +8,7 @@
   <style>
     :root { font-family: Segoe UI, sans-serif; color: #223238; }
     * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
     body { margin: 0; background: #f3f1eb; }
     main { width: min(1000px, 100%); margin: auto; padding: 24px 16px 40px; }
     header { background: #293f4a; color: #fff; border-radius: 14px; padding: 22px; }
@@ -40,6 +41,7 @@
     .lista-trabajos tr.trabajo-faena { border-left: 4px solid #174b82; }
     .lista-trabajos tr.trabajo-presupuesto { border-left: 4px solid #1c6036; }
     .lista-trabajos tr.trabajo-reparacion { border-left: 4px solid #854500; }
+    .lista-trabajos tr.trabajo-alucarpin { border-left: 4px solid #62458a; }
     .lista-trabajos .acciones { flex-wrap: nowrap; gap: 6px; }
     .lista-trabajos .acciones button, .lista-trabajos .acciones a { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; min-height: 44px; padding: 6px 10px; border-radius: 6px; }
     .lista-trabajos .acciones a { background: #293f4a; color: #fff; text-decoration: none; font-weight: 700; }
@@ -63,8 +65,9 @@
       <h2>Registrar trabajo y mi día</h2>
       <p>Elige una obra existente o crea una nueva. Guardar trabajo registra también tu día en el listado y el calendario de abajo, sin crear pagos ni cobros. Para volver a la misma obra otro día, selecciónala: no la crees de nuevo.</p>
       <form id="formulario">
-        <div class="fila"><label>Tipo <select id="tipo"><option value="faena">Faena a terceros</option><option value="presupuesto">Presupuesto</option><option value="reparacion">Reparación</option></select></label><label>Día trabajado <input id="fecha-inicio" type="date" required></label></div>
+        <div class="fila"><label>Tipo <select id="tipo"><option value="faena">Faena a terceros</option><option value="presupuesto">Presupuesto</option><option value="reparacion">Reparación</option><option value="alucarpin">Alucarpin · trabajo interno</option></select></label><label>Día trabajado <input id="fecha-inicio" type="date" required></label></div>
         <label>Trabajo <select id="trabajo-destino" disabled><option value="">Cargando trabajos…</option></select></label>
+        <p id="aviso-alucarpin" hidden>Actividad interna no facturable: cuenta como día trabajado, sin generar cobros ni pendientes. Puedes registrar varias actividades en el mismo día; el calendario lo cuenta una sola vez.</p>
         <label>Cliente <input id="cliente" required></label>
         <div class="fila"><label>Obra o reparación <input id="obra" required></label><label>Dirección / ubicación <input id="ubicacion"></label></div>
         <div class="fila"><label>Población <input id="poblacion"></label><label id="numero-presupuesto-campo" hidden>Número del presupuesto nuevo (opcional) <input id="numero-presupuesto"></label></div>
@@ -79,7 +82,7 @@
       <p>Si parte del presupuesto pertenece a otro autónomo, el importe y los cobros del listado muestran solo tu parte. En «Ver ficha» puedes consultar el total global y los cobros ajenos, excluidos de tus ingresos.</p>
       <p>La ejecución y el cobro son independientes. Los cobros de faenas se calculan con sus pagos registrados y sincronizados; los presupuestos solo generan recordatorios cuando están aceptados. Terminar una obra no registra un cobro.</p>
       <div class="fila">
-        <label>Mostrar tipo <select id="filtro-tipo-trabajos"><option value="">Todos</option><option value="faena">Faenas</option><option value="presupuesto">Presupuestos</option><option value="reparacion">Reparaciones</option></select></label>
+        <label>Mostrar tipo <select id="filtro-tipo-trabajos"><option value="">Todos</option><option value="faena">Faenas</option><option value="presupuesto">Presupuestos</option><option value="reparacion">Reparaciones</option><option value="alucarpin">Alucarpin</option></select></label>
         <label>Buscar cliente <input id="filtro-cliente-trabajos" type="search" placeholder="Ej.: Alucarpin Samitier"></label>
         <label>Buscar obra <input id="filtro-obra-trabajos" type="search" placeholder="Ej.: Mercedes"></label>
       </div>
@@ -168,9 +171,19 @@
     const fecha = value => String(value || '').split('-').reverse().join('/');
     const normalizarBusqueda = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase();
     const fechaLocalHoy = () => { const hoy = new Date(); hoy.setMinutes(hoy.getMinutes() - hoy.getTimezoneOffset()); return hoy.toISOString().slice(0, 10); };
-    const tipos = { faena: 'Faena a terceros', presupuesto: 'Presupuesto', reparacion: 'Reparación' };
+    const tipos = { faena: 'Faena a terceros', presupuesto: 'Presupuesto', reparacion: 'Reparación', alucarpin: 'Alucarpin' };
+    const actividades = ['Oficina: presupuestos y facturación', 'Tomar medidas / visitar una obra', 'Preparar material y herramientas', 'Compras / recoger material'];
     function actualizarDestinos() {
       const anterior = destinoTrabajo.value;
+      if (tipo.value === 'alucarpin') {
+        destinoTrabajo.replaceChildren(new Option('Selecciona la actividad', ''), ...actividades.map(a => new Option(a, a)), new Option('Otros (escribe la actividad)', 'otros'));
+        if ([...destinoTrabajo.options].some(o => o.value === anterior)) destinoTrabajo.value = anterior;
+        destinoTrabajo.disabled = !trabajosCargados;
+        destinoTrabajo.required = true;
+        actualizarTrabajo();
+        return;
+      }
+      destinoTrabajo.required = false;
       destinoTrabajo.replaceChildren(new Option('Crear trabajo nuevo', ''));
       trabajosDisponibles.filter(t => t.tipo === tipo.value).forEach(t => {
         const opcion = document.createElement('option');
@@ -185,6 +198,21 @@
     function actualizarTrabajo() {
       const seleccionado = trabajosDisponibles.find(t => `${t.origen}:${t.origen_id}` === destinoTrabajo.value);
       const cliente = document.querySelector('#cliente');
+      const interno = tipo.value === 'alucarpin';
+      document.querySelector('#aviso-alucarpin').hidden = !interno;
+      const obra = document.querySelector('#obra');
+      obra.readOnly = interno && destinoTrabajo.value !== 'otros';
+      if (interno) {
+        cliente.value = 'Alucarpin';
+        cliente.readOnly = true;
+        cliente.required = false;
+        obra.value = destinoTrabajo.value === 'otros' ? '' : destinoTrabajo.value;
+        obra.placeholder = 'Describe la actividad';
+        document.querySelector('#numero-presupuesto-campo').hidden = true;
+        document.querySelector('#numero-presupuesto').value = '';
+        return;
+      }
+      obra.placeholder = '';
       cliente.readOnly = Boolean(seleccionado);
       cliente.required = !seleccionado;
       document.querySelector('#numero-presupuesto-campo').hidden = tipo.value !== 'presupuesto' || Boolean(seleccionado);
@@ -200,11 +228,13 @@
       document.querySelector('#editar-obra').value = trabajo.obra || '';
       document.querySelector('#editar-fecha').value = trabajo.fecha_inicio || '';
       document.querySelector('#editar-importe').value = trabajo.importe || 0;
+      document.querySelector('#editar-importe').parentElement.hidden = trabajo.tipo === 'alucarpin';
       const estado = document.querySelector('#editar-estado');
-      estado.value = trabajo.origen === 'presupuesto' ? (trabajo.estado || 'Presupuesto') : (trabajo.estado_cobro === 'Parcial' ? 'No cobrado' : trabajo.estado_cobro || 'No cobrado');
-      estado.parentElement.hidden = trabajo.origen === 'faena' || Boolean(trabajo.cuenta_con_movimientos);
+      estado.value = trabajo.tipo === 'alucarpin' ? 'No cobrado' : trabajo.origen === 'presupuesto' ? (trabajo.estado || 'Presupuesto') : (trabajo.estado_cobro === 'Parcial' ? 'No cobrado' : trabajo.estado_cobro || 'No cobrado');
+      estado.parentElement.hidden = trabajo.tipo === 'alucarpin' || trabajo.origen === 'faena' || Boolean(trabajo.cuenta_con_movimientos);
       document.querySelector('#mensaje-edicion-trabajo').className = 'mensaje';
-      document.querySelector('#mensaje-edicion-trabajo').textContent = trabajo.origen === 'faena'
+      document.querySelector('#mensaje-edicion-trabajo').textContent = trabajo.tipo === 'alucarpin' ? 'Actividad interna no facturable. Editar no genera cobros.'
+        : trabajo.origen === 'faena'
         ? 'El cobro se calcula a partir de los pagos de la faena ya registrados y sincronizados.'
         : trabajo.origen === 'presupuesto'
           ? 'El importe edita solo el total final. El bruto, IVA, efectivo y desglose se conservan sin recalcular.'
@@ -304,8 +334,8 @@
           trabajo.cliente || '',
           trabajo.obra || '-',
           trabajo.num_presupuesto || '-',
-          `${Number(trabajo.importe || 0).toFixed(2)} €`,
-          [trabajo.estado_cobro || '-',
+          trabajo.tipo === 'alucarpin' ? 'No facturable' : `${Number(trabajo.importe || 0).toFixed(2)} €`,
+          trabajo.tipo === 'alucarpin' ? 'Trabajo interno · sin cobros' : [trabajo.estado_cobro || '-',
             trabajo.pendiente_cobro !== undefined ? `${Number(trabajo.pendiente_cobro).toFixed(2)} € pendientes` : '',
             trabajo.estado_ejecucion ? `Ejecución: ${trabajo.estado_ejecucion}` : 'Sin aceptar'].filter(Boolean).join(' | ')
         ];
@@ -325,7 +355,7 @@
           }
           fila.appendChild(celda);
         });
-        const dias = trabajo.origen === 'faena'
+        const dias = trabajo.tipo === 'alucarpin' ? [trabajo.fecha_inicio] : trabajo.origen === 'faena'
           ? jornadasPorFaena.get(trabajo.origen_id) || []
           : jornadasPropias.filter(j => j.origen === trabajo.origen && j.origen_id === trabajo.origen_id).map(j => j.fecha);
         const celdaJornadas = document.createElement('td');
@@ -341,7 +371,7 @@
         const ficha = document.createElement('a');
         ficha.href = `/app/obra.html?origen=${encodeURIComponent(trabajo.origen)}&id=${trabajo.origen_id}`;
         ficha.textContent = 'Ver ficha';
-        celdaAcciones.appendChild(ficha);
+        if (trabajo.tipo !== 'alucarpin') celdaAcciones.appendChild(ficha);
         if (trabajo.estado_ejecucion) {
           const botonEjecucion = document.createElement('button');
           botonEjecucion.type = 'button';
@@ -362,7 +392,21 @@
           };
           celdaAcciones.appendChild(botonEjecucion);
         }
-        if (['faena', 'presupuesto', 'propio'].includes(trabajo.origen)) {
+        if (trabajo.tipo === 'alucarpin') {
+          const otroDia = document.createElement('button');
+          otroDia.type = 'button';
+          otroDia.textContent = 'Registrar otro día';
+          otroDia.onclick = () => {
+            tipo.value = 'alucarpin';
+            actualizarDestinos();
+            destinoTrabajo.value = actividades.includes(trabajo.obra) ? trabajo.obra : 'otros';
+            actualizarTrabajo();
+            document.querySelector('#obra').value = trabajo.obra;
+            document.querySelector('#fecha-inicio').value = fechaLocalHoy();
+            formulario.scrollIntoView({behavior: 'smooth', block: 'start'});
+          };
+          celdaAcciones.appendChild(otroDia);
+        } else if (['faena', 'presupuesto', 'propio'].includes(trabajo.origen)) {
           const botonJornada = document.createElement('button');
           botonJornada.type = 'button';
           botonJornada.textContent = 'Registrar día';
@@ -490,7 +534,7 @@
         cliente: document.querySelector('#cliente').value, obra: document.querySelector('#obra').value,
         ubicacion: document.querySelector('#ubicacion').value, poblacion: document.querySelector('#poblacion').value,
         observaciones: document.querySelector('#observaciones').value,
-        num_presupuesto: seleccionado ? null : document.querySelector('#numero-presupuesto').value || null,
+        num_presupuesto: seleccionado || tipo.value === 'alucarpin' ? null : document.querySelector('#numero-presupuesto').value || null,
       };
       const contenido = JSON.stringify(datos);
       if (!solicitudPendiente || solicitudPendiente.contenido !== contenido) {
@@ -512,12 +556,13 @@
         tipo.value = datos.tipo;
         document.querySelector('#fecha-inicio').value = fechaLocalHoy();
         await cargarTrabajos();
-        destinoTrabajo.value = `${resultado.origen}:${resultado.origen_id}`;
+        destinoTrabajo.value = datos.tipo === 'alucarpin' ? (actividades.includes(datos.obra) ? datos.obra : 'otros') : `${resultado.origen}:${resultado.origen_id}`;
         actualizarTrabajo();
+        if (datos.tipo === 'alucarpin') document.querySelector('#obra').value = datos.obra;
         await AlucarpinDiario.actualizar();
         AlucarpinDiario.mostrarFecha(datos.fecha);
         document.querySelector('#mis-dias').scrollIntoView({behavior: 'smooth', block: 'start'});
-        mensaje.textContent = 'Trabajo y día guardados. Ya aparecen en tu listado y calendario. Para otro día, puedes mantener este trabajo seleccionado.';
+        mensaje.textContent = datos.tipo === 'alucarpin' ? 'Actividad de Alucarpin guardada en tu día y calendario, sin cobros ni pendientes.' : 'Trabajo y día guardados. Ya aparecen en tu listado y calendario. Para otro día, puedes mantener este trabajo seleccionado.';
         mensaje.className = 'mensaje exito';
       } catch (error) {
         mensaje.textContent = guardado ? `Día guardado, pero no se pudo actualizar la pantalla: ${error.message}. Recarga; no lo crees de nuevo.` : `${error.message} No cambies el formulario si quieres reintentar el mismo registro.`;

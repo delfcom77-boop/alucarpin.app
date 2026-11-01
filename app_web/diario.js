@@ -2,14 +2,14 @@
   const destino = document.querySelector('[data-diario]');
   if (!destino) return;
   const token = localStorage.getItem('alucarpin_token');
-  const nombres = {faena: 'Faena a terceros', presupuesto: 'Presupuesto', reparacion: 'Reparación'};
+  const nombres = {faena: 'Faena a terceros', presupuesto: 'Presupuesto', reparacion: 'Reparación', alucarpin: 'Alucarpin'};
   destino.innerHTML = `
     <h2>Mis días trabajados</h2>
     <p>Solo tus días registrados, no los fichajes de ayudantes ni fechas previstas. Pulsa un día para ver dónde trabajaste.</p>
-    <div class="diario-leyenda"><span class="dia-tipo faena">3º · Faenas a terceros</span><span class="dia-tipo presupuesto">P · Presupuestos</span><span class="dia-tipo reparacion">R · Reparaciones</span></div>
+    <div class="diario-leyenda"><span class="dia-tipo faena">3º · Faenas a terceros</span><span class="dia-tipo presupuesto">P · Presupuestos</span><span class="dia-tipo reparacion">R · Reparaciones</span><span class="dia-tipo alucarpin">A · Alucarpin (no facturable)</span></div>
     <div class="fila">
       <label>Mes <input id="diario-mes" type="month" required></label>
-      <label>Tipo <select id="diario-tipo"><option value="">Todos</option><option value="faena">Faenas a terceros</option><option value="presupuesto">Presupuestos</option><option value="reparacion">Reparaciones</option></select></label>
+      <label>Tipo <select id="diario-tipo"><option value="">Todos</option><option value="faena">Faenas a terceros</option><option value="presupuesto">Presupuestos</option><option value="reparacion">Reparaciones</option><option value="alucarpin">Alucarpin</option></select></label>
       <label>Buscar cliente, obra o ubicación <input id="diario-buscar" type="search"></label>
     </div>
     <div class="acciones"><button type="button" id="diario-anterior">Mes anterior</button><button type="button" id="diario-hoy">Mes actual</button><button type="button" id="diario-siguiente">Mes siguiente</button><button type="button" id="diario-todos">Ver todo el mes</button><button type="button" id="diario-actualizar">Actualizar días</button></div>
@@ -67,7 +67,7 @@
       for (const categoria of [...new Set(eventos.map(d => d.tipo))]) {
         const marca = document.createElement('span');
         marca.className = `dia-tipo ${categoria}`;
-        marca.textContent = {faena: '3º', presupuesto: 'P', reparacion: 'R'}[categoria];
+        marca.textContent = {faena: '3º', presupuesto: 'P', reparacion: 'R', alucarpin: 'A'}[categoria];
         marca.title = nombres[categoria];
         boton.appendChild(marca);
       }
@@ -94,11 +94,11 @@
       sello.textContent = dia.creado_en ? `Registrado: ${dia.creado_en}` : 'Registro anterior sin sello de fecha de alta.';
       const ficha = document.createElement('a');
       ficha.textContent = 'Ver trabajo';
-      ficha.href = `/app/obra.html?origen=${encodeURIComponent(dia.origen)}&id=${dia.origen_id}`;
+      ficha.href = dia.tipo === 'alucarpin' ? '/app/mi_control.html' : `/app/obra.html?origen=${encodeURIComponent(dia.origen)}&id=${dia.origen_id}`;
       if (destino.hasAttribute('data-diario-compacto')) {
         const detalle = document.createElement('details');
         const resumen = document.createElement('summary');
-        etiqueta.textContent = {faena: '3º', presupuesto: 'P', reparacion: 'R'}[dia.tipo];
+        etiqueta.textContent = {faena: '3º', presupuesto: 'P', reparacion: 'R', alucarpin: 'A'}[dia.tipo];
         etiqueta.title = nombres[dia.tipo];
         etiqueta.setAttribute('aria-label', nombres[dia.tipo]);
         titulo.title = titulo.textContent;

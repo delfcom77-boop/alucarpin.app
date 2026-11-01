@@ -91,7 +91,7 @@ class FichajeVinculacion(BaseModel):
 
 
 class TrabajoCreate(BaseModel):
-    tipo: Literal["faena", "presupuesto", "reparacion"]
+    tipo: Literal["faena", "presupuesto", "reparacion", "alucarpin"]
     fecha_inicio: date
     fecha_fin: Optional[date] = None
     cliente: str = Field(min_length=1)
@@ -1116,7 +1116,8 @@ def listar_alarmas(usuario=Depends(administrador)):
             "SELECT t.id, t.fecha_inicio AS fecha, '' AS hora, t.cliente, t.ubicacion, "
             "t.poblacion, t.obra AS detalle, t.estado_cobro, t.importe, 'propio' AS origen, "
             "COALESCE(e.estado, 'Pendiente') AS estado_ejecucion "
-            "FROM trabajos_propios t LEFT JOIN estados_ejecucion_trabajos e ON e.trabajo_id = t.id"
+            "FROM trabajos_propios t LEFT JOIN estados_ejecucion_trabajos e ON e.trabajo_id = t.id "
+            "WHERE t.tipo <> 'alucarpin'"
         ).fetchall()
         cuentas_reparacion = resumenes_cuentas(db, [
             dict(t) for t in db.execute("SELECT * FROM trabajos_propios WHERE tipo='reparacion'").fetchall()])
@@ -1170,6 +1171,10 @@ def actualizar_ejecucion_trabajo(
     with conexion() as db:
         if not db.execute(f"SELECT id FROM {destino} WHERE id = ?", (trabajo_id,)).fetchone():
             raise HTTPException(status_code=404, detail="Trabajo no encontrado")
+        if origen == "propio" and db.execute(
+            "SELECT id FROM trabajos_propios WHERE id=? AND tipo='alucarpin'", (trabajo_id,),
+        ).fetchone():
+            raise HTTPException(409, "Alucarpin registra actividad diaria, no ejecución de una obra.")
         db.execute(
             f"INSERT INTO {estados} ({columna}, estado) VALUES (?, ?) "
             f"ON CONFLICT ({columna}) DO UPDATE SET estado = excluded.estado, actualizado_en = CURRENT_TIMESTAMP",
@@ -1504,6 +1509,15 @@ def _trabajo_datos(datos):
             valores[clave] = valores[clave].strip()
     if valores["fecha_fin"] and valores["fecha_fin"] < valores["fecha_inicio"]:
         raise HTTPException(status_code=400, detail="La fecha final no puede ser anterior a la inicial")
+    if valores["tipo"] == "alucarpin":
+        if (valores["importe"] != 0 or valores["estado_cobro"] != "No cobrado"
+                or valores["num_presupuesto"] or valores["forma_pago"] or valores["fecha_cobro"]):
+            raise HTTPException(400, "Alucarpin no admite importes, cobros ni presupuestos vinculados.")
+        if datos.fecha_inicio > date.today() or valores["fecha_fin"]:
+            raise HTTPException(400, "Registra cada actividad de Alucarpin en un único día ya trabajado.")
+        if not valores["obra"]:
+            raise HTTPException(400, "Indica la actividad realizada.")
+        valores["cliente"] = "Alucarpin"
     if valores["tipo"] == "presupuesto" and not valores["num_presupuesto"]:
         raise HTTPException(status_code=400, detail="Selecciona un presupuesto existente")
     if valores["estado_cobro"] == "Cobrado" and not valores["fecha_cobro"]:
@@ -1780,7 +1794,10 @@ def consultar_jornadas_propias(db):
         "JOIN presupuestos p ON p.id = j.presupuesto_id "
         "UNION ALL SELECT j.id, j.fecha, 'propio' AS origen, j.trabajo_id AS origen_id, "
         "t.cliente, t.obra, t.ubicacion, t.poblacion FROM jornadas_propias j "
-        "JOIN trabajos_propios t ON t.id = j.trabajo_id ORDER BY fecha, id"
+        "JOIN trabajos_propios t ON t.id = j.trabajo_id "
+        "UNION ALL SELECT id, fecha_inicio, 'propio' AS origen, id AS origen_id, "
+        "cliente, obra, ubicacion, poblacion FROM trabajos_propios WHERE tipo='alucarpin' "
+        "ORDER BY fecha, id"
     ).fetchall()]
 
 
@@ -1950,7 +1967,7 @@ def listar_trabajos(usuario=Depends(administrador)):
              estado_cobro, forma_pago, fecha_cobro, estado_revision, 'propio' AS origen,
              id AS origen_id
          FROM trabajos_propios
-         WHERE tipo = 'reparacion'
+         WHERE tipo IN ('reparacion', 'alucarpin')
          UNION ALL
          SELECT id, fecha AS fecha_inicio, NULL AS fecha_fin, 'faena' AS tipo,
              cliente, obra, ubicacion, poblacion, NULL AS observaciones,
@@ -1993,7 +2010,10 @@ def listar_trabajos(usuario=Depends(administrador)):
             trabajo["estado_ejecucion"] = None
         if trabajo["origen"] == "presupuesto":
             trabajo["estado"] = presupuestos[trabajo["origen_id"]]
-        if trabajo["origen"] == "propio":
+        if trabajo["tipo"] == "alucarpin":
+            trabajo.update(estado_cobro="No facturable", pendiente_cobro=0,
+                           estado_ejecucion=None, cuenta_con_movimientos=False)
+        elif trabajo["origen"] == "propio":
             cuenta = cuentas[trabajo["origen_id"]]
             trabajo.update(cuenta, pendiente_cobro=cuenta["pendiente_cobro"],
                            cuenta_con_movimientos=cuenta["tiene_historial"])
@@ -2008,7 +2028,7 @@ def ficha_obra(
 ):
     obra = next((t for t in listar_trabajos(usuario)
                  if t["origen"] == origen and t["origen_id"] == obra_id), None)
-    if not obra:
+    if not obra or obra.get("tipo") == "alucarpin":
         raise HTTPException(status_code=404, detail="Obra no encontrada")
     columna = {"propio": "trabajo_propio_id", "faena": "faena_id_vinculada", "presupuesto": "presupuesto_id"}[origen]
     with conexion() as db:
@@ -2105,6 +2125,9 @@ def crear_trabajo(datos: TrabajoCreate, usuario=Depends(administrador)):
     valores = _trabajo_datos(datos)
     with conexion() as db:
         estado_revision = "Pendiente de revisar"
+        if datos.tipo == "alucarpin":
+            from uuid import uuid4
+            valores["cuenta_uid"] = str(uuid4())
         if datos.tipo == "faena":
             existente = db.execute(
                 "SELECT id FROM faenas WHERE lower(trim(cliente)) = lower(trim(?)) "
@@ -2149,6 +2172,8 @@ def modificar_trabajo(trabajo_id: int, datos: TrabajoUpdate, usuario=Depends(adm
     asignaciones = ", ".join(f"{clave} = ?" for clave in valores)
     with conexion() as db:
         anterior = db.execute("SELECT * FROM trabajos_propios WHERE id=?", (trabajo_id,)).fetchone()
+        if anterior and (anterior["tipo"] == "alucarpin") != (datos.tipo == "alucarpin"):
+            raise HTTPException(409, "No se puede convertir una actividad interna en una obra facturable ni al revés.")
         if anterior and anterior["tipo"] == "reparacion":
             if datos.tipo != "reparacion" and movimientos(db, trabajo_id, True):
                 raise HTTPException(409, "La reparacion tiene historial contable y no se puede cambiar de tipo.")

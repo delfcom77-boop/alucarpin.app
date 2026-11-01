@@ -18,7 +18,7 @@ class RegistroDia(BaseModel):
     fecha: date
     origen: Literal["faena", "presupuesto", "propio"] | None = None
     origen_id: int | None = Field(default=None, gt=0)
-    tipo: Literal["faena", "presupuesto", "reparacion"]
+    tipo: Literal["faena", "presupuesto", "reparacion", "alucarpin"]
     cliente: str = Field(default="", max_length=160)
     obra: str = Field(default="", max_length=300)
     ubicacion: str = Field(default="", max_length=300)
@@ -28,12 +28,18 @@ class RegistroDia(BaseModel):
 
     @model_validator(mode="after")
     def validar(self):
+        if self.tipo == "alucarpin":
+            if self.origen is not None or self.origen_id is not None or self.num_presupuesto:
+                raise ValueError("Alucarpin es una actividad interna, no una obra ni un presupuesto.")
+            self.cliente = "Alucarpin"
+            if not self.obra.strip():
+                raise ValueError("Indica la actividad realizada.")
         if (self.origen is None) != (self.origen_id is None):
             raise ValueError("Selecciona un trabajo existente completo o crea uno nuevo.")
         if self.origen is None and (not self.cliente.strip() or not self.obra.strip()):
             raise ValueError("Cliente y obra son obligatorios para un trabajo nuevo.")
         if self.origen and self.origen != {
-            "faena": "faena", "presupuesto": "presupuesto", "reparacion": "propio"
+            "faena": "faena", "presupuesto": "presupuesto", "reparacion": "propio", "alucarpin": "propio"
         }[self.tipo]:
             raise ValueError("El trabajo seleccionado no corresponde al tipo indicado.")
         if self.fecha > date.today():
@@ -80,6 +86,10 @@ def crear_diario(conexion, administrador):
                 "JOIN faenas f ON f.id = j.faena_id"
             ).fetchall()]
             dias += [dict(f) for f in db.execute(
+                "SELECT fecha_inicio AS fecha, 'propio' AS origen, id AS origen_id, tipo, "
+                "cliente, obra, ubicacion, poblacion, observaciones, creado_en FROM trabajos_propios WHERE tipo='alucarpin'"
+            ).fetchall()]
+            dias += [dict(f) for f in db.execute(
                 "SELECT j.fecha, 'presupuesto' AS origen, p.id AS origen_id, 'presupuesto' AS tipo, "
                 "p.cliente, 'Presupuesto ' || coalesce(p.num_presupuesto, '') AS obra, "
                 "'' AS ubicacion, '' AS poblacion FROM jornadas_propias j "
@@ -98,7 +108,7 @@ def crear_diario(conexion, administrador):
             dia["fecha"] = str(dia["fecha"])
             detalle = detalles.get((dia["origen"], dia["origen_id"], dia["fecha"]))
             for campo in ("cliente", "obra", "ubicacion", "poblacion", "observaciones", "creado_en"):
-                dia[campo] = detalle[campo] if detalle else dia.get(campo)
+                dia[campo] = detalle[campo] if detalle and dia["tipo"] != "alucarpin" else dia.get(campo)
         return sorted(dias, key=lambda d: (d["fecha"], d["origen"], d["origen_id"]), reverse=True)
 
     @router.post("/registro-dia", status_code=201)
@@ -120,7 +130,7 @@ def crear_diario(conexion, administrador):
                     raise HTTPException(409, "La solicitud ya se utilizó para otro registro.")
                 return publico(anterior)
             tipo = datos.tipo
-            origen = datos.origen or {"faena": "faena", "presupuesto": "presupuesto", "reparacion": "propio"}[tipo]
+            origen = datos.origen or {"faena": "faena", "presupuesto": "presupuesto", "reparacion": "propio", "alucarpin": "propio"}[tipo]
             ident = datos.origen_id
             tabla = {"faena": "faenas", "presupuesto": "presupuestos", "propio": "trabajos_propios"}[origen]
             if ident:
@@ -160,24 +170,35 @@ def crear_diario(conexion, administrador):
                         (cliente, numero, fecha),
                     ).fetchone()
                 else:
+                    if tipo == "alucarpin":
+                        clave = f"alucarpin:{fecha}:{obra.casefold()}"
+                        if hasattr(db, "db"):
+                            db.execute("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", (clave,))
+                        if db.execute(
+                            "SELECT id FROM trabajos_propios WHERE tipo='alucarpin' AND fecha_inicio=? "
+                            "AND lower(trim(obra))=lower(trim(?))", (fecha, obra),
+                        ).fetchone():
+                            raise HTTPException(409, "Esa actividad de Alucarpin ya está registrada en ese día.")
                     trabajo = db.execute(
                         "INSERT INTO trabajos_propios (tipo, fecha_inicio, cliente, obra, ubicacion, poblacion, "
-                        "observaciones, estado_revision) VALUES ('reparacion', ?, ?, ?, ?, ?, ?, "
-                        "'Pendiente de revisar') RETURNING id",
-                        (fecha, cliente, obra, ubicacion, poblacion, datos.observaciones.strip()),
+                        "observaciones, estado_revision, cuenta_uid) VALUES (?, ?, ?, ?, ?, ?, ?, "
+                        "'Pendiente de revisar', ?) RETURNING id",
+                        (tipo, fecha, cliente, obra, ubicacion, poblacion, datos.observaciones.strip(),
+                         solicitud if tipo == "alucarpin" else None),
                     ).fetchone()
                 ident = trabajo["id"]
             tabla_dias, columna = (
                 ("jornadas_faenas", "faena_id") if origen == "faena" else
                 ("jornadas_propias", "presupuesto_id" if origen == "presupuesto" else "trabajo_id")
             )
-            dia = db.execute(
-                f"INSERT INTO {tabla_dias} ({columna}, fecha) VALUES (?, ?) "
-                f"ON CONFLICT ({columna}, fecha) DO NOTHING RETURNING fecha",
-                (ident, datos.fecha.isoformat()),
-            ).fetchone()
-            if not dia:
-                raise HTTPException(409, "Ya has registrado ese día en este trabajo. No se ha duplicado.")
+            if tipo != "alucarpin":
+                dia = db.execute(
+                    f"INSERT INTO {tabla_dias} ({columna}, fecha) VALUES (?, ?) "
+                    f"ON CONFLICT ({columna}, fecha) DO NOTHING RETURNING fecha",
+                    (ident, datos.fecha.isoformat()),
+                ).fetchone()
+                if not dia:
+                    raise HTTPException(409, "Ya has registrado ese día en este trabajo. No se ha duplicado.")
             db.execute(
                 "INSERT INTO diario_trabajo (solicitud_id, contenido_hash, usuario_id, origen, origen_id, fecha, "
                 "tipo, cliente, obra, ubicacion, poblacion, observaciones) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",

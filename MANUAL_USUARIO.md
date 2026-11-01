@@ -432,6 +432,20 @@ ubicacion y observaciones, o **Ver todo el mes**. Puedes filtrar tipo y buscar
 cliente, obra o ubicacion. El contador distingue registros de fechas: puedes
 haber ido a varias obras un mismo dia.
 
+En **Tipo -> Alucarpin**, el desplegable **Trabajo** ofrece oficina
+(presupuestos y facturacion), tomar medidas/visitar una obra, preparar material
+y herramientas, compras/recoger material y **Otros** con descripcion libre.
+La fecha registra una actividad interna realizada, no una obra a cobrar.
+Aparece en Mi control y Agenda en morado, con etiqueta **Alucarpin**.
+No genera ingresos, gastos, cobros pendientes ni alarmas de ejecucion.
+Cada actividad lleva su propio dia; varias actividades y una faena en la misma
+fecha cuentan como un solo dia distinto. **Registrar otro dia** reutiliza la
+actividad, no la fecha. Puedes editar o borrar la actividad en Mi control.
+Tambien se incluye en la descarga de dias propios a Google Calendar.
+En el programa Windows utiliza **Mi control -> alucarpin** y el mismo listado
+de actividades. **Enviar datos / Recibir datos** las sincroniza con la app;
+no hace falta registrarlas dos veces. No se crean nuevas pestanas.
+
 No se admiten fechas futuras para fichar un dia realizado; las previsiones se
 registran en Agenda. No se copian fichajes de ayudantes ni se inventan dias a
 partir de la fecha general o de un rango de fechas. Se conservan todos los dias

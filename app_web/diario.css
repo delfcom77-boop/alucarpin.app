@@ -2,6 +2,7 @@
 .dia-tipo.faena { background: #dcecff; color: #174b82; }
 .dia-tipo.presupuesto { background: #dff3e6; color: #1c6036; }
 .dia-tipo.reparacion { background: #fff0dc; color: #854500; }
+.dia-tipo.alucarpin { background: #eee5fa; color: #62458a; }
 .diario-leyenda { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .diario-calendario { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin: 12px 0; }
 .diario-cabecera { text-align: center; font-weight: 700; }
@@ -13,6 +14,7 @@
 .diario-registro.faena { border-left-color: #174b82; }
 .diario-registro.presupuesto { border-left-color: #1c6036; }
 .diario-registro.reparacion { border-left-color: #854500; }
+.diario-registro.alucarpin { border-left-color: #62458a; }
 .diario-registro h4 { margin: 8px 0; }
 [data-diario] .fila { grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); }
 [data-diario] input, [data-diario] select { min-width: 0; max-width: 100%; width: 100%; }

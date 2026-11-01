@@ -36,6 +36,7 @@ class CalendarioJornadasTests(unittest.TestCase):
             INSERT INTO faenas VALUES (1, 'Tercero', 'Obra; A, B', 'Calle 2', 'Jaca');
             INSERT INTO jornadas_faenas VALUES (1, '2026-10-03');
             INSERT INTO citas_agenda VALUES (1, '2026-10-05', '09:00', 60, 'visita', 'Cita', '', '', '', 'Pendiente');
+            ALTER TABLE trabajos_propios ADD COLUMN fecha_inicio TEXT;
         """)
 
         @contextlib.contextmanager
@@ -57,6 +58,18 @@ class CalendarioJornadasTests(unittest.TestCase):
         self.assertEqual({(d["origen"], d["origen_id"]) for d in dias}, {("presupuesto", 1), ("propio", 1)})
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM pagos_ingresos").fetchone()[0], 0)
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM pagos_faenas").fetchone()[0], 0)
+
+    def test_alucarpin_exporta_dia_propio_sin_convertirse_en_faena(self):
+        self.db.execute(
+            "INSERT INTO trabajos_propios(id,tipo,cliente,obra,fecha_inicio) VALUES(2,'alucarpin','Alucarpin','Oficina','2026-10-04')"
+        )
+        dias = api.listar_jornadas_propias({})
+        self.assertEqual([(d["origen"], d["origen_id"], d["fecha"]) for d in dias], [("propio", 2, "2026-10-04")])
+        calendario = api.calendario_trabajos("propias", {}).body.decode()
+        self.assertIn("Alucarpin - Oficina", calendario)
+        self.assertIn("DTSTART;VALUE=DATE:20261004", calendario)
+        self.assertEqual(calendario.count("BEGIN:VEVENT"), 1)
+        self.assertNotIn("Oficina", api.calendario_trabajos("terceros", {}).body.decode())
 
     def test_duplicado_409_y_destino_inexistente_404(self):
         api.crear_jornada_propia("presupuesto", 1, self.datos, {})

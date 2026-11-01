@@ -63,6 +63,12 @@ class ResumenEconomicoTests(unittest.TestCase):
     def test_mes_actual_y_febrero_bisiesto(self):
         self.assertEqual(periodo_actual(date(2024, 2, 3)), (date(2024, 2, 1), date(2024, 2, 29)))
 
+    def test_actividad_alucarpin_no_afecta_resumen_economico(self):
+        antes = self.resumen()
+        self.db.execute("ALTER TABLE trabajos_propios ADD COLUMN tipo TEXT")
+        self.db.execute("INSERT INTO trabajos_propios(id,cliente,obra,fecha_inicio,importe,estado_cobro,tipo) VALUES(99,'Alucarpin','Oficina','2026-10-01',0,'No cobrado','alucarpin')")
+        self.assertEqual(self.resumen(), antes)
+
     def test_imagen_render_incluye_calculo_y_script_economico(self):
         docker = (Path(__file__).resolve().parents[1] / "Dockerfile").read_text(encoding="utf-8")
         fuentes = [fuente for linea in docker.splitlines() if linea.startswith("COPY ")

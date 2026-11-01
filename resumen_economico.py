@@ -120,6 +120,8 @@ def calcular_resumen(db, desde, hasta, hoy, postgres=False):
             continue
         ingresos_reparaciones.setdefault(movimiento["trabajo_id"], []).append(movimiento)
     for fila in leer("trabajos_propios"):
+        if fila.get("tipo") == "alucarpin":
+            continue
         if fila.get("tipo") != "reparacion" and fila.get("num_presupuesto") and fila["num_presupuesto"] in numeros:
             continue
         importe = dinero(fila.get("importe"))
