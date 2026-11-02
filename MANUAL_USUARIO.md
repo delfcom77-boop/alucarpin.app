@@ -399,6 +399,13 @@ Los historicos vinculados no se suman otra vez si existe pago diario.
 Las liquidaciones no se suman. Los presupuestos no aceptados no generan deuda;
 los antiguos Completados conservan el criterio historico de no reclamar cobro.
 Los trabajos vinculados a un presupuesto del resumen no duplican su importe.
+En faenas, el total acordado prevalece; si esta vacio se suman las jornadas
+realizadas, y solo sin jornadas se utiliza el precio de la ficha. Un total
+acordado explicitamente de cero no genera aviso de importe desconocido.
+Los cobros se cuentan una sola vez, desde su historial. Un cobro confirmado sin
+fecha reduce la deuda acumulada, pero no se asigna a ningun periodo hasta
+completar su fecha. Los gastos y sus abonos se comparan redondeados a centimos
+para evitar pequenos saldos residuales del calculo del IVA.
 
 La fuente se identifica expresamente: base central en la app y base local en
 Windows. Consultar el resumen no sincroniza ni modifica registros; si falla,

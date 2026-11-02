@@ -95,11 +95,24 @@ def calcular_resumen(db, desde, hasta, hoy, postgres=False):
 
     faenas = leer("faenas")
     presupuestos = leer("presupuestos")
+    importes_jornadas = {}
+    if "jornadas_faenas" in tablas:
+        for jornada in leer("jornadas_faenas"):
+            dia = fecha(jornada.get("fecha"))
+            if dia is None:
+                avisos.append(f"Jornada #{jornada['id']}: sin fecha, incluida en pendientes.")
+            if dia is None or dia <= hoy:
+                referencia = jornada["faena_id"]
+                importes_jornadas[referencia] = (
+                    importes_jornadas.get(referencia, Decimal(0)) + dinero(jornada.get("importe"))
+                )
     for fila in faenas:
-        obra("faena", fila, dinero(
-            fila["importe_acordado"] if fila.get("importe_acordado") is not None
-            else fila.get("precio")) - partes_terceros.get(fila["id"], Decimal(0)),
-             totales_cobrados.get(("faena", fila["id"]), Decimal(0)))
+        acordado = fila.get("importe_acordado")
+        importe = (dinero(acordado) if acordado is not None else
+                   importes_jornadas.get(fila["id"], dinero(fila.get("precio"))))
+        obra("faena", fila, importe - partes_terceros.get(fila["id"], Decimal(0)),
+             totales_cobrados.get(("faena", fila["id"]), Decimal(0)),
+             cerrado=acordado is not None and importe == 0)
     numeros = {}
     for fila in presupuestos:
         if str(fila.get("estado") or "").strip().upper() not in ("ACEPTADO", "COMPLETADO"):
@@ -195,9 +208,9 @@ def calcular_resumen(db, desde, hasta, hoy, postgres=False):
         if gasto["revision"]:
             revision += 1
             continue
-        importe = dinero(gasto.get("importe"))
+        importe = dinero(gasto.get("importe")).quantize(Decimal(".01"))
         pagado = dinero(gasto.get("importe_pagado") if gasto.get("importe_pagado") is not None
-                        else gasto.get("pagado"))
+                        else gasto.get("pagado")).quantize(Decimal(".01"))
         pendiente = max(importe - pagado, Decimal(0))
         if pendiente:
             pendientes_pago.append({
