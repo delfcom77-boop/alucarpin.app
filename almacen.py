@@ -115,6 +115,8 @@ def firma(datos):
 
 
 def inicializar_almacen(db):
+    if hasattr(db, "db"):
+        db.execute("SELECT pg_advisory_xact_lock(hashtextextended('almacen-esquema',0))")
     db.execute("CREATE TABLE IF NOT EXISTS almacen_responsables (usuario_id BIGINT PRIMARY KEY)")
     db.execute(
         "CREATE TABLE IF NOT EXISTS almacen_carpetas (id TEXT PRIMARY KEY, "

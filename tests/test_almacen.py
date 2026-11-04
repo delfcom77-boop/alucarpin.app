@@ -284,7 +284,26 @@ class AlmacenTests(unittest.TestCase):
             db.commit()
             self.assertEqual([tuple(f)[:-1] for f in db.execute("SELECT * FROM almacen_materiales")], materiales)
             self.assertEqual([tuple(f) for f in db.execute("SELECT * FROM almacen_movimientos")], movimientos)
-        self.assertIsNone(self.materiales()[0]["carpeta_id"])
+            self.assertIsNone(self.materiales()[0]["carpeta_id"])
+
+    def test_bloquea_inicializacion_postgres_antes_del_ddl(self):
+        from almacen import inicializar_almacen
+
+        class ConexionPostgres:
+            def __init__(self):
+                self.db = object()
+                self.consultas = []
+
+            def execute(self, consulta):
+                self.consultas.append(consulta)
+
+        conexion = ConexionPostgres()
+        inicializar_almacen(conexion)
+        self.assertEqual(
+            conexion.consultas[0],
+            "SELECT pg_advisory_xact_lock(hashtextextended('almacen-esquema',0))",
+        )
+        self.assertTrue(conexion.consultas[1].startswith("CREATE TABLE IF NOT EXISTS"))
 
     def test_permisos_carpetas_y_reintento_alta_legacy(self):
         ident = str(uuid4())
