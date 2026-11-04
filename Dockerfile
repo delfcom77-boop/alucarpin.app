@@ -17,10 +17,11 @@ COPY importes_faenas.py ./
 COPY tareas.py tareas_api.py ./
 COPY almacen.py ./
 RUN mkdir -p app_web
-COPY app_web/login.html app_web/inicio.html app_web/mi_control.html app_web/agenda.html app_web/alarmas.html app_web/administrador.html app_web/ayudante.html app_web/remates.html app_web/manifest.json app_web/pwa.js app_web/sw.js app_web/icon.svg app_web/icon-192.png app_web/icon-512.png ./app_web/
+COPY app_web/login.html app_web/inicio.html app_web/mi_control.html app_web/agenda.html app_web/alarmas.html app_web/administrador.html app_web/configuracion.html app_web/ayudante.html app_web/remates.html app_web/manifest.json app_web/pwa.js app_web/sw.js app_web/icon.svg app_web/icon-192.png app_web/icon-512.png ./app_web/
 COPY app_web/jornadas.js ./app_web/
 COPY app_web/catalogo.js ./app_web/
 COPY app_web/panel.js app_web/economia.js ./app_web/
+COPY app_web/panel_comun.js app_web/panel_administracion.css app_web/gestion_trabajos.js ./app_web/
 COPY app_web/resumen.html app_web/resumen_privado.js ./app_web/
 COPY app_web/diario.js app_web/diario.css ./app_web/
 COPY app_web/costes_dia.js ./app_web/
