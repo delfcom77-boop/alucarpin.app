@@ -26,7 +26,7 @@
       };
     }
     (async () => {
-      const html = (await fetch('../app_web/administrador.html').then(r => r.text())).replaceAll('/app/', '/app_web/');
+      const html = (await fetch('../app_web/configuracion.html').then(r => r.text())).replaceAll('/app/', '/app_web/');
       const marco = document.querySelector('#app');
       marco.srcdoc = html.replace('<head>', `<head><script>(${preparar.toString()})();<\/script>`);
       await new Promise(resolve => marco.onload = resolve);
@@ -36,7 +36,6 @@
         for (let i = 0; i < 100; i++) { if (condicion()) return; await new Promise(r => setTimeout(r, 30)); }
         throw new Error('Tiempo agotado');
       };
-      d.querySelector('[data-apartado="configuracion"]').click();
       const boton = d.querySelector('#descargar-respaldo'), mensaje = d.querySelector('#mensaje-respaldo');
       comprobar(!d.querySelector('#apartado-configuracion').hidden, 'Respaldo fuera de configuracion');
       w.confirmar = false; boton.click();

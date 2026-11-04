@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Prueba de apartados separados</title></head>
+<body>
+  <pre id="resultado">Ejecutando...</pre>
+  <iframe id="app" title="Panel de prueba" style="width:390px;height:800px"></iframe>
+  <script>
+    function preparar() {
+      localStorage.setItem('alucarpin_token', 'prueba-local');
+      window.solicitudes = []; window.errores = []; window.fallar = false;
+      window.confirm = () => true;
+      window.archivo = null;
+      window.addEventListener('error', event => errores.push(event.message));
+      window.addEventListener('unhandledrejection', event => errores.push(event.reason.message));
+      URL.createObjectURL = blob => { window.archivo = blob; return 'blob:prueba'; };
+      HTMLAnchorElement.prototype.click = function () {
+        if (!this.download) this.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      };
+      const tablas = {
+        '/faenas': [
+          { id: 1, cliente: 'Cliente A', obra: 'Obra A', precio: 150 },
+          { id: 2, cliente: 'Cliente B', obra: 'Obra B', precio: 250 },
+        ],
+        '/presupuestos': [{ id: 7, cliente: 'Cliente P', num_presupuesto: 'P-7', bruto: 100, iva: 21, total_iva: 21, presupuesto_iva: 121, presupuesto_final: 130, efectivo: 9, estado: 'Aceptado' }],
+        '/ayudantes': [{ id: 1, nombre: 'Ayudante prueba' }],
+        '/usuarios': [{ id: 1, usuario: 'prueba', rol: 'ayudante', activo: true }],
+        '/gastos': [],
+      };
+      let siguiente = 20;
+      window.fetch = async (url, opciones = {}) => {
+        const metodo = opciones.method || 'GET';
+        solicitudes.push({ url, metodo, datos: opciones.body ? JSON.parse(opciones.body) : null });
+        await new Promise(resolve => setTimeout(resolve, 15));
+        if (fallar && metodo !== 'GET') throw new Error('Fallo de red simulado');
+        const ruta = url.split('?')[0];
+        const base = '/' + ruta.split('/')[1];
+        const id = Number(ruta.split('/')[2]);
+        let datos = tablas[ruta] || [];
+        if (metodo === 'POST' && tablas[base]) {
+          const nuevo = { id: siguiente++, ...JSON.parse(opciones.body) };
+          tablas[base].push(nuevo);
+          datos = { ...nuevo, usuario: 'prueba', password_inicial: 'solo-prueba' };
+        } else if (metodo === 'PATCH' && tablas[base]) {
+          Object.assign(tablas[base].find(item => item.id === id), JSON.parse(opciones.body));
+          datos = { usuario: 'prueba' };
+        } else if (metodo === 'DELETE' && tablas[base]) {
+          tablas[base] = tablas[base].filter(item => item.id !== id);
+          datos = {};
+        }
+        return new Response(JSON.stringify(datos));
+      };
+    }
+    (async () => {
+      const marco = document.querySelector('#app');
+      const comprobar = (valor, mensaje) => { if (!valor) throw new Error(mensaje); };
+      const esperar = async condicion => {
+        for (let i = 0; i < 150; i++) {
+          if (condicion()) return;
+          await new Promise(resolve => setTimeout(resolve, 20));
+        }
+        throw new Error('Tiempo agotado');
+      };
+      const cargar = async nombre => {
+        const html = (await fetch('../app_web/' + nombre).then(r => r.text()))
+          .replaceAll('/app/', '/app_web/').replace('<script src="/app_web/pwa.js"><\/script>', '');
+        const listo = new Promise(resolve => marco.onload = resolve);
+        marco.srcdoc = html.replace('<head>', `<head><script>(${preparar.toString()})();<\/script>`);
+        await listo;
+        return [marco.contentDocument, marco.contentWindow];
+      };
+      let [d, w] = await cargar('administrador.html');
+      await esperar(() => d.querySelector('#ayudantes .ayudante'));
+      comprobar([...d.querySelectorAll('[data-apartado]')].filter(e => e.tagName === 'BUTTON').map(e => e.dataset.apartado).join(',') === 'fichajes,pagos,liquidaciones', 'Ayudantes mezcla apartados');
+      comprobar(!d.querySelector('#apartado-gastos,#formulario-faena,#formulario-presupuesto,#formulario-ayudante,#usuarios'), 'Quedan formularios ajenos en Ayudantes');
+      comprobar(d.querySelector('#apartado-dias').dataset.contenido === 'fichajes', 'Los dias no estan en Fichajes');
+      comprobar(!w.solicitudes.some(s => ['/gastos', '/usuarios', '/presupuestos'].includes(s.url)), 'Ayudantes carga datos de otros paneles');
+      comprobar(!w.errores.length, w.errores.join('; '));
+      [d, w] = await cargar('mi_control.html');
+      const ir = async apartado => {
+        w.location.hash = apartado;
+        await esperar(() => apartado === 'trabajos' ? !d.querySelector('#control-personal').hidden : !d.querySelector(`#apartado-${apartado}`).hidden);
+      };
+      await ir('faenas');
+      await esperar(() => d.querySelectorAll('#lista-faenas .editar-faena').length === 2);
+      comprobar(d.querySelector('#control-personal').hidden && d.querySelector('#apartado-presupuestos').hidden, 'Mezcla paneles');
+      d.querySelector('#faena-cliente').value = 'Borrador';
+      await ir('presupuestos'); await ir('faenas');
+      comprobar(d.querySelector('#faena-cliente').value === 'Borrador', 'Pierde el formulario al cambiar de apartado');
+      d.querySelector('#faena-obra').value = 'Obra creada';
+      const formulario = d.querySelector('#formulario-faena');
+      formulario.requestSubmit(); formulario.requestSubmit();
+      await esperar(() => d.querySelector('#mensaje-faena').textContent.includes('creada correctamente'));
+      comprobar(w.solicitudes.filter(s => s.metodo === 'POST' && s.url === '/faenas').length === 1, 'Duplica el alta');
+      comprobar(!w.solicitudes.some(s => s.metodo !== 'GET' && s.url.includes('jornada')), 'Crear una obra registra un dia');
+      d.querySelector('#lista-faenas .editar-faena').click();
+      d.querySelector('#faena-obra').value = 'Obra modificada';
+      formulario.requestSubmit();
+      await esperar(() => d.querySelector('#mensaje-faena').textContent.includes('actualizada'));
+      comprobar(w.solicitudes.some(s => s.metodo === 'PATCH' && s.url === '/faenas/1' && s.datos.obra === 'Obra modificada'), 'No edita la faena');
+      d.querySelector('#lista-faenas .borrar-faena').click();
+      await esperar(() => d.querySelector('#mensaje-faena').textContent.includes('borrada'));
+      comprobar(!d.querySelector('#lista-faenas').textContent.includes('Cliente A'), 'No refresca tras borrar');
+      d.querySelector('#filtro-faenas').value = 'Cliente B';
+      d.querySelector('#filtro-faenas').dispatchEvent(new w.Event('input'));
+      d.querySelector('#exportar-faenas').click();
+      await esperar(() => w.archivo);
+      const csv = await w.archivo.text();
+      comprobar(csv.includes('Cliente B') && !csv.includes('Borrador') && !csv.includes('Acciones'), 'CSV ignora filtros');
+      await ir('presupuestos');
+      await esperar(() => d.querySelector('#lista-presupuestos .editar-presupuesto'));
+      d.querySelector('#lista-presupuestos .editar-presupuesto').click();
+      d.querySelector('#presupuesto-cliente').value = 'Presupuesto editado';
+      d.querySelector('#formulario-presupuesto').requestSubmit();
+      await esperar(() => d.querySelector('#mensaje-presupuesto').textContent.includes('actualizado'));
+      const cambio = w.solicitudes.find(s => s.metodo === 'PATCH' && s.url === '/presupuestos/7');
+      comprobar(cambio.datos.bruto === 100 && cambio.datos.total_iva === 21 && cambio.datos.presupuesto_final === 130 && cambio.datos.efectivo === 9, 'Cambia los importes del presupuesto');
+      w.fallar = true;
+      d.querySelector('#presupuesto-cliente').value = 'Sin guardar';
+      d.querySelector('#presupuesto-num').value = 'P-nuevo';
+      d.querySelector('#formulario-presupuesto').requestSubmit();
+      await esperar(() => d.querySelector('#mensaje-presupuesto').textContent.includes('Fallo de red'));
+      comprobar(!d.querySelector('#btn-presupuesto-submit').disabled && d.querySelector('#presupuesto-cliente').value === 'Sin guardar', 'Bloquea o pierde el borrador tras error');
+      w.fallar = false;
+      await ir('gastos');
+      await esperar(() => !d.querySelector('#gasto-destino').disabled);
+      d.querySelector('#gasto-destino').value = '20';
+      d.querySelector('#gasto-concepto').value = 'Compra de prueba';
+      await ir('faenas'); await ir('gastos');
+      await esperar(() => !d.querySelector('#gasto-destino').disabled);
+      comprobar(d.querySelector('#gasto-destino').value === '20' && d.querySelector('#gasto-concepto').value === 'Compra de prueba', 'Pierde el destino o concepto del gasto');
+      d.querySelector('#gasto-importe').value = '12.50';
+      d.querySelector('#formulario-gasto').requestSubmit();
+      await esperar(() => w.solicitudes.some(s => s.metodo === 'POST' && s.url === '/gastos'));
+      const gasto = w.solicitudes.find(s => s.metodo === 'POST' && s.url === '/gastos');
+      comprobar(gasto.datos.faena_id === 20 && gasto.datos.importe === 12.5, 'Gasto en destino incorrecto');
+      for (const apartado of ['faenas', 'presupuestos', 'gastos', 'trabajos']) {
+        await ir(apartado);
+        comprobar(d.documentElement.scrollWidth <= w.innerWidth, apartado + ' desborda el movil');
+      }
+      comprobar(w.solicitudes.filter(s => s.url === '/trabajos').length >= 2, 'No actualiza trabajos al regresar');
+      comprobar(!w.errores.length, w.errores.join('; '));
+      [d, w] = await cargar('configuracion.html');
+      await esperar(() => d.querySelector('#usuarios .cambiar-estado'));
+      comprobar(!d.querySelector('#formulario-faena,#jornadas-pago'), 'Configuracion mezcla trabajo y pagos');
+      d.querySelector('#nombre-ayudante').value = 'Nuevo ayudante';
+      d.querySelector('#formulario-ayudante').requestSubmit();
+      await esperar(() => d.querySelector('#ayudantes').textContent.includes('Nuevo ayudante'));
+      w.fallar = true;
+      d.querySelector('#usuarios .cambiar-estado').click();
+      await esperar(() => d.querySelector('#mensaje-usuarios').textContent.includes('Fallo de red'));
+      comprobar(!w.errores.length, w.errores.join('; '));
+      const ids = [...d.querySelectorAll('[id]')].map(elemento => elemento.id);
+      comprobar(new Set(ids).size === ids.length, 'Identificadores duplicados');
+      comprobar(d.documentElement.scrollWidth <= w.innerWidth, 'Configuracion desborda el movil');
+      document.querySelector('#resultado').textContent = 'OK: apartados separados, altas/edicion/borrado simulados, pagos intactos, filtros/CSV, borradores, errores y movil.';
+    })().catch(error => { document.querySelector('#resultado').textContent = 'ERROR: ' + error.message; throw error; });
+  </script>
+</body>
+</html>

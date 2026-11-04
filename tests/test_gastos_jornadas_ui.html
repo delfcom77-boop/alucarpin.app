@@ -29,7 +29,7 @@
       };
     }
     (async () => {
-      const html = (await fetch('../app_web/administrador.html').then(r => r.text())).replaceAll('/app/', '/app_web/');
+      const html = (await fetch('../app_web/mi_control.html').then(r => r.text())).replaceAll('/app/', '/app_web/');
       const marco = document.querySelector('#app');
       marco.srcdoc = html.replace('<head>', `<head><script>(${preparar.toString()})();<\/script>`);
       await new Promise(resolve => marco.onload = resolve);
@@ -42,8 +42,8 @@
         }
         throw new Error('Tiempo agotado');
       };
+      w.location.hash = 'gastos';
       await esperar(() => d.querySelector('#lista-gastos').textContent.includes('DANI'));
-      d.querySelector('[data-apartado="gastos"]').click();
       comprobar(d.querySelectorAll('#lista-gastos tr').length === 2, 'No muestra una fila por jornada');
       comprobar(d.querySelector('#totales-gastos').textContent.includes('50.00'), 'Suma mal el gasto');
       comprobar(d.querySelector('#totales-gastos').textContent.includes('30.00'), 'Suma mal el pendiente');
@@ -52,9 +52,9 @@
       d.querySelector('#filtro-gastos').value = 'jornada';
       d.querySelector('#filtro-gastos').dispatchEvent(new w.Event('change'));
       await esperar(() => w.solicitudes.includes('/gastos?tipo=jornada'));
-      d.querySelector('#lista-gastos button').click();
-      await esperar(() => d.querySelector('#jornadas-pago').textContent.includes('Obra A'));
-      comprobar(w.solicitudes.includes('/ayudantes/1/jornadas-pago?desde=2026-10-03&hasta=2026-10-03'), 'No abre el ayudante y fecha correctos');
+      const enlace = new URL(d.querySelector('#lista-gastos a').href);
+      comprobar(enlace.pathname === '/app/administrador.html' && enlace.hash === '#pagos', 'No remite a Pagos');
+      comprobar(enlace.searchParams.get('ayudante') === '1' && enlace.searchParams.get('desde') === '2026-10-03' && enlace.searchParams.get('hasta') === '2026-10-03', 'Pierde el ayudante o la fecha');
       comprobar(d.documentElement.scrollWidth <= d.documentElement.clientWidth, 'Desborda la pantalla movil');
       document.querySelector('#resultado').textContent = 'OK: jornadas y totales sin duplicados; revision explicita; filtro y enlace a Pagos; vista movil.';
     })().catch(error => {

@@ -220,7 +220,7 @@ Antes de borrar datos, comprueba siempre el cliente, la fecha y la obra mostrado
 
 ### Dias trabajados de ayudantes por faena
 
-En **Ayudantes -> Gastos registrados -> Dias trabajados por faena** puedes:
+En **Ayudantes -> Fichajes -> Dias trabajados por faena** puedes:
 
 - Filtrar por tipo de trabajo: faenas a terceros, presupuestos Alucarpin, reparaciones o pendientes de vincular.
 - Seleccionar un cliente, por ejemplo Mercedes o Alucarpin Samitier, y un ayudante.
@@ -234,18 +234,25 @@ Los dias se calculan a partir de los fichajes, no de las compras ni de los impor
 
 En **Ayudantes -> Listado general de fichajes** estan disponibles los mismos filtros por tipo de trabajo, cliente, ayudante, obra y fechas. Ademas, puedes filtrar por estado de pago. El listado muestra el numero de fichajes visibles y el total de dias trabajados de esos registros, con el mismo criterio de recuento anterior.
 
-El selector de ayudante se coordina con los botones de ayudantes de la parte superior, y el estado de pago con los botones Pagado, Parcial, Pendiente y Total jornadas. **Limpiar filtros de fichajes** restablece todos los filtros del listado. Estos filtros no cambian el resumen de Gastos registrados. Los botones Modificar, Validar y Borrar siguen disponibles en las filas filtradas.
+El selector de ayudante se coordina con los botones de ayudantes de la parte superior, y el estado de pago con los botones Pagado, Parcial, Pendiente y Total jornadas. **Limpiar filtros de fichajes** restablece todos los filtros del listado. Estos filtros no cambian el resumen de dias por faena. Los botones Modificar, Validar y Borrar siguen disponibles en las filas filtradas.
 
 ### Organizacion de Ayudantes
 
-La pantalla se divide en apartados: **Fichajes**, **Pagos**, **Liquidaciones**, **Gastos y dias**, **Faenas**, **Presupuestos**, **Ayudantes** y **Configuracion**. Solo se muestran las secciones del apartado seleccionado; cambiar de apartado conserva los filtros y los formularios sin guardar mientras no recargues la pagina.
+En **Ayudantes** quedan **Fichajes**, **Pagos** y **Liquidaciones**. **Gestionar
+ayudantes**, usuarios y copias estan en **Configuracion**. Desde **Mi control**
+se gestionan **Faenas a terceros**, **Presupuestos** y **Gastos** directamente,
+ademas de **Mis trabajos y dias**. Los gastos de jornadas enlazan con **Pagos**
+del ayudante y la fecha correspondientes; no crean un segundo pago.
+Solo se muestran las secciones del apartado
+seleccionado; cambiar de apartado conserva los filtros y los formularios sin
+guardar mientras no recargues la pagina.
 
-Los botones superiores permiten seleccionar el ayudante activo, cuyo nombre se muestra debajo de los apartados. En **Ayudantes** aparecen tambien las acciones para modificar y borrar ayudantes. En **Configuracion** se gestionan los usuarios y las contrasenas. Los contadores de estado de pago abren **Fichajes** con el filtro correspondiente.
+Los botones superiores permiten seleccionar el ayudante activo, cuyo nombre se muestra debajo de los apartados. En **Configuracion**, una pagina separada accesible desde el menu, se crean, modifican y borran ayudantes, se gestionan usuarios y contrasenas y se descargan copias. Los contadores de estado de pago abren **Fichajes** con el filtro correspondiente. Los enlaces antiguos a gastos, faenas y presupuestos de Ayudantes redirigen a Mi control.
 
 **TODOS LOS TRABAJOS** abre el listado de **Fichajes** de todos los ayudantes,
 limpia sus filtros de tipo, cliente, obra, fechas y estado de pago y desplaza
 la pantalla hasta el listado. El boton queda seleccionado. No cambia los filtros
-del resumen de gastos ni modifica fichajes o pagos.
+del resumen de dias por faena ni modifica fichajes o pagos.
 
 En el movil, los formularios y los botones se ajustan al ancho de la pantalla. Las tablas se desplazan horizontalmente dentro de su propio recuadro, sin desplazar toda la pagina. Tambien puedes enfocar una tabla con el teclado y desplazarla con las flechas. El formulario de edicion de fichajes solo aparece al seleccionar un registro; la pantalla se desplaza hasta el formulario. **Cancelar edicion** descarta ese borrador sin modificar el fichaje.
 
@@ -253,7 +260,7 @@ Esta reorganizacion no modifica los datos ni las reglas de pago y liquidacion.
 
 ### Catalogo de clientes y obras de la app
 
-Solo el administrador puede crear clientes y obras nuevos. En **Ayudantes -> Faenas** se dan de alta las faenas con cliente y obra; en **Mi control** se crean las reparaciones, y en **Presupuestos** se crean los presupuestos. Los formularios administrativos sugieren clientes existentes y las obras de cada cliente. Escribir un nombre nuevo sigue estando permitido al administrador. Las sugerencias corrigen diferencias de mayusculas, espacios y acentos al salir del campo.
+Solo el administrador puede crear clientes y obras nuevos. En **Mi control -> Faenas a terceros** se dan de alta las faenas con cliente y obra sin registrar automaticamente una jornada; en **Mis trabajos y dias** se crean las reparaciones, y en **Presupuestos** se crean los presupuestos. Los formularios administrativos sugieren clientes existentes y las obras de cada cliente. Escribir un nombre nuevo sigue estando permitido al administrador. Las sugerencias corrigen diferencias de mayusculas, espacios y acentos al salir del campo.
 
 El ayudante introduce manualmente el dia, el tipo de destino, el cliente, la obra, la ubicacion y la poblacion. Si no sabe el tipo, puede elegir **No se el tipo de trabajo**. No necesita que el cliente o la obra existan en el catalogo: el fichaje se guarda **Pendiente de vincular**, sin crear faenas, presupuestos ni reparaciones automaticamente.
 
@@ -314,9 +321,9 @@ En **Pagos** aparece una fila por ayudante y fecha, con todas las obras realizad
 
 Se paga cada dia trabajado contigo, independientemente de la obra, aunque se abonen todos los dias juntos al final de la semana. **El pago diario es la referencia**: si ese dia tiene ademas gastos asociados a obras, estos se conservan como desglose y no se suman como otro pago al ayudante ni generan una alerta de duplicado.
 
-En **Gastos y dias**, el filtro **Jornadas de ayudantes** muestra ese coste una sola vez por ayudante y fecha. Sin pago registrado, se muestra una jornada pendiente de 50 euros; un pago existente conserva su importe real. Las faenas sirven para controlar los sitios donde se trabajo, no para repartir ni multiplicar el coste del dia. Los totales visibles separan gasto, pagado y pendiente; las jornadas con pagos duplicados aparecen como **Revisar** y se excluyen con aviso. **Ver en Pagos** abre el ayudante y la fecha correspondientes. Los gastos historicos vinculados se muestran una sola vez y mantienen sus acciones de edicion; los registros originales no se borran.
+En **Mi control -> Gastos**, el filtro **Jornadas de ayudantes** muestra ese coste una sola vez por ayudante y fecha. Sin pago registrado, se muestra una jornada pendiente de 50 euros; un pago existente conserva su importe real. Las faenas sirven para controlar los sitios donde se trabajo, no para repartir ni multiplicar el coste del dia. Los totales visibles separan gasto, pagado y pendiente; las jornadas con pagos duplicados aparecen como **Revisar** y se excluyen con aviso. **Ver en Pagos** abre el ayudante y la fecha correspondientes. Los gastos historicos vinculados se muestran una sola vez y mantienen sus acciones de edicion; los registros originales no se borran.
 
-Los pagos ya registrados no se renumeran, suman ni borran. Solo si hay varios pagos diarios en una misma fecha aparece **Revision necesaria**, se muestran sus importes y el dia queda bloqueado para evitar sobrescribirlos. Esos dias quedan excluidos de los totales automaticos, que no representan el periodo completo hasta revisar los casos. Si no existe pago diario, se mantiene la consulta historica de Gastos: se modifica en **Gastos y dias**, sin crear otro pago desde Pagos.
+Los pagos ya registrados no se renumeran, suman ni borran. Solo si hay varios pagos diarios en una misma fecha aparece **Revision necesaria**, se muestran sus importes y el dia queda bloqueado para evitar sobrescribirlos. Esos dias quedan excluidos de los totales automaticos, que no representan el periodo completo hasta revisar los casos. Si no existe pago diario, se mantiene la consulta historica de Gastos: se modifica en **Mi control -> Gastos**, sin crear otro pago desde Pagos.
 
 Las liquidaciones cuentan las fechas distintas confirmadas por el ayudante, tambien en fin de semana. Las liquidaciones antiguas conservan sus importes pagados, pero sus dias, total y pendiente se recalculan con este criterio. Las liquidaciones y los pagos diarios siguen siendo registros independientes: no deben usarse para registrar dos veces el mismo pago.
 
@@ -509,7 +516,7 @@ Los datos se vinculan por identificadores, no por nombres similares. Los gastos 
 
 **Imprimir / guardar PDF** abre la impresion del navegador; selecciona Guardar como PDF. Se imprime la ficha completa consultada, sin botones y con las tablas adaptadas a papel. No se envia a servicios externos.
 
-Puedes descargar CSV de los trabajos filtrados en Mi control y de fichajes, desglose de dias, gastos y liquidaciones en Ayudantes. Solo se exportan las filas visibles con los filtros actuales, sin botones de acciones. La ficha permite descargar sus dias/ayudantes, gastos y cobros por separado. Los CSV llevan separador punto y coma y codificacion UTF-8 para Excel; los textos con apariencia de formulas se exportan como texto. Las exportaciones son consultas, no modifican registros.
+Puedes descargar CSV de trabajos, faenas, presupuestos y gastos filtrados en Mi control, y de fichajes, desglose de dias y liquidaciones en Ayudantes. Solo se exportan las filas visibles con los filtros actuales, sin botones de acciones. La ficha permite descargar sus dias/ayudantes, gastos y cobros por separado. Los CSV llevan separador punto y coma y codificacion UTF-8 para Excel; los textos con apariencia de formulas se exportan como texto. Las exportaciones son consultas, no modifican registros.
 
 ## 3. Programa de escritorio
 
@@ -590,7 +597,7 @@ Los filtros, PDF y WhatsApp separan cada referencia y los grupos antiguos sin vi
 
 ### Copia completa y comprobacion de restauracion
 
-En **Ayudantes / Administracion → Configuracion → Copias de seguridad**, elige el contenido, pulsa **Descargar copia de seguridad** y confirma. **Todos los datos de la app** es la opcion recomendada: respalda todos los objetos y tablas del esquema `public`, incluidos usuarios, movimientos economicos, agenda, obras, remates y vinculos, sin los esquemas internos de Supabase. **Base completa** conserva tambien esos esquemas y requiere sus extensiones para restaurarse (por ejemplo, `supabase_vault` no existe en PostgreSQL estandar). En SQLite ambas opciones contienen toda la base.
+En **Menu → Configuracion → Copias de seguridad**, elige el contenido, pulsa **Descargar copia de seguridad** y confirma. **Todos los datos de la app** es la opcion recomendada: respalda todos los objetos y tablas del esquema `public`, incluidos usuarios, movimientos economicos, agenda, obras, remates y vinculos, sin los esquemas internos de Supabase. **Base completa** conserva tambien esos esquemas y requiere sus extensiones para restaurarse (por ejemplo, `supabase_vault` no existe en PostgreSQL estandar). En SQLite ambas opciones contienen toda la base.
 
 Guarda el ZIP en un lugar privado fuera del servidor y del repositorio. Contiene datos personales, movimientos economicos y hashes de contrasenas. No lo envies por WhatsApp ni lo publiques. El archivo no esta cifrado: usa almacenamiento privado cifrado. No sustituye a copias automaticas.
 

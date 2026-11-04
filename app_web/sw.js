@@ -1,7 +1,11 @@
-const CACHE = 'alucarpin-app-v29-gasto-ayudantes-destino';
+const CACHE = 'alucarpin-app-v30-apartados-separados';
 const ARCHIVOS = [
   '/app/login.html',
   '/app/administrador.html',
+  '/app/configuracion.html',
+  '/app/panel_comun.js',
+  '/app/panel_administracion.css',
+  '/app/gestion_trabajos.js',
   '/app/jornadas.js',
   '/app/catalogo.js',
   '/app/inicio.html',

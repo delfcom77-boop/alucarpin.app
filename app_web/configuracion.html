@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AlucarpinSamitier | Configuración</title>
+  <link rel="stylesheet" href="/app/panel_administracion.css">
+</head>
+<body data-apartado="ayudantes">
+  <main>
+    <header><h1>Configuración</h1><p>Ayudantes, usuarios y copias de seguridad</p></header>
+    <nav class="enlaces-panel"><a href="/app/inicio.html">Volver al menú</a><a href="/app/administrador.html">Ayudantes</a><a href="/app/mi_control.html">Mi control</a></nav>
+    <section><h2>Gestionar ayudantes</h2><div id="ayudantes" class="ayudantes">Cargando...</div></section>
+    <section id="apartado-ayudantes">
+      <h2>Añadir ayudante</h2>
+      <form id="formulario-ayudante">
+        <label>Nombre completo <input id="nombre-ayudante" required></label>
+        <button type="submit">Crear ayudante</button>
+        <div id="mensaje-ayudante" class="mensaje"></div>
+      </form>
+    </section>
+    <section id="apartado-configuracion"><h2>Usuarios y contraseñas</h2><div class="lista-general"><table><thead><tr><th>Usuario</th><th>Rol</th><th>Ayudante</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="usuarios"><tr><td colspan="5">Cargando...</td></tr></tbody></table></div><div id="mensaje-usuarios" class="mensaje"></div>
+      <h3>Copias de seguridad</h3>
+      <p>Descarga todos los datos de la app con un inventario y una huella de comprobación. Incluye datos personales, importes y usuarios: guárdala en un lugar privado, fuera de Render y del repositorio.</p>
+      <label>Contenido de la copia <select id="alcance-respaldo"><option value="aplicacion">Todos los datos de la app (recomendado)</option><option value="completa">Base completa, incluidas extensiones de Supabase</option></select></label>
+      <p>La copia de la app incluye todo su esquema público: obras, usuarios, pagos, agenda, remates y vínculos. No incluye los esquemas internos de Supabase. La base completa también los incluye y requiere un entorno con sus extensiones para restaurarse. En SQLite ambas opciones incluyen toda la base.</p>
+      <p>Esta descarga es manual, no una copia automática. La restauración se comprueba con la herramienta del programa sobre una base nueva y separada; no se restaura desde la web. No incluye archivos externos ni la configuración del servidor.</p>
+      <button id="descargar-respaldo" type="button">Descargar copia de seguridad</button>
+      <p id="mensaje-respaldo" class="mensaje" role="status" aria-live="polite"></p>
+    </section>
+  </main>
+  <script src="/app/panel_comun.js"></script>
+  <script>
+    const token = localStorage.getItem('alucarpin_token');
+    const apiFetch = AlucarpinPanel.apiFetch;
+    const contenedorAyudantes = document.querySelector('#ayudantes');
+    const mensajeUsuarios = document.querySelector('#mensaje-usuarios');
+    const mensajeAyudante = document.querySelector('#mensaje-ayudante');
+    document.querySelector('#descargar-respaldo').onclick = async () => {
+      const boton = document.querySelector('#descargar-respaldo');
+      const aviso = document.querySelector('#mensaje-respaldo');
+      if (boton.disabled) return;
+      if (!confirm('La copia contiene datos privados y usuarios. ¿Descargarla para guardarla en un lugar seguro?')) return;
+      boton.disabled = true;
+      const alcance = document.querySelector('#alcance-respaldo').value;
+      aviso.className = 'mensaje'; aviso.textContent = 'Preparando copia. No cierres esta página…';
+      let url;
+      try {
+        const respuesta = await fetch(`/copias-seguridad?alcance=${encodeURIComponent(alcance)}`, {
+          headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
+          signal: AbortSignal.timeout(180000),
+        });
+        if (!respuesta.ok) {
+          const error = await respuesta.json().catch(() => null);
+          throw new Error(typeof error?.detail === 'string' ? error.detail : `No se pudo generar la copia (HTTP ${respuesta.status}).`);
+        }
+        if (!respuesta.headers.get('Content-Type')?.includes('application/zip')) throw new Error('La respuesta no contiene un archivo de respaldo válido.');
+        const archivo = await respuesta.blob();
+        if (!archivo.size) throw new Error('La copia está vacía. No se considera un respaldo válido.');
+        url = URL.createObjectURL(archivo);
+        const enlace = document.createElement('a');
+        enlace.href = url;
+        const nombre = respuesta.headers.get('Content-Disposition')?.match(/filename="([a-zA-Z0-9.-]+)"/)?.[1];
+        enlace.download = nombre || 'alucarpin-respaldo.zip';
+        document.body.appendChild(enlace); enlace.click(); enlace.remove();
+        aviso.className = 'mensaje exito';
+        aviso.textContent = 'Archivo enviado al navegador. Comprueba que se ha descargado y guárdalo en un lugar privado. Todavía falta verificar su restauración en una base separada.';
+      } catch (error) {
+        aviso.className = 'mensaje error';
+        aviso.textContent = error.name === 'TimeoutError' ? 'La descarga ha superado el tiempo límite. No hay una copia descargada verificada; vuelve a intentarlo.' : error.message;
+      } finally {
+        boton.disabled = false;
+        if (url) setTimeout(() => URL.revokeObjectURL(url), 30000);
+      }
+    };
+    async function cargarUsuarios() {
+      const respuesta = await apiFetch('/usuarios');
+      if (!respuesta.ok) throw new Error('No se pudieron cargar los usuarios.');
+      const usuarios = await respuesta.json();
+      const cuerpo = document.querySelector('#usuarios');
+      cuerpo.textContent = '';
+      usuarios.forEach(usuario => {
+        const fila = document.createElement('tr');
+        fila.innerHTML = `<td>${usuario.usuario}</td><td>${usuario.rol}</td><td>${usuario.nombre_ayudante || ''}</td><td>${usuario.activo ? 'Activo' : 'Desactivado'}</td><td class="acciones"><button type="button" class="cambiar-password">Cambiar contraseña</button><button type="button" class="cambiar-estado">${usuario.activo ? 'Desactivar' : 'Activar'}</button></td>`;
+        fila.querySelector('.cambiar-password').onclick = AlucarpinPanel.accion('#mensaje-usuarios', async () => {
+          const password = prompt(`Nueva contraseña para ${usuario.usuario} (mínimo 8 caracteres):`);
+          if (!password) return;
+          const cambio = await apiFetch(`/usuarios/${usuario.id}/password`, { method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({password}) });
+          mensajeUsuarios.textContent = cambio.ok ? 'Contraseña actualizada correctamente.' : 'No se pudo actualizar la contraseña.';
+          mensajeUsuarios.className = cambio.ok ? 'mensaje exito' : 'mensaje error';
+        });
+        fila.querySelector('.cambiar-estado').onclick = AlucarpinPanel.accion('#mensaje-usuarios', async () => {
+          const cambio = await apiFetch(`/usuarios/${usuario.id}/estado`, { method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({activo: !usuario.activo}) });
+          if (cambio.ok) { mensajeUsuarios.textContent = 'Estado actualizado correctamente.'; await cargarUsuarios(); }
+          else { const detalle = await cambio.json(); mensajeUsuarios.textContent = detalle.detail || 'No se pudo cambiar el estado.'; }
+          mensajeUsuarios.className = cambio.ok ? 'mensaje exito' : 'mensaje error';
+        });
+        cuerpo.appendChild(fila);
+      });
+    }
+
+    async function cargarAyudantes() {
+      const respuesta = await apiFetch('/ayudantes');
+      if (!respuesta.ok) throw new Error('No se pudieron cargar los ayudantes.');
+      const lista = await respuesta.json();
+      contenedorAyudantes.replaceChildren();
+      lista.forEach(ayudante => {
+        const elemento = document.createElement('div'); elemento.className = 'ayudante-item';
+        const boton = document.createElement('strong'); boton.textContent = ayudante.nombre;
+        const acciones = document.createElement('div'); acciones.className = 'ayudante-acciones';
+        const modificar = document.createElement('button'); modificar.type = 'button'; modificar.textContent = 'Modificar';
+        modificar.onclick = AlucarpinPanel.accion('#mensaje-ayudante', async () => {
+          const nombre = prompt('Nuevo nombre del ayudante:', ayudante.nombre);
+          if (!nombre || nombre.trim() === ayudante.nombre) return;
+          const respuesta = await apiFetch(`/ayudantes/${ayudante.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: nombre.trim() }) });
+          const resultado = await respuesta.json();
+          mensajeAyudante.textContent = respuesta.ok ? `Ayudante modificado. Nuevo usuario: ${resultado.usuario}` : (resultado.detail || 'No se pudo modificar.');
+          mensajeAyudante.className = respuesta.ok ? 'mensaje exito' : 'mensaje error';
+          if (respuesta.ok) { await cargarAyudantes(); await cargarUsuarios(); }
+        });
+        const borrar = document.createElement('button'); borrar.type = 'button'; borrar.className = 'borrar-ayudante'; borrar.textContent = 'Borrar';
+        borrar.onclick = AlucarpinPanel.accion('#mensaje-ayudante', async () => {
+          if (!confirm(`¿Borrar al ayudante ${ayudante.nombre}?`)) return;
+          const respuesta = await apiFetch(`/ayudantes/${ayudante.id}`, { method: 'DELETE' });
+          const resultado = await respuesta.json();
+          mensajeAyudante.textContent = respuesta.ok ? 'Ayudante borrado correctamente.' : (resultado.detail || 'No se pudo borrar.');
+          mensajeAyudante.className = respuesta.ok ? 'mensaje exito' : 'mensaje error';
+          if (respuesta.ok) { await cargarAyudantes(); await cargarUsuarios(); }
+        });
+        acciones.append(modificar, borrar); elemento.append(boton, acciones); contenedorAyudantes.appendChild(elemento);
+      });
+    }
+    document.querySelector('#formulario-ayudante').addEventListener('submit', AlucarpinPanel.accion('#mensaje-ayudante', async event => {
+      event.preventDefault();
+      const nombre = document.querySelector('#nombre-ayudante').value.trim();
+      const respuesta = await apiFetch('/ayudantes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre }) });
+      const resultado = await respuesta.json();
+      if (!respuesta.ok) {
+        mensajeAyudante.textContent = resultado.detail || 'No se pudo crear el ayudante.';
+        mensajeAyudante.className = 'mensaje error';
+        return;
+      }
+      mensajeAyudante.textContent = `Creado. Usuario: ${resultado.usuario} | Contraseña inicial: ${resultado.password_inicial}`;
+      mensajeAyudante.className = 'mensaje exito';
+      event.target.reset();
+      await cargarAyudantes();
+      await cargarUsuarios();
+    }));
+    AlucarpinPanel.prepararTablas();
+    cargarUsuarios().catch(error => { mensajeUsuarios.textContent = error.message; mensajeUsuarios.className = 'mensaje error'; });
+    cargarAyudantes().catch(error => { mensajeAyudante.textContent = error.message; mensajeAyudante.className = 'mensaje error'; });
+  </script>
+  <script src="/app/pwa.js"></script>
+</body>
+</html>
