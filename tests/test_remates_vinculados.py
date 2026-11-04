@@ -43,10 +43,10 @@ class RematesVinculadosTests(unittest.TestCase):
             self.addCleanup(cambio.stop)
         api.startup()
 
-    def crear(self, referencia, origen="propia"):
+    def crear(self, referencia, origen="propia", tipo="u"):
         return api.crear_remate(api.RemateCreate(
             origen=origen, obra_catalogo=referencia, cliente="Incorrecto", obra="Incorrecta",
-            pieza="Puerta", lacado_color="Blanco", tipo="u", largura=2500,
+            pieza="Puerta", lacado_color="Blanco", tipo=tipo, largura=2500,
             medida_1=10, medida_2=20, medida_3=30,
         ), {})
 
@@ -62,6 +62,14 @@ class RematesVinculadosTests(unittest.TestCase):
                          {"faena:1", "faena:2", "presupuesto:1", "reparacion:1"})
         self.assertTrue(all(r["cliente"] == "Cliente" for r in vinculados))
         self.assertEqual(len(self.listar(origen="tercero")), 3)
+
+    def test_vierteaguas_guarda_sus_tres_cotas(self):
+        remate = self.crear("presupuesto:1", tipo="vierteaguas")
+        self.assertEqual(remate["tipo"], "vierteaguas")
+        self.assertEqual(
+            (remate["medida_1"], remate["medida_2"], remate["medida_3"]),
+            (10, 20, 30),
+        )
 
     def test_historicos_no_se_vinculan_por_nombre_ni_origen_id(self):
         self.db.execute("UPDATE remates SET origen_id=1 WHERE id=10")

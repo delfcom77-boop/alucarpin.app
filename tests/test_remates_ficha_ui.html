@@ -15,11 +15,13 @@
       window.print = () => { window.impresiones++; };
       const r = { pieza: 'Ventana', lacado_color: 'Blanco', tipo: 'u', medida_1: 10, medida_2: 20, medida_3: 30,
         largura: 2500, cantidad: 2, posicion_medidas: 'exterior', observaciones: '=nota' };
+      const vierteaguas = { pieza: 'Vierteaguas', lacado_color: 'Negro', tipo: 'vierteaguas',
+        medida_1: 100, medida_2: 50, medida_3: 20, largura: 2000, cantidad: 1, observaciones: '' };
       window.fetch = async () => new Response(JSON.stringify({
         obra: { cliente: 'Cliente', obra: 'Obra', tipo: 'faena', importe: 100, estado_cobro: 'No cobrado' },
         resumen: { dias_ayudantes: 0, fechas_trabajadas: 0, ayudantes: 0, dias_obra_registrados: 0,
           gastos: 0, gastos_pagados: 0, cobros_registrados: 0 },
-        jornadas_ayudantes: [], gastos: [], cobros: [], dias_obra: [], remates: [r],
+        jornadas_ayudantes: [], gastos: [], cobros: [], dias_obra: [], remates: [r, vierteaguas],
       }));
     }
     (async () => {
@@ -37,6 +39,7 @@
       };
       await esperar(() => !d.querySelector('#contenido').hidden);
       comprobar(d.querySelector('#remates tbody').textContent.includes('exteriores'), 'Pierde posicion de medidas');
+      comprobar(d.querySelector('#remates tbody').textContent.includes('Vierteaguas') && d.querySelector('#remates tbody').textContent.includes('A: 100 × B: 50 × C: 20'), 'No muestra las cotas del vierteaguas en la ficha');
       d.querySelector('[data-exportar="remates"]').click();
       await esperar(() => w.archivo);
       const csv = await w.archivo.text();

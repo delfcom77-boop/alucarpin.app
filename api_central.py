@@ -263,7 +263,7 @@ class RemateCreate(BaseModel):
     obra: str = Field(min_length=1)
     pieza: str = Field(min_length=1)
     lacado_color: str = Field(min_length=1)
-    tipo: Literal["chapa", "angulo", "u", "tubo", "tubo_redondo"]
+    tipo: Literal["chapa", "angulo", "u", "tubo", "tubo_redondo", "vierteaguas"]
     modo_chapa: Literal["normal", "desnivel"] = "normal"
     orientacion_chapa: Literal["arriba", "abajo"] = "abajo"
     posicion_medidas: Literal["interior", "exterior"] = "interior"

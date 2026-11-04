@@ -79,18 +79,31 @@
       const whatsapp = decodeURIComponent(w.salidas[1].url);
       comprobar(whatsapp.includes('SoloFaena1') && !whatsapp.includes('SoloFaena2') && !whatsapp.includes('SoloReparacion'), 'WhatsApp mezcla referencias');
       seleccionar('origen', 'propia'); seleccionar('cliente', 'Cliente'); seleccionar('obra', 'presupuesto:1');
-      for (const [id, valor] of Object.entries({ pieza: 'Nueva', 'lacado-color': 'Blanco', 'medida-1': 10, 'medida-2': 20, 'medida-3': 30, largura: 2500, cantidad: 1 })) d.querySelector('#' + id).value = valor;
+      seleccionar('tipo', 'vierteaguas');
+      comprobar(!d.querySelector('#perfil-vierteaguas').hidden, 'No muestra el perfil de vierteaguas');
+      comprobar(d.querySelector('#etiqueta-1').textContent.includes('Cota A') && d.querySelector('#etiqueta-2').textContent.includes('Cota B') && d.querySelector('#etiqueta-3').textContent.includes('Cota C'), 'Etiquetas de cotas incorrectas');
+      for (const [id, valor] of Object.entries({ pieza: 'Nueva', 'lacado-color': 'Blanco', 'medida-1': 120, 'medida-2': 80, 'medida-3': 40, largura: 2500, cantidad: 1 })) d.querySelector('#' + id).value = valor;
+      ['medida-1', 'medida-2', 'medida-3', 'largura'].forEach(id => d.querySelector('#' + id).dispatchEvent(new w.Event('input')));
+      comprobar(d.querySelector('#vierteaguas-cota-a').textContent.includes('120') && d.querySelector('#vierteaguas-cota-b').textContent.includes('80') && d.querySelector('#vierteaguas-cota-c').textContent.includes('40'), 'El dibujo no muestra las cotas introducidas');
       d.querySelector('#formulario').requestSubmit();
       await esperar(() => w.cambios.some(c => c.metodo === 'POST'));
       const post = w.cambios.find(c => c.metodo === 'POST').datos;
       comprobar(post.obra_catalogo === 'presupuesto:1' && post.origen === 'propia' && post.obra === 'Presupuesto P1', 'POST no usa referencia canonica');
+      comprobar(post.tipo === 'vierteaguas' && post.medida_1 === 120 && post.medida_2 === 80 && post.medida_3 === 40, 'POST pierde el tipo o las cotas del vierteaguas');
       await esperar(() => !d.querySelector('#formulario button[type="submit"]').disabled);
+      seleccionar('filtro-obra', ''); await esperar(() => d.querySelectorAll('#lista tr').length === 5);
+      comprobar(d.querySelector('#lista').textContent.includes('A: 120 x B: 80 x C: 40'), 'El listado no identifica las cotas');
+      seleccionar('filtro-obra', 'presupuesto:1'); await esperar(() => d.querySelectorAll('#lista tr').length === 1);
+      d.querySelector('#generar-pdf').click(); await esperar(() => w.salidas.length === 3);
+      comprobar(w.salidas[2].html.includes('Vierteaguas') && w.salidas[2].html.includes('A: 120 mm') && w.salidas[2].html.includes('B: 80 mm') && w.salidas[2].html.includes('C: 40 mm'), 'PDF no incluye el perfil y las cotas del vierteaguas');
+      d.querySelector('#enviar-whatsapp').click(); await esperar(() => w.salidas.length === 4);
+      comprobar(decodeURIComponent(w.salidas[3].url).includes('Cotas del croquis: A 120 x B 80 x C 40'), 'WhatsApp no incluye las cotas del vierteaguas');
       seleccionar('filtro-obra', ''); await esperar(() => d.querySelectorAll('#lista tr').length === 5);
       w.fallar = true; filaAntigua().querySelector('.borrar').click();
       await esperar(() => d.querySelector('#mensaje').textContent.includes('No se pudo borrar'));
       comprobar(d.querySelectorAll('#lista tr').length === 5, 'Oculta fila tras borrado rechazado');
       comprobar(d.documentElement.scrollWidth <= d.documentElement.clientWidth, 'Desbordamiento movil');
-      document.querySelector('#resultado').textContent = 'OK: Catalogo por tipo e ID\nOK: Historicos visibles y vinculo sin alterar medidas\nOK: Errores de vinculo y borrado visibles\nOK: Filtro, PDF y WhatsApp sin mezclar obras homonimas\nOK: Guardado canonico y pantalla movil';
+      document.querySelector('#resultado').textContent = 'OK: Catalogo por tipo e ID\nOK: Historicos visibles y vinculo sin alterar medidas\nOK: Errores de vinculo y borrado visibles\nOK: Filtro, PDF y WhatsApp sin mezclar obras homonimas\nOK: Vierteaguas, tres cotas y guardado canonico\nOK: Pantalla movil';
     })().catch(error => { document.querySelector('#resultado').textContent = 'ERROR: ' + error.message; throw error; });
   </script>
 </body>
