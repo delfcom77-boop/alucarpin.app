@@ -76,6 +76,9 @@
       comprobar(!w.solicitudes.some(s => ['/gastos', '/usuarios', '/presupuestos'].includes(s.url)), 'Ayudantes carga datos de otros paneles');
       comprobar(!w.errores.length, w.errores.join('; '));
       [d, w] = await cargar('mi_control.html');
+      comprobar([...d.querySelectorAll('.gestion-atajos a')].some(a =>
+        a.textContent.trim() === 'Remates' && a.getAttribute('href').endsWith('remates.html')
+      ), 'Mi control no ofrece acceso a Remates');
       const ir = async apartado => {
         w.location.hash = apartado;
         await esperar(() => apartado === 'trabajos' ? !d.querySelector('#control-personal').hidden : !d.querySelector(`#apartado-${apartado}`).hidden);
