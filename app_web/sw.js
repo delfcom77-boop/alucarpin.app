@@ -1,4 +1,4 @@
-const CACHE = 'alucarpin-app-v31-remates-en-mi-control';
+const CACHE = 'alucarpin-app-v32-gestion-en-mi-control';
 const ARCHIVOS = [
   '/app/login.html',
   '/app/administrador.html',

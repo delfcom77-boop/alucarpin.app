@@ -243,6 +243,9 @@ ayudantes**, usuarios y copias estan en **Configuracion**. Desde **Mi control**
 se gestionan **Faenas a terceros**, **Presupuestos** y **Gastos** directamente,
 ademas de **Mis trabajos y dias**. Los gastos de jornadas enlazan con **Pagos**
 del ayudante y la fecha correspondientes; no crean un segundo pago.
+Desde **Mi control** tambien hay accesos a **Resumen de gestion**, **Agenda y
+citas**, **Tareas**, **Almacen**, **Alarmas** y **Remates**. El menu principal
+conserva accesos directos a estas herramientas.
 Solo se muestran las secciones del apartado
 seleccionado; cambiar de apartado conserva los filtros y los formularios sin
 guardar mientras no recargues la pagina.

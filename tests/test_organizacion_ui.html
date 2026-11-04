@@ -79,6 +79,12 @@
       comprobar([...d.querySelectorAll('.gestion-atajos a')].some(a =>
         a.textContent.trim() === 'Remates' && a.getAttribute('href').endsWith('remates.html')
       ), 'Mi control no ofrece acceso a Remates');
+      const herramientas = [...d.querySelectorAll('nav[aria-label="Otras herramientas de gestión"] a')];
+      comprobar(
+        ['resumen.html', 'agenda.html', 'tareas.html', 'almacen.html', 'alarmas.html']
+          .every(ruta => herramientas.some(a => a.getAttribute('href').endsWith(ruta))),
+        'Mi control no agrupa todas las herramientas de gestión'
+      );
       const ir = async apartado => {
         w.location.hash = apartado;
         await esperar(() => apartado === 'trabajos' ? !d.querySelector('#control-personal').hidden : !d.querySelector(`#apartado-${apartado}`).hidden);
