@@ -600,6 +600,8 @@ Los filtros, PDF y WhatsApp separan cada referencia y los grupos antiguos sin vi
 
 El tipo **Vierteaguas** guarda las cotas **A** (horizontal), **B** (vertical) y **C** (inclinada) del croquis, además de la largura de la pieza. Introduce las medidas directamente: no se calculan ángulos ni pliegues.
 
+Los perfiles **Esquinero** y **Remate techo** guardan cuatro cotas (**A-D**); **Remate techo 2** guarda dos (**A-B**). La largura sigue siendo la longitud de la pieza, separada de las medidas del perfil.
+
 ### Copia completa y comprobacion de restauracion
 
 En **Menu → Configuracion → Copias de seguridad**, elige el contenido, pulsa **Descargar copia de seguridad** y confirma. **Todos los datos de la app** es la opcion recomendada: respalda todos los objetos y tablas del esquema `public`, incluidos usuarios, movimientos economicos, agenda, obras, remates y vinculos, sin los esquemas internos de Supabase. **Base completa** conserva tambien esos esquemas y requiere sus extensiones para restaurarse (por ejemplo, `supabase_vault` no existe en PostgreSQL estandar). En SQLite ambas opciones contienen toda la base.

@@ -77,9 +77,10 @@
       tabla('gastos', ficha.gastos.map(g => [fecha(g.fecha), g.proveedor, g.concepto, g.categoria, euros(g.importe), euros(g.importe_pagado), euros(g.pendiente)]));
       tabla('cobros', ficha.cobros.map(c => [fecha(c.fecha), euros(c.importe), c.forma_pago,
         c.beneficiario ? `Cobro ajeno: ${c.beneficiario}. Excluido de mis ingresos. ${c.observaciones || ''}` : c.observaciones]));
-      const tiposRemate = { u: 'Bandeja / U', chapa: 'Chapa', angulo: 'Ángulo / L', tubo: 'Tubo', tubo_redondo: 'Tubo redondo', vierteaguas: 'Vierteaguas' };
+      const tiposRemate = { u: 'Bandeja / U', chapa: 'Chapa', angulo: 'Ángulo / L', tubo: 'Tubo', tubo_redondo: 'Tubo redondo', vierteaguas: 'Vierteaguas', esquinero: 'Esquinero', remate_techo: 'Remate techo', remate_techo_2: 'Remate techo 2' };
+      const cotasRemate = { vierteaguas: ['A', 'B', 'C'], esquinero: ['A', 'B', 'C', 'D'], remate_techo: ['A', 'B', 'C', 'D'], remate_techo_2: ['A', 'B'] };
       const medidasRemate = r => {
-        if (r.tipo === 'vierteaguas') return `A: ${r.medida_1} × B: ${r.medida_2} × C: ${r.medida_3}`;
+        if (cotasRemate[r.tipo]) return cotasRemate[r.tipo].map((cota, indice) => `${cota}: ${r[`medida_${indice + 1}`]}`).join(' × ');
         if (r.tipo === 'u') return `${r.medida_1} × ${r.medida_2} × ${r.medida_3} · Medidas ${r.posicion_medidas === 'exterior' ? 'exteriores' : 'interiores'}`;
         if (r.tipo === 'chapa' && r.modo_chapa === 'desnivel') return `Izq. ${r.medida_1} × Der. ${r.medida_2} · Recta ${r.orientacion_chapa}`;
         if (r.tipo === 'chapa' || r.tipo === 'tubo_redondo') return String(r.medida_1);

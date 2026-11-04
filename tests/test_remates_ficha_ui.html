@@ -17,11 +17,14 @@
         largura: 2500, cantidad: 2, posicion_medidas: 'exterior', observaciones: '=nota' };
       const vierteaguas = { pieza: 'Vierteaguas', lacado_color: 'Negro', tipo: 'vierteaguas',
         medida_1: 100, medida_2: 50, medida_3: 20, largura: 2000, cantidad: 1, observaciones: '' };
+      const esquinero = { pieza: 'Esquinero', tipo: 'esquinero', medida_1: 10, medida_2: 20, medida_3: 30, medida_4: 40 };
+      const remateTecho = { pieza: 'Techo', tipo: 'remate_techo', medida_1: 11, medida_2: 22, medida_3: 33, medida_4: 44 };
+      const remateTecho2 = { pieza: 'Techo 2', tipo: 'remate_techo_2', medida_1: 12, medida_2: 24 };
       window.fetch = async () => new Response(JSON.stringify({
         obra: { cliente: 'Cliente', obra: 'Obra', tipo: 'faena', importe: 100, estado_cobro: 'No cobrado' },
         resumen: { dias_ayudantes: 0, fechas_trabajadas: 0, ayudantes: 0, dias_obra_registrados: 0,
           gastos: 0, gastos_pagados: 0, cobros_registrados: 0 },
-        jornadas_ayudantes: [], gastos: [], cobros: [], dias_obra: [], remates: [r, vierteaguas],
+        jornadas_ayudantes: [], gastos: [], cobros: [], dias_obra: [], remates: [r, vierteaguas, esquinero, remateTecho, remateTecho2],
       }));
     }
     (async () => {
@@ -40,6 +43,10 @@
       await esperar(() => !d.querySelector('#contenido').hidden);
       comprobar(d.querySelector('#remates tbody').textContent.includes('exteriores'), 'Pierde posicion de medidas');
       comprobar(d.querySelector('#remates tbody').textContent.includes('Vierteaguas') && d.querySelector('#remates tbody').textContent.includes('A: 100 × B: 50 × C: 20'), 'No muestra las cotas del vierteaguas en la ficha');
+      const textoRemates = d.querySelector('#remates tbody').textContent;
+      comprobar(textoRemates.includes('Esquinero') && textoRemates.includes('A: 10 × B: 20 × C: 30 × D: 40'), 'No muestra las cuatro cotas del esquinero');
+      comprobar(textoRemates.includes('Remate techo') && textoRemates.includes('A: 11 × B: 22 × C: 33 × D: 44'), 'No muestra las cuatro cotas del remate techo');
+      comprobar(textoRemates.includes('Remate techo 2') && textoRemates.includes('A: 12 × B: 24'), 'No muestra las dos cotas del remate techo 2');
       d.querySelector('[data-exportar="remates"]').click();
       await esperar(() => w.archivo);
       const csv = await w.archivo.text();

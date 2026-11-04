@@ -20,7 +20,7 @@
         { referencia: 'presupuesto:1', tipo: 'presupuesto', cliente: 'Cliente', obra: 'Presupuesto P1', id: 1 },
         { referencia: 'reparacion:1', tipo: 'reparacion', cliente: 'Cliente', obra: 'Obra', id: 1 },
       ];
-      const base = { origen: 'tercero', cliente: 'Cliente', obra: 'Obra', tipo: 'u', medida_1: 10, medida_2: 20, medida_3: 30,
+      const base = { origen: 'tercero', cliente: 'Cliente', obra: 'Obra', tipo: 'u', medida_1: 10, medida_2: 20, medida_3: 30, medida_4: 0,
         largura: 2500, cantidad: 2, lacado_color: 'Blanco', observaciones: 'Conservar', posicion_medidas: 'exterior' };
       const remates = [
         { ...base, id: 10, pieza: 'Antigua', obra_catalogo: null },
@@ -37,7 +37,7 @@
             const remate = remates.find(r => r.id === Number(url.split('/')[2]));
             remate.obra_catalogo = datos.obra_catalogo;
           }
-          if (opciones.method === 'POST') remates.push({ ...datos, id: 14 });
+          if (opciones.method === 'POST') remates.push({ ...datos, id: Math.max(...remates.map(remate => remate.id)) + 1 });
           if (opciones.method === 'DELETE') remates.splice(remates.findIndex(r => r.id === Number(url.split('/')[2])), 1);
           return new Response(JSON.stringify({ id: 14 }), { status: 200 });
         }
@@ -89,7 +89,7 @@
       await esperar(() => w.cambios.some(c => c.metodo === 'POST'));
       const post = w.cambios.find(c => c.metodo === 'POST').datos;
       comprobar(post.obra_catalogo === 'presupuesto:1' && post.origen === 'propia' && post.obra === 'Presupuesto P1', 'POST no usa referencia canonica');
-      comprobar(post.tipo === 'vierteaguas' && post.medida_1 === 120 && post.medida_2 === 80 && post.medida_3 === 40, 'POST pierde el tipo o las cotas del vierteaguas');
+      comprobar(post.tipo === 'vierteaguas' && post.medida_1 === 120 && post.medida_2 === 80 && post.medida_3 === 40 && post.medida_4 === 0, 'POST pierde el tipo o las cotas del vierteaguas');
       await esperar(() => !d.querySelector('#formulario button[type="submit"]').disabled);
       seleccionar('filtro-obra', ''); await esperar(() => d.querySelectorAll('#lista tr').length === 5);
       comprobar(d.querySelector('#lista').textContent.includes('A: 120 x B: 80 x C: 40'), 'El listado no identifica las cotas');
@@ -98,12 +98,50 @@
       comprobar(w.salidas[2].html.includes('Vierteaguas') && w.salidas[2].html.includes('A: 120 mm') && w.salidas[2].html.includes('B: 80 mm') && w.salidas[2].html.includes('C: 40 mm'), 'PDF no incluye el perfil y las cotas del vierteaguas');
       d.querySelector('#enviar-whatsapp').click(); await esperar(() => w.salidas.length === 4);
       comprobar(decodeURIComponent(w.salidas[3].url).includes('Cotas del croquis: A 120 x B 80 x C 40'), 'WhatsApp no incluye las cotas del vierteaguas');
-      seleccionar('filtro-obra', ''); await esperar(() => d.querySelectorAll('#lista tr').length === 5);
+      const perfilesNuevos = [
+        { tipo: 'esquinero', nombreTipo: 'Esquinero', panel: 'perfil-esquinero', origen: 'propia', obra: 'reparacion:1', nombre: 'Nuevo esquinero', cotas: [110, 220, 35, 45], resumen: 'A: 110 x B: 220 x C: 35 x D: 45' },
+        { tipo: 'remate_techo', nombreTipo: 'Remate techo', panel: 'perfil-remate-techo', origen: 'tercero', obra: 'faena:1', nombre: 'Nuevo techo', cotas: [50, 20, 280, 60], resumen: 'A: 50 x B: 20 x C: 280 x D: 60' },
+        { tipo: 'remate_techo_2', nombreTipo: 'Remate techo 2', panel: 'perfil-remate-techo-2', origen: 'tercero', obra: 'faena:2', nombre: 'Nuevo techo 2', cotas: [120, 240], resumen: 'A: 120 x B: 240' },
+      ];
+      const letrasCota = ['A', 'B', 'C', 'D'];
+      for (let indicePerfil = 0; indicePerfil < perfilesNuevos.length; indicePerfil++) {
+        const perfil = perfilesNuevos[indicePerfil];
+        seleccionar('filtro-obra', ''); await esperar(() => d.querySelectorAll('#lista tr').length === 5 + indicePerfil);
+        seleccionar('origen', perfil.origen); seleccionar('cliente', 'Cliente'); seleccionar('obra', perfil.obra);
+        seleccionar('tipo', perfil.tipo);
+        comprobar(!d.querySelector('#' + perfil.panel).hidden, `No muestra el perfil ${perfil.tipo}`);
+        for (let indiceCota = 0; indiceCota < 4; indiceCota++) {
+          const etiqueta = d.querySelector(`#etiqueta-${indiceCota + 1}`);
+          const activa = indiceCota < perfil.cotas.length;
+          comprobar(etiqueta.textContent.includes(activa ? `Cota ${letrasCota[indiceCota]}` : 'No se usa'), `Etiqueta incorrecta para ${perfil.tipo}`);
+          comprobar(etiqueta.classList.contains('campo-oculto') === !activa, `Visibilidad de cotas incorrecta para ${perfil.tipo}`);
+        }
+        const valores = { pieza: perfil.nombre, 'lacado-color': 'Negro', largura: 2500, cantidad: 1 };
+        perfil.cotas.forEach((valor, indiceCota) => { valores[`medida-${indiceCota + 1}`] = valor; });
+        for (const [id, valor] of Object.entries(valores)) d.querySelector('#' + id).value = valor;
+        ['medida-1', 'medida-2', 'medida-3', 'medida-4', 'largura'].forEach(id => d.querySelector('#' + id).dispatchEvent(new w.Event('input')));
+        d.querySelector('#formulario').requestSubmit();
+        await esperar(() => w.cambios.filter(c => c.metodo === 'POST').length === indicePerfil + 2);
+        const datosPost = w.cambios.filter(c => c.metodo === 'POST').at(-1).datos;
+        comprobar(datosPost.tipo === perfil.tipo && datosPost.medida_4 === (perfil.cotas[3] || 0), `POST pierde cotas de ${perfil.tipo}`);
+        await esperar(() => !d.querySelector('#formulario button[type="submit"]').disabled);
+        seleccionar('filtro-obra', ''); await esperar(() => d.querySelectorAll('#lista tr').length === 6 + indicePerfil);
+        comprobar(d.querySelector('#lista').textContent.includes(perfil.resumen), `El listado no identifica las cotas de ${perfil.tipo}`);
+        seleccionar('filtro-obra', perfil.obra); await esperar(() => d.querySelector('#lista').textContent.includes(perfil.nombre));
+        const indicePdf = w.salidas.length;
+        d.querySelector('#generar-pdf').click(); await esperar(() => w.salidas.length === indicePdf + 1);
+        comprobar(w.salidas[indicePdf].html.includes(perfil.nombreTipo) && w.salidas[indicePdf].html.includes(perfil.resumen.replaceAll(':', '')), `PDF omite cotas de ${perfil.tipo}`);
+        const indiceWhatsapp = w.salidas.length;
+        d.querySelector('#enviar-whatsapp').click(); await esperar(() => w.salidas.length === indiceWhatsapp + 1);
+        comprobar(decodeURIComponent(w.salidas[indiceWhatsapp].url).includes(perfil.resumen.replaceAll(': ', ' ')), `WhatsApp omite cotas de ${perfil.tipo}`);
+      }
+      seleccionar('filtro-obra', ''); await esperar(() => d.querySelectorAll('#lista tr').length === 8);
       w.fallar = true; filaAntigua().querySelector('.borrar').click();
       await esperar(() => d.querySelector('#mensaje').textContent.includes('No se pudo borrar'));
-      comprobar(d.querySelectorAll('#lista tr').length === 5, 'Oculta fila tras borrado rechazado');
+      comprobar(d.querySelectorAll('#lista tr').length === 8, 'Oculta fila tras borrado rechazado');
+      seleccionar('tipo', 'esquinero');
       comprobar(d.documentElement.scrollWidth <= d.documentElement.clientWidth, 'Desbordamiento movil');
-      document.querySelector('#resultado').textContent = 'OK: Catalogo por tipo e ID\nOK: Historicos visibles y vinculo sin alterar medidas\nOK: Errores de vinculo y borrado visibles\nOK: Filtro, PDF y WhatsApp sin mezclar obras homonimas\nOK: Vierteaguas, tres cotas y guardado canonico\nOK: Pantalla movil';
+      document.querySelector('#resultado').textContent = 'OK: Catalogo por tipo e ID\nOK: Historicos visibles y vinculo sin alterar medidas\nOK: Errores de vinculo y borrado visibles\nOK: Filtro, PDF y WhatsApp sin mezclar obras homonimas\nOK: Vierteaguas y tres perfiles nuevos con cotas y largura separadas\nOK: Pantalla movil';
     })().catch(error => { document.querySelector('#resultado').textContent = 'ERROR: ' + error.message; throw error; });
   </script>
 </body>

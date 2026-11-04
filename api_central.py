@@ -263,13 +263,14 @@ class RemateCreate(BaseModel):
     obra: str = Field(min_length=1)
     pieza: str = Field(min_length=1)
     lacado_color: str = Field(min_length=1)
-    tipo: Literal["chapa", "angulo", "u", "tubo", "tubo_redondo", "vierteaguas"]
+    tipo: Literal["chapa", "angulo", "u", "tubo", "tubo_redondo", "vierteaguas", "esquinero", "remate_techo", "remate_techo_2"]
     modo_chapa: Literal["normal", "desnivel"] = "normal"
     orientacion_chapa: Literal["arriba", "abajo"] = "abajo"
     posicion_medidas: Literal["interior", "exterior"] = "interior"
     medida_1: float = Field(default=0, ge=0)
     medida_2: float = Field(default=0, ge=0)
     medida_3: float = Field(default=0, ge=0)
+    medida_4: float = Field(default=0, ge=0)
     largura: float = Field(gt=0)
     cantidad: int = Field(default=1, ge=1)
     observaciones: str = ""
@@ -318,6 +319,11 @@ def conexion():
     return db
 
 
+def asegurar_medida_4_remates_sqlite(db):
+    if "medida_4" not in {fila["name"] for fila in db.execute("PRAGMA table_info(remates)")}:
+        db.execute("ALTER TABLE remates ADD COLUMN medida_4 REAL NOT NULL DEFAULT 0")
+
+
 def inicializar_base_datos():
     from importes_faenas import inicializar_importes
     if DATABASE_URL:
@@ -326,6 +332,7 @@ def inicializar_base_datos():
             inicializar_importes(db, True)
             inicializar_usuarios(db)
             db.execute("ALTER TABLE citas_agenda ADD COLUMN IF NOT EXISTS convertida_en TIMESTAMP")
+            db.execute("ALTER TABLE remates ADD COLUMN IF NOT EXISTS medida_4 DOUBLE PRECISION NOT NULL DEFAULT 0")
         return
 
     db = sqlite3.connect(str(DATABASE_PATH), timeout=30)
@@ -346,7 +353,8 @@ def inicializar_base_datos():
     db.execute("CREATE TABLE IF NOT EXISTS pagos_jornadas (id INTEGER PRIMARY KEY AUTOINCREMENT, fichaje_id INTEGER NOT NULL UNIQUE, importe REAL NOT NULL DEFAULT 0, importe_pagado REAL NOT NULL DEFAULT 0, forma_pago TEXT NOT NULL DEFAULT 'Efectivo', estado_pago TEXT NOT NULL DEFAULT 'No pagado', fecha_pago TEXT, creado_en TEXT DEFAULT CURRENT_TIMESTAMP, actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP)")
     db.execute("CREATE TABLE IF NOT EXISTS notas_usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, usuario_id INTEGER NOT NULL, titulo TEXT NOT NULL, contenido TEXT NOT NULL, fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP, fecha_actualizacion TEXT DEFAULT CURRENT_TIMESTAMP, completada INTEGER NOT NULL DEFAULT 0)")
     db.execute("CREATE TABLE IF NOT EXISTS alarmas (id INTEGER PRIMARY KEY AUTOINCREMENT, cantidad INTEGER NOT NULL DEFAULT 0, descripcion TEXT NOT NULL, activo INTEGER NOT NULL DEFAULT 1, fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP, fecha_actualizacion TEXT DEFAULT CURRENT_TIMESTAMP)")
-    db.execute("CREATE TABLE IF NOT EXISTS remates (id INTEGER PRIMARY KEY AUTOINCREMENT, origen TEXT NOT NULL DEFAULT 'propia', origen_id INTEGER NOT NULL DEFAULT 0, cliente TEXT NOT NULL, obra TEXT NOT NULL, pieza TEXT NOT NULL, lacado_color TEXT NOT NULL, tipo TEXT NOT NULL, modo_chapa TEXT NOT NULL DEFAULT 'normal', orientacion_chapa TEXT NOT NULL DEFAULT 'abajo', posicion_medidas TEXT NOT NULL DEFAULT 'interior', medida_1 REAL NOT NULL DEFAULT 0, medida_2 REAL NOT NULL DEFAULT 0, medida_3 REAL NOT NULL DEFAULT 0, largura REAL NOT NULL DEFAULT 0, cantidad INTEGER NOT NULL DEFAULT 1, observaciones TEXT NOT NULL DEFAULT '', creado_en TEXT DEFAULT CURRENT_TIMESTAMP, actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP)")
+    db.execute("CREATE TABLE IF NOT EXISTS remates (id INTEGER PRIMARY KEY AUTOINCREMENT, origen TEXT NOT NULL DEFAULT 'propia', origen_id INTEGER NOT NULL DEFAULT 0, cliente TEXT NOT NULL, obra TEXT NOT NULL, pieza TEXT NOT NULL, lacado_color TEXT NOT NULL, tipo TEXT NOT NULL, modo_chapa TEXT NOT NULL DEFAULT 'normal', orientacion_chapa TEXT NOT NULL DEFAULT 'abajo', posicion_medidas TEXT NOT NULL DEFAULT 'interior', medida_1 REAL NOT NULL DEFAULT 0, medida_2 REAL NOT NULL DEFAULT 0, medida_3 REAL NOT NULL DEFAULT 0, medida_4 REAL NOT NULL DEFAULT 0, largura REAL NOT NULL DEFAULT 0, cantidad INTEGER NOT NULL DEFAULT 1, observaciones TEXT NOT NULL DEFAULT '', creado_en TEXT DEFAULT CURRENT_TIMESTAMP, actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP)")
+    asegurar_medida_4_remates_sqlite(db)
     inicializar_importes(db)
     inicializar_usuarios(db)
     db.commit()

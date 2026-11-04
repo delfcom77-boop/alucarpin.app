@@ -21,7 +21,7 @@ class RematesVinculadosTests(unittest.TestCase):
                 id INTEGER PRIMARY KEY AUTOINCREMENT, origen TEXT, origen_id INTEGER,
                 cliente TEXT, obra TEXT, pieza TEXT, lacado_color TEXT, tipo TEXT,
                 modo_chapa TEXT, orientacion_chapa TEXT, posicion_medidas TEXT,
-                medida_1 REAL, medida_2 REAL, medida_3 REAL, largura REAL, cantidad INTEGER,
+                medida_1 REAL, medida_2 REAL, medida_3 REAL, medida_4 REAL, largura REAL, cantidad INTEGER,
                 observaciones TEXT
             );
             INSERT INTO faenas VALUES (1,'Cliente','Obra','','');
@@ -29,7 +29,7 @@ class RematesVinculadosTests(unittest.TestCase):
             INSERT INTO presupuestos VALUES (1,'Cliente','P-1');
             INSERT INTO trabajos_propios VALUES (1,'reparacion','Cliente','Obra','','');
             INSERT INTO remates VALUES (10,'tercero',0,'Cliente','Obra','Ventana','Blanco','u',
-                'normal','abajo','exterior',10,20,30,2500,2,'Conservar');
+                'normal','abajo','exterior',10,20,30,0,2500,2,'Conservar');
         """)
 
         @contextlib.contextmanager
@@ -43,11 +43,11 @@ class RematesVinculadosTests(unittest.TestCase):
             self.addCleanup(cambio.stop)
         api.startup()
 
-    def crear(self, referencia, origen="propia", tipo="u"):
+    def crear(self, referencia, origen="propia", tipo="u", medida_4=0):
         return api.crear_remate(api.RemateCreate(
             origen=origen, obra_catalogo=referencia, cliente="Incorrecto", obra="Incorrecta",
             pieza="Puerta", lacado_color="Blanco", tipo=tipo, largura=2500,
-            medida_1=10, medida_2=20, medida_3=30,
+            medida_1=10, medida_2=20, medida_3=30, medida_4=medida_4,
         ), {})
 
     def listar(self, **filtros):
@@ -70,6 +70,32 @@ class RematesVinculadosTests(unittest.TestCase):
             (remate["medida_1"], remate["medida_2"], remate["medida_3"]),
             (10, 20, 30),
         )
+
+    def test_nuevos_perfiles_guardan_cuatro_o_dos_cotas(self):
+        for tipo in ("esquinero", "remate_techo"):
+            remate = self.crear("presupuesto:1", tipo=tipo, medida_4=40)
+            self.assertEqual(remate["tipo"], tipo)
+            self.assertEqual(
+                (remate["medida_1"], remate["medida_2"], remate["medida_3"], remate["medida_4"]),
+                (10, 20, 30, 40),
+            )
+        remate = self.crear("presupuesto:1", tipo="remate_techo_2")
+        self.assertEqual(remate["tipo"], "remate_techo_2")
+        self.assertEqual((remate["medida_1"], remate["medida_2"]), (10, 20))
+        self.assertEqual(remate["medida_4"], 0)
+
+    def test_migracion_sqlite_agrega_cuarta_cota_sin_perder_datos(self):
+        db = sqlite3.connect(":memory:")
+        db.row_factory = sqlite3.Row
+        self.addCleanup(db.close)
+        db.execute("CREATE TABLE remates (id INTEGER PRIMARY KEY, medida_3 REAL)")
+        db.execute("INSERT INTO remates VALUES (1, 30)")
+
+        api.asegurar_medida_4_remates_sqlite(db)
+        api.asegurar_medida_4_remates_sqlite(db)
+
+        fila = db.execute("SELECT medida_3, medida_4 FROM remates WHERE id = 1").fetchone()
+        self.assertEqual((fila["medida_3"], fila["medida_4"]), (30, 0))
 
     def test_historicos_no_se_vinculan_por_nombre_ni_origen_id(self):
         self.db.execute("UPDATE remates SET origen_id=1 WHERE id=10")

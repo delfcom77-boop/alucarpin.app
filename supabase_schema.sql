@@ -171,6 +171,7 @@ CREATE TABLE IF NOT EXISTS estados_ejecucion_presupuestos (
         medida_1 DOUBLE PRECISION NOT NULL DEFAULT 0,
         medida_2 DOUBLE PRECISION NOT NULL DEFAULT 0,
         medida_3 DOUBLE PRECISION NOT NULL DEFAULT 0,
+        medida_4 DOUBLE PRECISION NOT NULL DEFAULT 0,
         largura DOUBLE PRECISION NOT NULL,
         cantidad INTEGER NOT NULL DEFAULT 1,
         observaciones TEXT NOT NULL DEFAULT '',

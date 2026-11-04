@@ -1,4 +1,4 @@
-const CACHE = 'alucarpin-app-v33-vierteaguas';
+const CACHE = 'alucarpin-app-v34-remates-nuevos-perfiles';
 const ARCHIVOS = [
   '/app/login.html',
   '/app/administrador.html',

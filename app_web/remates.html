@@ -24,7 +24,7 @@
     input, select { border: 1px solid #b9c4c2; padding: 10px; background: #fff; }
     button { border: 0; padding: 10px 14px; background: #d45d3f; color: #fff; font-weight: 700; cursor: pointer; }
     .fila { display: grid; min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-    .medidas { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 14px; background: #eef5f2; border-radius: 10px; }
+    .medidas { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; padding: 14px; background: #eef5f2; border-radius: 10px; }
     .perfil-u { position: relative; display: flex; align-items: flex-start; justify-content: center; gap: 0; width: 100%; min-height: 260px; margin: 12px 0 20px; padding: 30px 150px 110px; background: #f7faf8; border: 1px solid #d9e0dd; border-radius: 10px; overflow: hidden; }
     .perfil-u .lado { width: 28px; height: 100px; background: #d45d3f; }
     .perfil-u .centro { width: 220px; height: 28px; background: #d45d3f; }
@@ -41,7 +41,7 @@
     .perfil-u.exterior .cota-largura { left: auto; right: 12px; top: 76px; }
     .perfil-simple { display: grid; place-items: center; width: 100%; min-height: 150px; margin: 12px 0 20px; padding: 18px; background: #f7faf8; border: 1px solid #d9e0dd; border-radius: 10px; overflow: hidden; }
     .perfil-simple[hidden] { display: none; }
-    .perfil-vierteaguas-svg { width: min(420px, 100%); height: auto; }
+    .perfil-cotas-svg { width: min(420px, 100%); height: auto; }
     .simbolo-angular { width: 74px; height: 74px; border-left: 16px solid #d45d3f; border-bottom: 16px solid #d45d3f; }
     .simbolo-tubo { width: 130px; height: 72px; border: 16px solid #d45d3f; }
     .simbolo-redondo { width: 82px; height: 82px; border: 16px solid #d45d3f; border-radius: 50%; }
@@ -79,7 +79,7 @@
 </head>
 <body>
   <main>
-    <header><h1>Remates</h1><p>Define chapas, angulos, bandejas/U y vierteaguas para cada faena.</p></header>
+    <header><h1>Remates</h1><p>Define chapas, angulos, bandejas/U, vierteaguas, esquineros y remates de techo.</p></header>
     <nav><a href="/app/inicio.html">Volver al menu</a></nav>
     <section>
       <h2>Nuevo remate</h2>
@@ -92,7 +92,7 @@
         <p class="ayuda">Selecciona una obra del catálogo. Si no existe, créala primero en Mi control o Ayudantes. Para vincular un remate antiguo, selecciona aquí su obra y pulsa Vincular en su fila.</p>
         <label>Referencia de pieza / ventana <input id="pieza" required placeholder="Ejemplo: Ventana 1"></label>
         <label>Lacado / color <input id="lacado-color" required placeholder="Ejemplo: RAL 7016 gris antracita"></label>
-        <label>Remate <select id="tipo"><option value="u">Bandeja / U</option><option value="chapa">Chapa</option><option value="angulo">Angulo / L</option><option value="tubo">Tubo</option><option value="tubo_redondo">Tubo redondo</option><option value="vierteaguas">Vierteaguas</option></select></label>
+        <label>Remate <select id="tipo"><option value="u">Bandeja / U</option><option value="chapa">Chapa</option><option value="angulo">Angulo / L</option><option value="tubo">Tubo</option><option value="tubo_redondo">Tubo redondo</option><option value="vierteaguas">Vierteaguas</option><option value="esquinero">Esquinero</option><option value="remate_techo">Remate techo</option><option value="remate_techo_2">Remate techo 2</option></select></label>
         <label id="modo-chapa-label" hidden>Medidas de chapa <select id="modo-chapa"><option value="normal">Normal</option><option value="desnivel">Desnivel</option></select></label>
         <label id="orientacion-chapa-label" hidden>Parte recta de la chapa <select id="orientacion-chapa"><option value="abajo">Abajo</option><option value="arriba">Arriba</option></select></label>
         <label id="posicion-medidas-label">Medidas de la bandeja <select id="posicion-medidas"><option value="interior">Interior</option><option value="exterior">Exterior</option></select></label>
@@ -101,12 +101,40 @@
         <div id="perfil-tubo" class="perfil-simple" hidden aria-label="Simbolo de tubo rectangular"><span class="simbolo-tubo"></span></div>
         <div id="perfil-redondo" class="perfil-simple" hidden aria-label="Simbolo de tubo redondo"><span class="simbolo-redondo"></span></div>
         <div id="perfil-vierteaguas" class="perfil-simple" hidden aria-label="Perfil de vierteaguas">
-          <svg class="perfil-vierteaguas-svg" viewBox="0 0 360 220" role="img" aria-label="Cotas del vierteaguas: A horizontal, B vertical y C inclinada">
+          <svg class="perfil-cotas-svg" viewBox="0 0 360 220" role="img" aria-label="Cotas del vierteaguas: A horizontal, B vertical y C inclinada">
             <path d="M 75 186 V 38 H 315 M 75 186 L 142 119" fill="none" stroke="#d45d3f" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
             <text id="vierteaguas-cota-a" x="195" y="24" font-size="13" text-anchor="middle" fill="#293f4a" font-weight="700">A: -- mm</text>
             <text id="vierteaguas-cota-b" x="38" y="112" transform="rotate(-90 38 112)" font-size="13" text-anchor="middle" fill="#293f4a" font-weight="700">B: -- mm</text>
             <text id="vierteaguas-cota-c" x="112" y="169" font-size="13" text-anchor="middle" fill="#293f4a" font-weight="700">C: -- mm</text>
             <text id="vierteaguas-largura" x="195" y="211" font-size="12" text-anchor="middle" fill="#506269" font-weight="700">Largura: -- mm</text>
+          </svg>
+        </div>
+        <div id="perfil-esquinero" class="perfil-simple" hidden aria-label="Perfil de esquinero">
+          <svg class="perfil-cotas-svg" viewBox="0 0 360 280" role="img" aria-label="Cotas del esquinero: A superior, B vertical, C retorno inferior y D caída derecha">
+            <path d="M 75 45 H 300 V 105 M 75 45 V 205 H 145" fill="none" stroke="#d45d3f" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+            <text id="esquinero-cota-a" x="188" y="30" font-size="13" text-anchor="middle" fill="#293f4a" font-weight="700">A: -- mm</text>
+            <text id="esquinero-cota-b" x="35" y="125" transform="rotate(-90 35 125)" font-size="13" text-anchor="middle" fill="#293f4a" font-weight="700">B: -- mm</text>
+            <text id="esquinero-cota-c" x="110" y="233" font-size="13" text-anchor="middle" fill="#293f4a" font-weight="700">C: -- mm</text>
+            <text id="esquinero-cota-d" x="328" y="75" transform="rotate(-90 328 75)" font-size="13" text-anchor="middle" fill="#293f4a" font-weight="700">D: -- mm</text>
+            <text id="esquinero-largura" x="188" y="265" font-size="12" text-anchor="middle" fill="#506269" font-weight="700">Largura: -- mm</text>
+          </svg>
+        </div>
+        <div id="perfil-remate-techo" class="perfil-simple" hidden aria-label="Perfil de remate techo">
+          <svg class="perfil-cotas-svg" viewBox="0 0 380 295" role="img" aria-label="Cotas del remate techo: A vertical, B retorno corto, C pendiente y D caída final">
+            <path d="M 70 45 V 120 L 105 85 M 70 120 L 285 190 L 315 255" fill="none" stroke="#d45d3f" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+            <text id="remate-techo-cota-a" x="35" y="82" transform="rotate(-90 35 82)" font-size="13" text-anchor="middle" fill="#293f4a" font-weight="700">A: -- mm</text>
+            <text id="remate-techo-cota-b" x="122" y="77" font-size="13" text-anchor="middle" fill="#293f4a" font-weight="700">B: -- mm</text>
+            <text id="remate-techo-cota-c" x="185" y="146" font-size="13" text-anchor="middle" fill="#293f4a" font-weight="700">C: -- mm</text>
+            <text id="remate-techo-cota-d" x="345" y="220" transform="rotate(-65 345 220)" font-size="13" text-anchor="middle" fill="#293f4a" font-weight="700">D: -- mm</text>
+            <text id="remate-techo-largura" x="190" y="286" font-size="12" text-anchor="middle" fill="#506269" font-weight="700">Largura: -- mm</text>
+          </svg>
+        </div>
+        <div id="perfil-remate-techo-2" class="perfil-simple" hidden aria-label="Perfil de remate techo 2">
+          <svg class="perfil-cotas-svg" viewBox="0 0 360 250" role="img" aria-label="Cotas del remate techo 2: A horizontal y B inclinada">
+            <path d="M 60 60 H 190 L 300 215" fill="none" stroke="#d45d3f" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+            <text id="remate-techo-2-cota-a" x="125" y="38" font-size="13" text-anchor="middle" fill="#293f4a" font-weight="700">A: -- mm</text>
+            <text id="remate-techo-2-cota-b" x="255" y="125" font-size="13" text-anchor="middle" fill="#293f4a" font-weight="700">B: -- mm</text>
+            <text id="remate-techo-2-largura" x="180" y="242" font-size="12" text-anchor="middle" fill="#506269" font-weight="700">Largura: -- mm</text>
           </svg>
         </div>
         <div id="perfil-chapa" class="perfil-simple" hidden aria-label="Chapa con desnivel"><div class="perfil-chapa-desnivel" style="--nivel-izquierda: 65%; --nivel-derecha: 35%;"><span class="chapa-inclinada"></span><span id="chapa-izquierda" class="cota-chapa cota-izquierda">Izq. -- mm</span><span id="chapa-derecha" class="cota-chapa cota-derecha">Der. -- mm</span><span id="chapa-largura" class="cota-chapa cota-largura">= -- mm</span></div></div>
@@ -116,6 +144,7 @@
           <label id="etiqueta-1">Alto 1 (mm)<input id="medida-1" type="number" min="0" step="1" required></label>
           <label id="etiqueta-2">Ancho (mm)<input id="medida-2" type="number" min="0" step="1" required></label>
           <label id="etiqueta-3">Alto 2 (mm)<input id="medida-3" type="number" min="0" step="1" required></label>
+          <label id="etiqueta-4" class="campo-oculto">No se usa<input id="medida-4" type="number" min="0" step="1"></label>
           <label>Largura (mm)<input id="largura" type="number" min="1" step="1" required></label>
         </div>
         <div class="fila">
@@ -138,7 +167,8 @@
     const token = localStorage.getItem('alucarpin_token');
     if (!token) location.replace('/app/login.html');
     const apiFetch = (url, options = {}) => fetch(url, { ...options, headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` } });
-    const nombres = { u: 'Bandeja / U', chapa: 'Chapa', angulo: 'Angulo / L', tubo: 'Tubo', tubo_redondo: 'Tubo redondo', vierteaguas: 'Vierteaguas' };
+    const nombres = { u: 'Bandeja / U', chapa: 'Chapa', angulo: 'Angulo / L', tubo: 'Tubo', tubo_redondo: 'Tubo redondo', vierteaguas: 'Vierteaguas', esquinero: 'Esquinero', remate_techo: 'Remate techo', remate_techo_2: 'Remate techo 2' };
+    const cotasPorTipo = { vierteaguas: ['A', 'B', 'C'], esquinero: ['A', 'B', 'C', 'D'], remate_techo: ['A', 'B', 'C', 'D'], remate_techo_2: ['A', 'B'] };
     const origen = document.querySelector('#origen');
     const cliente = document.querySelector('#cliente');
     const obraSeleccionada = document.querySelector('#obra');
@@ -167,12 +197,15 @@
     const generarPdf = document.querySelector('#generar-pdf');
     const enviarWhatsapp = document.querySelector('#enviar-whatsapp');
     const perfiles = {
-      u: { etiquetas: ['Izquierda (mm)', 'Centro (mm)', 'Derecha (mm)'], ayuda: 'Bandeja / U invertida: izquierda x centro x derecha x largura. Todas las medidas estan en milimetros.', campos: 3 },
-      vierteaguas: { etiquetas: ['Cota A (mm)', 'Cota B (mm)', 'Cota C (mm)'], ayuda: 'Introduce las cotas A (horizontal), B (vertical) y C (inclinada) del croquis. La largura es la longitud de la pieza; no se calculan angulos ni pliegues.', campos: 3 },
-      angulo: { etiquetas: ['Alto (mm)', 'Ancho (mm)', 'No se usa'], ayuda: 'Angular / L: alto x ancho x largura.', campos: 2 },
-      chapa: { etiquetas: ['Altura izquierda (mm)', 'Altura derecha (mm)', 'No se usa'], ayuda: 'Chapa con desnivel: altura izquierda x altura derecha x largura.', campos: 2 },
-      tubo: { etiquetas: ['Ancho (mm)', 'Alto (mm)', 'No se usa'], ayuda: 'Tubo rectangular: ancho x alto x largura.', campos: 2 },
-      tubo_redondo: { etiquetas: ['Diametro (mm)', 'No se usa', 'No se usa'], ayuda: 'Tubo redondo: diametro x largura.', campos: 1 }
+      u: { etiquetas: ['Izquierda (mm)', 'Centro (mm)', 'Derecha (mm)', 'No se usa'], ayuda: 'Bandeja / U invertida: izquierda x centro x derecha x largura. Todas las medidas estan en milimetros.', campos: 3 },
+      vierteaguas: { etiquetas: ['Cota A horizontal (mm)', 'Cota B vertical (mm)', 'Cota C inclinada (mm)', 'No se usa'], ayuda: 'Introduce las cotas A (horizontal), B (vertical) y C (inclinada) del croquis. La largura es la longitud de la pieza; no se calculan angulos ni pliegues.', campos: 3 },
+      esquinero: { etiquetas: ['Cota A superior (mm)', 'Cota B vertical larga (mm)', 'Cota C retorno inferior (mm)', 'Cota D caida derecha (mm)'], ayuda: 'Introduce las cuatro cotas A-D del perfil segun el croquis. La largura es la longitud de la pieza.', campos: 4 },
+      remate_techo: { etiquetas: ['Cota A vertical (mm)', 'Cota B retorno inclinado corto (mm)', 'Cota C pendiente larga (mm)', 'Cota D caida final (mm)'], ayuda: 'Introduce las cuatro cotas A-D del perfil segun el croquis. La largura es la longitud de la pieza.', campos: 4 },
+      remate_techo_2: { etiquetas: ['Cota A horizontal (mm)', 'Cota B inclinada (mm)', 'No se usa', 'No se usa'], ayuda: 'Introduce las cotas A (horizontal) y B (inclinada) del croquis. La largura es la longitud de la pieza.', campos: 2 },
+      angulo: { etiquetas: ['Alto (mm)', 'Ancho (mm)', 'No se usa', 'No se usa'], ayuda: 'Angular / L: alto x ancho x largura.', campos: 2 },
+      chapa: { etiquetas: ['Altura izquierda (mm)', 'Altura derecha (mm)', 'No se usa', 'No se usa'], ayuda: 'Chapa con desnivel: altura izquierda x altura derecha x largura.', campos: 2 },
+      tubo: { etiquetas: ['Ancho (mm)', 'Alto (mm)', 'No se usa', 'No se usa'], ayuda: 'Tubo rectangular: ancho x alto x largura.', campos: 2 },
+      tubo_redondo: { etiquetas: ['Diametro (mm)', 'No se usa', 'No se usa', 'No se usa'], ayuda: 'Tubo redondo: diametro x largura.', campos: 1 }
     };
     const datos = id => document.querySelector(`#${id}`).value;
     const dinero = valor => Number(valor || 0).toLocaleString('es-ES', { maximumFractionDigits: 2 });
@@ -182,20 +215,24 @@
       document.querySelector('#perfil-centro').textContent = datos('medida-2') || '--';
       document.querySelector('#perfil-derecha').textContent = datos('medida-3') || '--';
       document.querySelector('#perfil-largura').textContent = `= ${datos('largura') || '--'} mm`;
-      document.querySelector('#vierteaguas-cota-a').textContent = `A: ${datos('medida-1') || '--'} mm`;
-      document.querySelector('#vierteaguas-cota-b').textContent = `B: ${datos('medida-2') || '--'} mm`;
-      document.querySelector('#vierteaguas-cota-c').textContent = `C: ${datos('medida-3') || '--'} mm`;
-      document.querySelector('#vierteaguas-largura').textContent = `Largura: ${datos('largura') || '--'} mm`;
+      ['vierteaguas', 'esquinero', 'remate-techo', 'remate-techo-2'].forEach(perfil => {
+        ['a', 'b', 'c', 'd'].forEach((letra, indice) => {
+          const cota = document.querySelector(`#${perfil}-cota-${letra}`);
+          if (cota) cota.textContent = `${letra.toUpperCase()}: ${datos(`medida-${indice + 1}`) || '--'} mm`;
+        });
+        const largura = document.querySelector(`#${perfil}-largura`);
+        if (largura) largura.textContent = `Largura: ${datos('largura') || '--'} mm`;
+      });
       actualizarChapa();
     }
     function actualizarEtiquetas() {
       const perfil = { ...perfiles[tipo.value] };
       if (tipo.value === 'chapa' && modoChapa.value === 'normal') {
-        perfil.etiquetas = ['Ancho (mm)', 'No se usa', 'No se usa'];
+        perfil.etiquetas = ['Ancho (mm)', 'No se usa', 'No se usa', 'No se usa'];
         perfil.ayuda = 'Chapa normal: ancho x largura.';
         perfil.campos = 1;
       }
-      ['etiqueta-1', 'etiqueta-2', 'etiqueta-3'].forEach((id, indice) => {
+      ['etiqueta-1', 'etiqueta-2', 'etiqueta-3', 'etiqueta-4'].forEach((id, indice) => {
         const etiqueta = document.querySelector(`#${id}`);
         const entrada = etiqueta.querySelector('input');
         etiqueta.firstChild.textContent = perfil.etiquetas[indice];
@@ -209,6 +246,9 @@
       document.querySelector('#perfil-tubo').hidden = tipo.value !== 'tubo';
       document.querySelector('#perfil-redondo').hidden = tipo.value !== 'tubo_redondo';
       document.querySelector('#perfil-vierteaguas').hidden = tipo.value !== 'vierteaguas';
+      document.querySelector('#perfil-esquinero').hidden = tipo.value !== 'esquinero';
+      document.querySelector('#perfil-remate-techo').hidden = tipo.value !== 'remate_techo';
+      document.querySelector('#perfil-remate-techo-2').hidden = tipo.value !== 'remate_techo_2';
       document.querySelector('#perfil-chapa').hidden = tipo.value !== 'chapa' || modoChapa.value !== 'desnivel';
       document.querySelector('#modo-chapa-label').hidden = tipo.value !== 'chapa';
       document.querySelector('#orientacion-chapa-label').hidden = tipo.value !== 'chapa' || modoChapa.value !== 'desnivel';
@@ -235,7 +275,7 @@
       document.querySelector('#chapa-normal-ancho').textContent = `Ancho ${izquierda || '--'} mm`;
       document.querySelector('#chapa-normal-largura').textContent = `= ${datos('largura') || '--'} mm`;
     }
-    ['medida-1', 'medida-2', 'medida-3', 'largura'].forEach(id => document.querySelector(`#${id}`).addEventListener('input', actualizarDibujo));
+    ['medida-1', 'medida-2', 'medida-3', 'medida-4', 'largura'].forEach(id => document.querySelector(`#${id}`).addEventListener('input', actualizarDibujo));
     async function cargarClientes() {
       catalogo = await AlucarpinCatalogo.cargar(apiFetch);
       pintarClientes();
@@ -253,7 +293,8 @@
       const rematesVisibles = filtroObra.value ? remates.filter(remate => claveObra(remate) === filtroObra.value) : remates;
       lista.innerHTML = rematesVisibles.length ? '' : '<tr><td colspan="9">No hay remates guardados para esta obra.</td></tr>';
       rematesVisibles.forEach(remate => {
-        const medidas = remate.tipo === 'u' ? `${dinero(remate.medida_1)} x ${dinero(remate.medida_2)} x ${dinero(remate.medida_3)}` : remate.tipo === 'vierteaguas' ? `A: ${dinero(remate.medida_1)} x B: ${dinero(remate.medida_2)} x C: ${dinero(remate.medida_3)}` : remate.tipo === 'chapa' || remate.tipo === 'tubo_redondo' ? dinero(remate.medida_1) : `${dinero(remate.medida_1)} x ${dinero(remate.medida_2)}`;
+        const cotas = cotasPorTipo[remate.tipo];
+        const medidas = cotas ? cotas.map((cota, indice) => `${cota}: ${dinero(remate[`medida_${indice + 1}`])}`).join(' x ') : remate.tipo === 'u' ? `${dinero(remate.medida_1)} x ${dinero(remate.medida_2)} x ${dinero(remate.medida_3)}` : remate.tipo === 'chapa' || remate.tipo === 'tubo_redondo' ? dinero(remate.medida_1) : `${dinero(remate.medida_1)} x ${dinero(remate.medida_2)}`;
         const fila = document.createElement('tr');
         [remate.cliente || '-', `${remate.obra || '-'} · ${remate.obra_catalogo || 'Sin vincular'}`, remate.pieza, remate.origen === 'propia' ? 'Propia' : '3º', remate.lacado_color, nombres[remate.tipo], `${medidas} mm`, `${dinero(remate.largura)} mm / ${remate.cantidad} ud.`].forEach(valor => {
           const celda = document.createElement('td'); celda.textContent = valor; fila.appendChild(celda);
@@ -299,6 +340,7 @@
       const medida1 = escapar(dinero(remate.medida_1));
       const medida2 = escapar(dinero(remate.medida_2));
       const medida3 = escapar(dinero(remate.medida_3));
+      const medida4 = escapar(dinero(remate.medida_4));
       const largura = escapar(dinero(remate.largura));
 
       if (remate.tipo === 'u') {
@@ -375,6 +417,37 @@
         </svg>
       `;
 
+      if (remate.tipo === 'esquinero') return `
+        <svg class="perfil-svg" viewBox="0 0 360 280" aria-label="Esquinero con cotas A, B, C y D">
+          <path d="M 75 45 H 300 V 105 M 75 45 V 205 H 145" fill="none" stroke="#d45d3f" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+          <text x="188" y="30" font-size="13" text-anchor="middle" fill="#293f4a" font-weight="700">A: ${medida1} mm</text>
+          <text x="35" y="125" transform="rotate(-90 35 125)" font-size="13" text-anchor="middle" fill="#293f4a" font-weight="700">B: ${medida2} mm</text>
+          <text x="110" y="233" font-size="13" text-anchor="middle" fill="#293f4a" font-weight="700">C: ${medida3} mm</text>
+          <text x="328" y="75" transform="rotate(-90 328 75)" font-size="13" text-anchor="middle" fill="#293f4a" font-weight="700">D: ${medida4} mm</text>
+          <text x="188" y="265" font-size="12" text-anchor="middle" fill="#506269" font-weight="700">Largura: ${largura} mm</text>
+        </svg>
+      `;
+
+      if (remate.tipo === 'remate_techo') return `
+        <svg class="perfil-svg" viewBox="0 0 380 295" aria-label="Remate techo con cotas A, B, C y D">
+          <path d="M 70 45 V 120 L 105 85 M 70 120 L 285 190 L 315 255" fill="none" stroke="#d45d3f" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+          <text x="35" y="82" transform="rotate(-90 35 82)" font-size="13" text-anchor="middle" fill="#293f4a" font-weight="700">A: ${medida1} mm</text>
+          <text x="122" y="77" font-size="13" text-anchor="middle" fill="#293f4a" font-weight="700">B: ${medida2} mm</text>
+          <text x="185" y="146" font-size="13" text-anchor="middle" fill="#293f4a" font-weight="700">C: ${medida3} mm</text>
+          <text x="345" y="220" transform="rotate(-65 345 220)" font-size="13" text-anchor="middle" fill="#293f4a" font-weight="700">D: ${medida4} mm</text>
+          <text x="190" y="286" font-size="12" text-anchor="middle" fill="#506269" font-weight="700">Largura: ${largura} mm</text>
+        </svg>
+      `;
+
+      if (remate.tipo === 'remate_techo_2') return `
+        <svg class="perfil-svg" viewBox="0 0 360 250" aria-label="Remate techo 2 con cotas A y B">
+          <path d="M 60 60 H 190 L 300 215" fill="none" stroke="#d45d3f" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+          <text x="125" y="38" font-size="13" text-anchor="middle" fill="#293f4a" font-weight="700">A: ${medida1} mm</text>
+          <text x="255" y="125" font-size="13" text-anchor="middle" fill="#293f4a" font-weight="700">B: ${medida2} mm</text>
+          <text x="180" y="242" font-size="12" text-anchor="middle" fill="#506269" font-weight="700">Largura: ${largura} mm</text>
+        </svg>
+      `;
+
       if (remate.tipo === 'tubo') return `
         <svg class="perfil-svg" viewBox="0 0 220 110" aria-label="Tubo rectangular">
           <rect x="28" y="30" width="164" height="52" fill="none" stroke="#d45d3f" stroke-width="18" rx="2"/>
@@ -392,8 +465,9 @@
     const medidasInforme = remate => {
       const tipoRemate = nombres[remate.tipo];
       const posicionBandeja = remate.posicion_medidas === 'exterior' ? 'Medidas exteriores' : 'Medidas interiores';
-      const medidas = remate.tipo === 'vierteaguas'
-        ? `Cotas del croquis: A ${dinero(remate.medida_1)} x B ${dinero(remate.medida_2)} x C ${dinero(remate.medida_3)}; largura ${dinero(remate.largura)} mm`
+      const cotas = cotasPorTipo[remate.tipo];
+      const medidas = cotas
+        ? `Cotas del croquis: ${cotas.map((cota, indice) => `${cota} ${dinero(remate[`medida_${indice + 1}`])}`).join(' x ')}; largura ${dinero(remate.largura)} mm`
         : remate.tipo === 'u'
         ? `${posicionBandeja}: ${dinero(remate.medida_1)} x ${dinero(remate.medida_2)} x ${dinero(remate.medida_3)} = ${dinero(remate.largura)} mm`
         : remate.tipo === 'chapa' && remate.modo_chapa === 'desnivel'
@@ -482,12 +556,12 @@
       if (boton.disabled) return;
       boton.disabled = true;
       try {
-        const payload = { origen: origen.value, obra_catalogo: destino.referencia, cliente: destino.cliente, obra: destino.obra, pieza: datos('pieza'), lacado_color: datos('lacado-color'), tipo: tipo.value, modo_chapa: modoChapa.value, orientacion_chapa: orientacionChapa.value, posicion_medidas: posicionMedidas.value, medida_1: Number(datos('medida-1')), medida_2: Number(datos('medida-2')), medida_3: Number(datos('medida-3')), largura: Number(datos('largura')), cantidad: Number(datos('cantidad')), observaciones: datos('observaciones') };
+        const payload = { origen: origen.value, obra_catalogo: destino.referencia, cliente: destino.cliente, obra: destino.obra, pieza: datos('pieza'), lacado_color: datos('lacado-color'), tipo: tipo.value, modo_chapa: modoChapa.value, orientacion_chapa: orientacionChapa.value, posicion_medidas: posicionMedidas.value, medida_1: Number(datos('medida-1')), medida_2: Number(datos('medida-2')), medida_3: Number(datos('medida-3')), medida_4: Number(datos('medida-4')), largura: Number(datos('largura')), cantidad: Number(datos('cantidad')), observaciones: datos('observaciones') };
         const respuesta = await apiFetch('/remates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         const resultado = await respuesta.json();
         if (!respuesta.ok) throw new Error(typeof resultado.detail === 'string' ? resultado.detail : 'No se pudo guardar el remate.');
         mensaje.textContent = `Remate añadido a ${datos('pieza')}.`; mensaje.className = 'mensaje exito';
-        ['medida-1', 'medida-2', 'medida-3', 'largura', 'observaciones'].forEach(id => { document.querySelector(`#${id}`).value = ''; });
+        ['medida-1', 'medida-2', 'medida-3', 'medida-4', 'largura', 'observaciones'].forEach(id => { document.querySelector(`#${id}`).value = ''; });
         actualizarDibujo(); await cargarRemates();
       } catch (error) { mostrarError(error.message); } finally { boton.disabled = false; }
     };
@@ -496,7 +570,7 @@
       pintarObras();
       document.querySelector('#pieza').value = '';
       document.querySelector('#lacado-color').value = '';
-      ['medida-1', 'medida-2', 'medida-3', 'largura', 'observaciones'].forEach(id => { document.querySelector(`#${id}`).value = ''; });
+      ['medida-1', 'medida-2', 'medida-3', 'medida-4', 'largura', 'observaciones'].forEach(id => { document.querySelector(`#${id}`).value = ''; });
       actualizarDibujo();
       mensaje.textContent = 'Selecciona un cliente y una obra del catálogo.';
       mensaje.className = 'mensaje exito';
