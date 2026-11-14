@@ -1563,11 +1563,16 @@ def crear_presupuesto(datos: PresupuestoCreate, usuario=Depends(administrador)):
     valores["cliente"] = valores["cliente"].strip()
     if not valores["cliente"]:
         raise HTTPException(status_code=400, detail="El cliente es obligatorio")
+    valores["num_presupuesto"] = (valores.get("num_presupuesto") or "").strip() or None
     if valores.get("fecha"):
         valores["fecha"] = valores["fecha"].isoformat()
     columnas = ", ".join(valores.keys())
     marcadores = ", ".join("?" for _ in valores)
     with conexion() as db:
+        if valores["num_presupuesto"] and db.execute(
+            "SELECT id FROM presupuestos WHERE num_presupuesto = ?", (valores["num_presupuesto"],)
+        ).fetchone():
+            raise HTTPException(status_code=409, detail="Ya existe un presupuesto con ese número.")
         if DATABASE_URL:
             fila = db.execute(
                 f"INSERT INTO presupuestos ({columnas}) VALUES ({marcadores}) RETURNING *",
@@ -1591,6 +1596,8 @@ def modificar_presupuesto(presupuesto_id: int, datos: PresupuestoUpdate, usuario
         cambios["cliente"] = (cambios["cliente"] or "").strip()
         if not cambios["cliente"]:
             raise HTTPException(status_code=400, detail="El cliente es obligatorio")
+    if "num_presupuesto" in cambios:
+        cambios["num_presupuesto"] = (cambios["num_presupuesto"] or "").strip() or None
     if cambios.get("fecha"):
         cambios["fecha"] = cambios["fecha"].isoformat()
     with conexion() as db:
@@ -1599,6 +1606,11 @@ def modificar_presupuesto(presupuesto_id: int, datos: PresupuestoUpdate, usuario
         ).fetchone()
         if not existente:
             raise HTTPException(status_code=404, detail="Presupuesto no encontrado")
+        if cambios.get("num_presupuesto") and db.execute(
+            "SELECT id FROM presupuestos WHERE num_presupuesto = ? AND id != ?",
+            (cambios["num_presupuesto"], presupuesto_id),
+        ).fetchone():
+            raise HTTPException(status_code=409, detail="Ya existe un presupuesto con ese número.")
         if "estado" in cambios:
             ejecucion_anterior = "Terminado" if str(existente["estado"]).strip().upper() == "COMPLETADO" else "Pendiente"
             db.execute(
@@ -2020,7 +2032,7 @@ def listar_trabajos(usuario=Depends(administrador)):
         else:
             trabajo["estado_ejecucion"] = None
         if trabajo["origen"] == "presupuesto":
-            trabajo["estado"] = presupuestos[trabajo["origen_id"]]
+            trabajo["estado"] = presupuestos.get(trabajo["origen_id"], trabajo.get("estado_cobro"))
         if trabajo["tipo"] == "alucarpin":
             trabajo.update(estado_cobro="No facturable", pendiente_cobro=0,
                            estado_ejecucion=None, cuenta_con_movimientos=False)

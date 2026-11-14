@@ -36,6 +36,9 @@ class PresupuestoEdicionTests(unittest.TestCase):
         cambio = patch.object(api, "conexion", conexion)
         cambio.start()
         self.addCleanup(cambio.stop)
+        cambio_url = patch.object(api, "DATABASE_URL", None)
+        cambio_url.start()
+        self.addCleanup(cambio_url.stop)
 
     def test_editar_cliente_fecha_estado_conserva_todos_los_importes(self):
         resultado = api.modificar_presupuesto(
@@ -65,6 +68,31 @@ class PresupuestoEdicionTests(unittest.TestCase):
             [15962.21, 21, 3352.06, 19314.27, 120],
         )
         self.assertEqual(resultado["estado"], "Aceptado")
+
+    def test_crear_presupuesto_rechaza_numero_duplicado_aunque_tenga_espacios(self):
+        with self.assertRaises(api.HTTPException) as error:
+            api.crear_presupuesto(api.PresupuestoCreate(cliente="Otro cliente", num_presupuesto=" P-27 "), {})
+        self.assertEqual(error.exception.status_code, 409)
+        self.assertEqual(self.db.execute("SELECT COUNT(*) AS n FROM presupuestos").fetchone()["n"], 1)
+
+    def test_crear_presupuesto_numero_distinto_se_crea_sin_problema(self):
+        resultado = api.crear_presupuesto(api.PresupuestoCreate(cliente="Otro cliente", num_presupuesto="P-28"), {})
+        self.assertEqual(resultado["num_presupuesto"], "P-28")
+        self.assertEqual(self.db.execute("SELECT COUNT(*) AS n FROM presupuestos").fetchone()["n"], 2)
+
+    def test_modificar_presupuesto_rechaza_renombrar_a_numero_de_otro(self):
+        api.crear_presupuesto(api.PresupuestoCreate(cliente="Otro cliente", num_presupuesto="P-28"), {})
+        with self.assertRaises(api.HTTPException) as error:
+            api.modificar_presupuesto(27, api.PresupuestoUpdate(num_presupuesto="P-28"), {})
+        self.assertEqual(error.exception.status_code, 409)
+        self.assertEqual(
+            self.db.execute("SELECT num_presupuesto FROM presupuestos WHERE id = 27").fetchone()["num_presupuesto"],
+            "P-27",
+        )
+
+    def test_modificar_presupuesto_conserva_su_propio_numero(self):
+        resultado = api.modificar_presupuesto(27, api.PresupuestoUpdate(num_presupuesto=" P-27 "), {})
+        self.assertEqual(resultado["num_presupuesto"], "P-27")
 
 
 if __name__ == "__main__":
