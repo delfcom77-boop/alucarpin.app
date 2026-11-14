@@ -1784,6 +1784,45 @@ def crear_jornada_faena(
     return dict(fila)
 
 
+@app.delete("/faenas/{faena_id}/jornadas/{fecha}")
+def borrar_jornada_faena(faena_id: int, fecha: date, usuario=Depends(administrador)):
+    with conexion() as db:
+        cursor = db.execute(
+            "DELETE FROM jornadas_faenas WHERE faena_id = ? AND fecha = ?",
+            (faena_id, fecha.isoformat()),
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="No hay un día registrado en esa fecha para esta faena.")
+    return {"eliminado": True}
+
+
+@app.patch("/faenas/{faena_id}/jornadas/{fecha}")
+def modificar_jornada_faena(
+    faena_id: int, fecha: date, datos: JornadaFaenaCreate, usuario=Depends(administrador),
+):
+    with conexion() as db:
+        try:
+            cursor = db.execute(
+                "UPDATE jornadas_faenas SET fecha = ? WHERE faena_id = ? AND fecha = ?",
+                (datos.fecha.isoformat(), faena_id, fecha.isoformat()),
+            )
+        except sqlite3.IntegrityError as error:
+            if "unique" in str(error).lower():
+                raise HTTPException(
+                    status_code=409,
+                    detail="Ya hay una jornada registrada para esta faena en esa fecha.",
+                ) from error
+            raise
+        except psycopg.errors.UniqueViolation as error:
+            raise HTTPException(
+                status_code=409,
+                detail="Ya hay una jornada registrada para esta faena en esa fecha.",
+            ) from error
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="No hay un día registrado en esa fecha para esta faena.")
+    return {"faena_id": faena_id, "fecha": datos.fecha.isoformat()}
+
+
 @app.post("/faenas", status_code=201)
 def crear_faena(datos: FaenaCreate, usuario=Depends(administrador)):
     valores = datos.model_dump()
@@ -1848,6 +1887,50 @@ def crear_jornada_propia(
         if not fila:
             raise HTTPException(status_code=409, detail="Ya hay un día propio registrado para esta obra y fecha.")
         return {**dict(fila), "origen": origen, "origen_id": obra_id}
+
+
+@app.delete("/obras/{origen}/{obra_id}/jornadas/{fecha}")
+def borrar_jornada_propia(
+    origen: Literal["propio", "presupuesto"], obra_id: int, fecha: date, usuario=Depends(administrador),
+):
+    columna = "presupuesto_id" if origen == "presupuesto" else "trabajo_id"
+    with conexion() as db:
+        cursor = db.execute(
+            f"DELETE FROM jornadas_propias WHERE {columna} = ? AND fecha = ?",
+            (obra_id, fecha.isoformat()),
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="No hay un día registrado en esa fecha para esta obra.")
+    return {"eliminado": True}
+
+
+@app.patch("/obras/{origen}/{obra_id}/jornadas/{fecha}")
+def modificar_jornada_propia(
+    origen: Literal["propio", "presupuesto"], obra_id: int, fecha: date,
+    datos: JornadaFaenaCreate, usuario=Depends(administrador),
+):
+    columna = "presupuesto_id" if origen == "presupuesto" else "trabajo_id"
+    with conexion() as db:
+        try:
+            cursor = db.execute(
+                f"UPDATE jornadas_propias SET fecha = ? WHERE {columna} = ? AND fecha = ?",
+                (datos.fecha.isoformat(), obra_id, fecha.isoformat()),
+            )
+        except sqlite3.IntegrityError as error:
+            if "unique" in str(error).lower():
+                raise HTTPException(
+                    status_code=409,
+                    detail="Ya hay un día propio registrado para esta obra y fecha.",
+                ) from error
+            raise
+        except psycopg.errors.UniqueViolation as error:
+            raise HTTPException(
+                status_code=409,
+                detail="Ya hay un día propio registrado para esta obra y fecha.",
+            ) from error
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="No hay un día registrado en esa fecha para esta obra.")
+    return {"origen": origen, "origen_id": obra_id, "fecha": datos.fecha.isoformat()}
 
 
 @app.patch("/faenas/{faena_id}")

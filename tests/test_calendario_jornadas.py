@@ -79,6 +79,43 @@ class CalendarioJornadasTests(unittest.TestCase):
             self.assertEqual(error.exception.status_code, esperado)
         self.assertEqual(len(api.listar_jornadas_propias({})), 1)
 
+    def test_borra_un_dia_propio_por_fecha_sin_tocar_otras_fechas(self):
+        api.crear_jornada_propia("presupuesto", 1, self.datos, {})
+        api.crear_jornada_propia("presupuesto", 1, api.JornadaFaenaCreate(fecha=date(2026, 10, 5)), {})
+
+        resultado = api.borrar_jornada_propia("presupuesto", 1, date(2026, 10, 4), {})
+
+        self.assertEqual(resultado, {"eliminado": True})
+        fechas = {d["fecha"] for d in api.listar_jornadas_propias({})}
+        self.assertEqual(fechas, {"2026-10-05"})
+
+    def test_borrar_dia_propio_inexistente_da_404(self):
+        with self.assertRaises(api.HTTPException) as error:
+            api.borrar_jornada_propia("presupuesto", 1, date(2026, 10, 4), {})
+        self.assertEqual(error.exception.status_code, 404)
+
+    def test_modifica_la_fecha_de_un_dia_propio(self):
+        api.crear_jornada_propia("propio", 1, self.datos, {})
+
+        resultado = api.modificar_jornada_propia(
+            "propio", 1, date(2026, 10, 4), api.JornadaFaenaCreate(fecha=date(2026, 10, 9)), {},
+        )
+
+        self.assertEqual(resultado, {"origen": "propio", "origen_id": 1, "fecha": "2026-10-09"})
+        fechas = {d["fecha"] for d in api.listar_jornadas_propias({})}
+        self.assertEqual(fechas, {"2026-10-09"})
+
+    def test_modificar_dia_propio_a_fecha_ya_usada_da_409(self):
+        api.crear_jornada_propia("presupuesto", 1, self.datos, {})
+        api.crear_jornada_propia("presupuesto", 1, api.JornadaFaenaCreate(fecha=date(2026, 10, 5)), {})
+
+        with self.assertRaises(api.HTTPException) as error:
+            api.modificar_jornada_propia(
+                "presupuesto", 1, date(2026, 10, 4), api.JornadaFaenaCreate(fecha=date(2026, 10, 5)), {},
+            )
+
+        self.assertEqual(error.exception.status_code, 409)
+
     def test_calendarios_separados_fechas_reales_y_uid_estable(self):
         api.crear_jornada_propia("presupuesto", 1, self.datos, {})
         api.crear_jornada_propia("propio", 1, self.datos, {})
@@ -136,7 +173,10 @@ class CalendarioJornadasTests(unittest.TestCase):
         self.assertEqual(len(api.listar_jornadas_propias({})), 1)
 
     def test_endpoints_requieren_administrador(self):
-        for nombre in ("listar_jornadas_propias", "crear_jornada_propia", "calendario_trabajos"):
+        for nombre in (
+            "listar_jornadas_propias", "crear_jornada_propia", "calendario_trabajos",
+            "borrar_jornada_propia", "modificar_jornada_propia",
+        ):
             ruta = next(r for r in api.app.routes if getattr(r, "name", None) == nombre)
             self.assertIn(api.administrador, [d.call for d in ruta.dependant.dependencies])
 

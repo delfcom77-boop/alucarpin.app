@@ -46,6 +46,10 @@
     .lista-trabajos table { min-width: 1000px; }
     .lista-trabajos th, .lista-trabajos td { padding: 4px 8px; white-space: nowrap; }
     .lista-trabajos td:not(.acciones) { max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+    .lista-trabajos td.dias-trabajados { max-width: 260px; overflow: visible; text-overflow: clip; white-space: normal; }
+    .dia-chip { display: inline-flex; align-items: center; gap: 2px; margin: 2px 4px 2px 0; padding: 2px 2px 2px 6px; border-radius: 10px; background: #eef1ea; white-space: nowrap; font-size: 0.85rem; }
+    .dia-chip button { min-height: 24px; min-width: 24px; padding: 0; border: none; border-radius: 50%; background: transparent; cursor: pointer; line-height: 1; }
+    .dia-chip button:hover { background: #ddd8cc; }
     .lista-trabajos tr.trabajo-faena { border-left: 4px solid #174b82; }
     .lista-trabajos tr.trabajo-presupuesto { border-left: 4px solid #1c6036; }
     .lista-trabajos tr.trabajo-reparacion { border-left: 4px solid #854500; }
@@ -308,6 +312,11 @@
     const normalizarBusqueda = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase();
     const fechaLocalHoy = () => { const hoy = new Date(); hoy.setMinutes(hoy.getMinutes() - hoy.getTimezoneOffset()); return hoy.toISOString().slice(0, 10); };
     const tipos = { faena: 'Faena a terceros', presupuesto: 'Presupuesto', reparacion: 'Reparación', alucarpin: 'Alucarpin' };
+    const detalleErrorApiDia = async (respuesta, mensajePredeterminado) => {
+      const cuerpo = await respuesta.json().catch(() => null);
+      if (Array.isArray(cuerpo?.detail)) return cuerpo.detail.map(error => error.msg).join('; ');
+      return cuerpo?.detail || mensajePredeterminado;
+    };
     const actividades = ['Oficina: presupuestos y facturación', 'Tomar medidas / visitar una obra', 'Preparar material y herramientas', 'Compras / recoger material'];
     function actualizarDestinos() {
       const anterior = destinoTrabajo.value;
@@ -496,9 +505,63 @@
           : jornadasPropias.filter(j => j.origen === trabajo.origen && j.origen_id === trabajo.origen_id).map(j => j.fecha);
         const celdaJornadas = document.createElement('td');
         celdaJornadas.dataset.label = 'Días trabajados';
+        celdaJornadas.className = 'dias-trabajados';
         celdaJornadas.setAttribute('role', 'cell');
-        celdaJornadas.textContent = dias.length ? dias.map(fecha).join(', ') : 'Sin registrar';
-        celdaJornadas.title = celdaJornadas.textContent;
+        if (trabajo.tipo === 'alucarpin') {
+          celdaJornadas.textContent = dias.length ? dias.map(fecha).join(', ') : 'Sin registrar';
+          celdaJornadas.title = celdaJornadas.textContent;
+        } else if (!dias.length) {
+          celdaJornadas.textContent = 'Sin registrar';
+        } else {
+          const rutaJornada = fechaIso => trabajo.origen === 'faena'
+            ? `/faenas/${trabajo.origen_id}/jornadas/${fechaIso}`
+            : `/obras/${trabajo.origen}/${trabajo.origen_id}/jornadas/${fechaIso}`;
+          [...dias].sort().reverse().forEach(fechaIso => {
+            const chip = document.createElement('span');
+            chip.className = 'dia-chip';
+            const texto = document.createElement('span');
+            texto.textContent = fecha(fechaIso);
+            const botonEditar = document.createElement('button');
+            botonEditar.type = 'button';
+            botonEditar.className = 'dia-chip-editar';
+            botonEditar.textContent = '✎';
+            botonEditar.title = 'Cambiar la fecha de este día';
+            botonEditar.onclick = async () => {
+              const nueva = prompt('Nueva fecha (AAAA-MM-DD):', fechaIso);
+              if (!nueva || nueva === fechaIso) return;
+              const respuesta = await apiFetch(rutaJornada(fechaIso), {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fecha: nueva }),
+              });
+              if (!respuesta.ok) {
+                mensajeTrabajos.textContent = await detalleErrorApiDia(respuesta, 'No se pudo cambiar la fecha del día.');
+                mensajeTrabajos.className = 'mensaje error';
+                return;
+              }
+              await cargarTrabajos();
+              await AlucarpinDiario.actualizar();
+            };
+            const botonBorrarDia = document.createElement('button');
+            botonBorrarDia.type = 'button';
+            botonBorrarDia.className = 'dia-chip-borrar';
+            botonBorrarDia.textContent = '✕';
+            botonBorrarDia.title = 'Borrar este día';
+            botonBorrarDia.onclick = async () => {
+              if (!confirm(`¿Borrar el día ${fecha(fechaIso)} de ${trabajo.cliente}?`)) return;
+              const respuesta = await apiFetch(rutaJornada(fechaIso), { method: 'DELETE' });
+              if (!respuesta.ok) {
+                mensajeTrabajos.textContent = await detalleErrorApiDia(respuesta, 'No se pudo borrar el día.');
+                mensajeTrabajos.className = 'mensaje error';
+                return;
+              }
+              await cargarTrabajos();
+              await AlucarpinDiario.actualizar();
+            };
+            chip.append(texto, botonEditar, botonBorrarDia);
+            celdaJornadas.appendChild(chip);
+          });
+          celdaJornadas.title = dias.map(fecha).join(', ');
+        }
         fila.appendChild(celdaJornadas);
         const celdaAcciones = document.createElement('td');
         celdaAcciones.dataset.label = 'Acciones';

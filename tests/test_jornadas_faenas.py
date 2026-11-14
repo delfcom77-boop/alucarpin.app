@@ -102,6 +102,66 @@ class JornadasFaenasTests(unittest.TestCase):
 
         self.assertEqual(error.exception.status_code, 409)
 
+    def test_no_borra_una_faena_que_tiene_jornadas(self):
+        api_central.crear_jornada_faena(
+            1,
+            api_central.JornadaFaenaCreate(fecha=date(2026, 10, 4)),
+            {"rol": "administrador"},
+        )
+
+        with self.assertRaises(api_central.HTTPException) as error:
+            api_central.borrar_faena(1, {"rol": "administrador"})
+
+        self.assertEqual(error.exception.status_code, 409)
+
+    def test_borra_una_jornada_de_faena_por_fecha(self):
+        api_central.crear_jornada_faena(
+            1, api_central.JornadaFaenaCreate(fecha=date(2026, 10, 4)), {"rol": "administrador"},
+        )
+        api_central.crear_jornada_faena(
+            1, api_central.JornadaFaenaCreate(fecha=date(2026, 10, 5)), {"rol": "administrador"},
+        )
+
+        resultado = api_central.borrar_jornada_faena(1, date(2026, 10, 4), {"rol": "administrador"})
+
+        self.assertEqual(resultado, {"eliminado": True})
+        fechas = {f["fecha"] for f in api_central.listar_jornadas_faenas(faena_id=1, usuario={"rol": "administrador"})}
+        self.assertEqual(fechas, {"2026-10-05"})
+
+    def test_borrar_jornada_de_faena_inexistente_da_404(self):
+        with self.assertRaises(api_central.HTTPException) as error:
+            api_central.borrar_jornada_faena(1, date(2026, 10, 4), {"rol": "administrador"})
+
+        self.assertEqual(error.exception.status_code, 404)
+
+    def test_modifica_la_fecha_de_una_jornada_de_faena(self):
+        api_central.crear_jornada_faena(
+            1, api_central.JornadaFaenaCreate(fecha=date(2026, 10, 4)), {"rol": "administrador"},
+        )
+
+        resultado = api_central.modificar_jornada_faena(
+            1, date(2026, 10, 4), api_central.JornadaFaenaCreate(fecha=date(2026, 10, 7)), {"rol": "administrador"},
+        )
+
+        self.assertEqual(resultado, {"faena_id": 1, "fecha": "2026-10-07"})
+        fechas = {f["fecha"] for f in api_central.listar_jornadas_faenas(faena_id=1, usuario={"rol": "administrador"})}
+        self.assertEqual(fechas, {"2026-10-07"})
+
+    def test_modificar_jornada_de_faena_a_fecha_ya_usada_da_409(self):
+        api_central.crear_jornada_faena(
+            1, api_central.JornadaFaenaCreate(fecha=date(2026, 10, 4)), {"rol": "administrador"},
+        )
+        api_central.crear_jornada_faena(
+            1, api_central.JornadaFaenaCreate(fecha=date(2026, 10, 5)), {"rol": "administrador"},
+        )
+
+        with self.assertRaises(api_central.HTTPException) as error:
+            api_central.modificar_jornada_faena(
+                1, date(2026, 10, 4), api_central.JornadaFaenaCreate(fecha=date(2026, 10, 5)), {"rol": "administrador"},
+            )
+
+        self.assertEqual(error.exception.status_code, 409)
+
     def test_inicio_sqlite_crea_la_tabla_de_jornadas(self):
         with tempfile.TemporaryDirectory() as directorio:
             ruta = Path(directorio) / "empresa.db"

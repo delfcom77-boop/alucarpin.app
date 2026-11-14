@@ -11,6 +11,56 @@
   const euros = valor => valor == null ? 'No disponible' : Number(valor).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' });
   const fecha = valor => valor ? String(valor).split('-').reverse().join('/') : 'Sin fecha';
   const texto = (selector, valor) => { document.querySelector(selector).textContent = valor; };
+  const detalleError = async (respuesta, mensajePredeterminado) => {
+    const cuerpo = await respuesta.json().catch(() => null);
+    if (Array.isArray(cuerpo?.detail)) return cuerpo.detail.map(error => error.msg).join('; ');
+    return cuerpo?.detail || mensajePredeterminado;
+  };
+  function rutaJornada(fechaIso) {
+    return origen === 'faena' ? `/faenas/${id}/jornadas/${fechaIso}` : `/obras/${origen}/${id}/jornadas/${fechaIso}`;
+  }
+  function diasObra(dias) {
+    const cuerpo = document.querySelector('#dias-obra tbody');
+    cuerpo.replaceChildren();
+    if (!dias.length) {
+      const fila = document.createElement('tr');
+      const celda = document.createElement('td');
+      celda.colSpan = 2; celda.textContent = 'Sin días propios vinculados.';
+      fila.appendChild(celda); cuerpo.appendChild(fila);
+      return;
+    }
+    [...dias].sort((a, b) => b.fecha.localeCompare(a.fecha)).forEach(dia => {
+      const fila = document.createElement('tr');
+      const celdaFecha = document.createElement('td');
+      celdaFecha.textContent = fecha(dia.fecha);
+      const celdaAcciones = document.createElement('td');
+      const botonEditar = document.createElement('button');
+      botonEditar.type = 'button'; botonEditar.textContent = 'Cambiar fecha';
+      botonEditar.onclick = async () => {
+        const nueva = prompt('Nueva fecha (AAAA-MM-DD):', dia.fecha);
+        if (!nueva || nueva === dia.fecha) return;
+        const respuesta = await fetch(rutaJornada(dia.fecha), {
+          method: 'PATCH', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fecha: nueva }), cache: 'no-store',
+        });
+        if (!respuesta.ok) { mensaje.className = 'error'; mensaje.textContent = await detalleError(respuesta, 'No se pudo cambiar la fecha del día.'); return; }
+        await cargar();
+      };
+      const botonBorrar = document.createElement('button');
+      botonBorrar.type = 'button'; botonBorrar.textContent = 'Borrar';
+      botonBorrar.onclick = async () => {
+        if (!confirm(`¿Borrar el día ${fecha(dia.fecha)}?`)) return;
+        const respuesta = await fetch(rutaJornada(dia.fecha), {
+          method: 'DELETE', headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
+        });
+        if (!respuesta.ok) { mensaje.className = 'error'; mensaje.textContent = await detalleError(respuesta, 'No se pudo borrar el día.'); return; }
+        await cargar();
+      };
+      celdaAcciones.append(botonEditar, botonBorrar);
+      fila.append(celdaFecha, celdaAcciones);
+      cuerpo.appendChild(fila);
+    });
+  }
   function tabla(idTabla, filas) {
     const cuerpo = document.querySelector(`#${idTabla} tbody`);
     cuerpo.replaceChildren();
@@ -91,7 +141,7 @@
         medidasRemate(r),
         r.largura, r.cantidad, r.observaciones,
       ]));
-      texto('#dias-obra', ficha.dias_obra.length ? ficha.dias_obra.map(d => fecha(d.fecha)).join(', ') : 'Sin días propios vinculados.');
+      diasObra(ficha.dias_obra);
       mensaje.textContent = ''; contenido.hidden = false; imprimir.disabled = false;
     } catch (error) {
       mensaje.className = 'error'; mensaje.textContent = error.message;

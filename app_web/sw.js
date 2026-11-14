@@ -1,4 +1,4 @@
-const CACHE = 'alucarpin-app-v34-remates-nuevos-perfiles';
+const CACHE = 'alucarpin-app-v35-dias-por-lineas';
 const ARCHIVOS = [
   '/app/login.html',
   '/app/administrador.html',
